@@ -2,7 +2,7 @@
 
 Use your desktop in VR without taking the headset off. Free, light, Windows and Linux.
 
-Status: early development. The interaction core (pointer, keyboard, grab, layout) and its automated gates are in place; the SteamVR backend and screen capture are next.
+Status: early development. On Windows it already shows your primary monitor in SteamVR with laser pointer, click/drag/scroll, a two-hand VR keyboard and grab/scale. Linux backends are next.
 
 ```
 cargo test --workspace

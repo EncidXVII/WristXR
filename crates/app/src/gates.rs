@@ -1,4 +1,5 @@
 //! AUTO GATES that need no VR runtime. Shared by `cargo test` and `--selftest`.
+use crate::bindings::{FILES, MANIFEST};
 use dvr_core::engine::{Engine, Event, FrameInput, HandInput, MouseButton};
 use dvr_core::keyboard::{self, LCTRL, LSHIFT};
 use dvr_core::math::{Pose, Quat, Vec3};
@@ -25,14 +26,8 @@ pub const GATES: &[Gate] = &[
 /// 60 characters, typed with alternating hands.
 pub const TYPING_TEXT: &str = "pack my box with five dozen liquor jugs then type a bit more";
 
-const MANIFEST: &str = include_str!("../../../bindings/actions.json");
-const BINDINGS: &[(&str, &str)] = &[
-    ("bindings_knuckles.json", include_str!("../../../bindings/bindings_knuckles.json")),
-    ("bindings_oculus_touch.json", include_str!("../../../bindings/bindings_oculus_touch.json")),
-    ("bindings_vive_controller.json", include_str!("../../../bindings/bindings_vive_controller.json")),
-    ("bindings_holographic_controller.json", include_str!("../../../bindings/bindings_holographic_controller.json")),
-];
-const CONTROLLERS: &[&str] = &["knuckles", "oculus_touch", "vive_controller", "holographic_controller"];
+const CONTROLLERS: &[&str] =
+    &["knuckles", "oculus_touch", "vive_controller", "holographic_controller", "frame_controller"];
 
 macro_rules! ensure {
     ($cond:expr, $($msg:tt)+) => {{
@@ -393,7 +388,7 @@ fn controls() -> GateResult {
             .find(|b| b["controller_type"] == *ctype)
             .and_then(|b| b["binding_url"].as_str())
             .ok_or_else(|| format!("no default binding for {ctype}"))?;
-        let text = BINDINGS.iter().find(|(n, _)| *n == url).map(|(_, t)| *t).ok_or_else(|| format!("missing {url}"))?;
+        let text = FILES.iter().find(|(n, _)| *n == url).map(|(_, t)| *t).ok_or_else(|| format!("missing {url}"))?;
         let binding: Value = serde_json::from_str(text).map_err(|e| format!("{url}: {e}"))?;
         ensure!(binding["controller_type"] == *ctype, "{url} has the wrong controller_type");
         let mut outputs = Vec::new();

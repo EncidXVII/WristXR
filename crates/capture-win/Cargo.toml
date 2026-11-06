@@ -1,0 +1,12 @@
+[package]
+name = "dvr-capture-win"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+dvr-core.workspace = true
+windows.workspace = true
+
+[lints]
+workspace = true

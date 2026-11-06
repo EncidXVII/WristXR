@@ -1,0 +1,174 @@
+//! CPU images for static textures (keyboard, cursor, placeholder). Uploaded once, never per frame.
+use crate::keyboard::{KeyDef, ROW_UNITS, ROWS};
+
+/// BGRA8, the format desktop capture delivers.
+pub type Color = [u8; 4];
+
+const fn rgb(hex: u32) -> Color {
+    [(hex & 0xFF) as u8, ((hex >> 8) & 0xFF) as u8, (hex >> 16) as u8, 0xFF]
+}
+
+// design-tokens.json "Night Lime (warm)"
+pub const BG: Color = rgb(0x0C0B0A);
+pub const RAISED: Color = rgb(0x1F1C18);
+pub const LINE: Color = rgb(0x2A2622);
+pub const INK: Color = rgb(0xF4F1EC);
+pub const INK2: Color = rgb(0xAAA49B);
+pub const ACCENT: Color = rgb(0xC6FF1A);
+
+pub struct Image {
+    pub w: u32,
+    pub h: u32,
+    pub bgra: Vec<u8>,
+}
+
+impl Image {
+    pub fn new(w: u32, h: u32, color: Color) -> Self {
+        Self { w, h, bgra: color.repeat((w * h) as usize) }
+    }
+
+    pub fn fill_rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: Color) {
+        let (x0, y0) = (x.max(0) as u32, y.max(0) as u32);
+        let (x1, y1) = ((x + w).clamp(0, self.w as i32) as u32, (y + h).clamp(0, self.h as i32) as u32);
+        for py in y0..y1 {
+            for px in x0..x1 {
+                let i = ((py * self.w + px) * 4) as usize;
+                self.bgra[i..i + 4].copy_from_slice(&color);
+            }
+        }
+    }
+
+    /// Text in the built-in 5x7 font, centered on (cx, cy). Unknown glyphs are skipped.
+    pub fn text(&mut self, cx: i32, cy: i32, scale: i32, s: &str, color: Color) {
+        let n = s.chars().count() as i32;
+        let x0 = cx - (n * 6 - 1) * scale / 2;
+        let y0 = cy - 7 * scale / 2;
+        for (i, c) in s.chars().enumerate() {
+            let Some(rows) = glyph(c) else { continue };
+            for (r, bits) in rows.iter().enumerate() {
+                for col in 0..5 {
+                    if bits & (0x10 >> col) != 0 {
+                        let x = x0 + (i as i32 * 6 + col) * scale;
+                        self.fill_rect(x, y0 + r as i32 * scale, scale, scale, color);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// True when the 5x7 font can draw every character of `s`.
+pub fn drawable(s: &str) -> bool {
+    s.chars().all(|c| glyph(c).is_some())
+}
+
+/// Keyboard texture, 100 px per key unit. `label` maps a key to the text shown on it.
+pub fn keyboard(label: impl Fn(&KeyDef) -> String) -> Image {
+    const U: i32 = 100;
+    const GAP: i32 = 6;
+    let mut img = Image::new(ROW_UNITS as u32 * U as u32, ROWS.len() as u32 * U as u32, BG);
+    for (r, row) in ROWS.iter().enumerate() {
+        let mut left = 0.0;
+        for key in row.iter() {
+            let (x, w) = ((left * U as f32) as i32, (key.w * U as f32) as i32);
+            let y = r as i32 * U;
+            img.fill_rect(x + GAP, y + GAP, w - 2 * GAP, U - 2 * GAP, RAISED);
+            let text = label(key);
+            let len = text.chars().count().max(1) as i32;
+            let scale = ((w - 4 * GAP) / (len * 6)).clamp(2, 6);
+            let color = if key.w > 1.0 || len > 1 { INK2 } else { INK };
+            img.text(x + w / 2, y + U / 2, scale, &text, color);
+            left += key.w;
+        }
+    }
+    img
+}
+
+/// Laser dot: accent disc with a dark rim, transparent outside.
+pub fn cursor(size: u32) -> Image {
+    let mut img = Image::new(size, size, [0; 4]);
+    let c = (size as f32 - 1.0) / 2.0;
+    for y in 0..size {
+        for x in 0..size {
+            let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt() / c;
+            let color = if d <= 0.7 {
+                ACCENT
+            } else if d <= 1.0 {
+                BG
+            } else {
+                continue;
+            };
+            let i = ((y * size + x) * 4) as usize;
+            img.bgra[i..i + 4].copy_from_slice(&color);
+        }
+    }
+    img
+}
+
+/// Shown on a panel whose source is not available on this device (fallback, app keeps running).
+pub fn placeholder(w: u32, h: u32, message: &str) -> Image {
+    let mut img = Image::new(w, h, BG);
+    let step = (w / 16).max(1) as i32;
+    for x in (0..w as i32).step_by(step as usize) {
+        img.fill_rect(x, 0, 2, h as i32, LINE);
+    }
+    for y in (0..h as i32).step_by(step as usize) {
+        img.fill_rect(0, y, w as i32, 2, LINE);
+    }
+    let scale = (w as i32 / (message.len() as i32 * 6 + 12)).clamp(2, 12);
+    img.text(w as i32 / 2, h as i32 / 2, scale, message, INK);
+    img
+}
+
+#[rustfmt::skip]
+fn glyph(c: char) -> Option<[u8; 7]> {
+    Some(match c.to_ascii_uppercase() {
+        'A' => [0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11], 'B' => [0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E],
+        'C' => [0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E], 'D' => [0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E],
+        'E' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F], 'F' => [0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x10],
+        'G' => [0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F], 'H' => [0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11],
+        'I' => [0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E], 'J' => [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0C],
+        'K' => [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11], 'L' => [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1F],
+        'M' => [0x11, 0x1B, 0x15, 0x15, 0x11, 0x11, 0x11], 'N' => [0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11],
+        'O' => [0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E], 'P' => [0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10],
+        'Q' => [0x0E, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0D], 'R' => [0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11],
+        'S' => [0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E], 'T' => [0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+        'U' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E], 'V' => [0x11, 0x11, 0x11, 0x11, 0x11, 0x0A, 0x04],
+        'W' => [0x11, 0x11, 0x11, 0x15, 0x15, 0x15, 0x0A], 'X' => [0x11, 0x11, 0x0A, 0x04, 0x0A, 0x11, 0x11],
+        'Y' => [0x11, 0x11, 0x11, 0x0A, 0x04, 0x04, 0x04], 'Z' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1F],
+        '0' => [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E], '1' => [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E],
+        '2' => [0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F], '3' => [0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E],
+        '4' => [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02], '5' => [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E],
+        '6' => [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E], '7' => [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+        '8' => [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E], '9' => [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C],
+        '-' => [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00], '=' => [0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00],
+        '[' => [0x0E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0E], ']' => [0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E],
+        '\\' => [0x00, 0x10, 0x08, 0x04, 0x02, 0x01, 0x00], ';' => [0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x04, 0x08],
+        '\'' => [0x0C, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00], ',' => [0x00, 0x00, 0x00, 0x00, 0x0C, 0x04, 0x08],
+        '.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C], '/' => [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x00],
+        '`' => [0x08, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00], '<' => [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+        ' ' => [0; 7],
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_us_label_is_drawable() {
+        for key in ROWS.iter().flat_map(|r| r.iter()) {
+            assert!(drawable(key.label), "{}", key.label);
+        }
+    }
+
+    #[test]
+    fn keyboard_texture_has_keys() {
+        let img = keyboard(|k| k.label.to_owned());
+        assert_eq!(img.bgra.len(), (img.w * img.h * 4) as usize);
+        let at = |x: u32, y: u32| &img.bgra[((y * img.w + x) * 4) as usize..][..4];
+        assert_eq!(at(3, 3), BG);
+        assert_eq!(at(10, 10), RAISED);
+    }
+}

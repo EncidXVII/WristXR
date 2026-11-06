@@ -149,6 +149,25 @@ impl Pose {
     pub fn forward(self) -> Vec3 {
         self.rot.rotate(Vec3::FORWARD)
     }
+    /// Inverse of `to_mat34` (rotation part must be orthonormal).
+    pub fn from_mat34(m: [[f32; 4]; 3]) -> Self {
+        let trace = m[0][0] + m[1][1] + m[2][2];
+        let rot = if trace > 0.0 {
+            let s = (trace + 1.0).sqrt() * 2.0;
+            Quat { w: 0.25 * s, x: (m[2][1] - m[1][2]) / s, y: (m[0][2] - m[2][0]) / s, z: (m[1][0] - m[0][1]) / s }
+        } else if m[0][0] > m[1][1] && m[0][0] > m[2][2] {
+            let s = (1.0 + m[0][0] - m[1][1] - m[2][2]).sqrt() * 2.0;
+            Quat { w: (m[2][1] - m[1][2]) / s, x: 0.25 * s, y: (m[0][1] + m[1][0]) / s, z: (m[0][2] + m[2][0]) / s }
+        } else if m[1][1] > m[2][2] {
+            let s = (1.0 + m[1][1] - m[0][0] - m[2][2]).sqrt() * 2.0;
+            Quat { w: (m[0][2] - m[2][0]) / s, x: (m[0][1] + m[1][0]) / s, y: 0.25 * s, z: (m[1][2] + m[2][1]) / s }
+        } else {
+            let s = (1.0 + m[2][2] - m[0][0] - m[1][1]).sqrt() * 2.0;
+            Quat { w: (m[1][0] - m[0][1]) / s, x: (m[0][2] + m[2][0]) / s, y: (m[1][2] + m[2][1]) / s, z: 0.25 * s }
+        };
+        Self::new(Vec3::new(m[0][3], m[1][3], m[2][3]), rot.normalized())
+    }
+
     /// Row-major 3x4 matrix (OpenVR `HmdMatrix34_t` layout).
     pub fn to_mat34(self) -> [[f32; 4]; 3] {
         let Quat { x, y, z, w } = self.rot;
@@ -203,5 +222,15 @@ mod tests {
             m[2][0] * v.x + m[2][1] * v.y + m[2][2] * v.z + m[2][3],
         );
         assert!(close(r, p.transform_point(v)));
+    }
+
+    #[test]
+    fn mat34_roundtrip_all_branches() {
+        for (axis, angle) in [(Vec3::Y, 0.3), (Vec3::X, 3.1), (Vec3::Y, 3.1), (Vec3::Z, 3.1)] {
+            let p = Pose::new(Vec3::new(1.0, -2.0, 0.5), Quat::from_axis_angle(axis, angle));
+            let q = Pose::from_mat34(p.to_mat34());
+            assert!(close(q.pos, p.pos));
+            assert!(close(q.rot.rotate(Vec3::new(0.2, 0.7, -0.4)), p.rot.rotate(Vec3::new(0.2, 0.7, -0.4))));
+        }
     }
 }

@@ -10,6 +10,14 @@ dvr-osc.workspace = true
 dvr-notify-api.workspace = true
 serde_json.workspace = true
 rosc.workspace = true
+tracing.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+dvr-vr.workspace = true
+dvr-gfx-d3d11.workspace = true
+dvr-capture-win.workspace = true
+dvr-input-win.workspace = true
+windows.workspace = true
 
 [lints]
 workspace = true

@@ -1,4 +1,9 @@
+mod bindings;
 mod gates;
+#[cfg(windows)]
+mod gates_vr;
+#[cfg(windows)]
+mod run;
 
 use std::process::ExitCode;
 
@@ -8,12 +13,25 @@ fn main() -> ExitCode {
     if std::env::args().any(|a| a == "--selftest") {
         return selftest();
     }
-    eprintln!("The VR runtime backend is not built yet. Run with --selftest to check this machine.");
-    ExitCode::from(2)
+    #[cfg(windows)]
+    let result = run::run();
+    #[cfg(not(windows))]
+    let result: Result<(), String> = Err("Linux capture and input backends are not built yet.".into());
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn selftest() -> ExitCode {
-    let results: Vec<_> = gates::GATES.iter().map(|(name, gate)| (*name, gate())).collect();
+    let mut results: Vec<_> = gates::GATES.iter().map(|(name, gate)| (*name, gate())).collect();
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == "--vr") {
+        results.push(("1+2+P live overlay", gates_vr::overlay_live()));
+    }
     for (name, r) in &results {
         match r {
             Ok(()) => println!("PASS  {name}"),
