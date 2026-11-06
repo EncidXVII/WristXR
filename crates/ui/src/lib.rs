@@ -2,8 +2,10 @@
 //! Strings come from Fluent (`locales/`), English shipped.
 
 mod i18n;
+mod menu;
 
 pub use i18n::Strings;
+pub use menu::{MENU_SIZE, Menu, MenuInput, MenuModel, SLOTS, Slot, slot_center, tab_center};
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
@@ -68,15 +70,15 @@ impl Platform for OffscreenPlatform {
 }
 
 /// A component's window plus its BGRA pixels.
-struct Canvas {
-    window: Rc<MinimalSoftwareWindow>,
+pub(crate) struct Canvas {
+    pub(crate) window: Rc<MinimalSoftwareWindow>,
     pixels: Vec<PremultipliedRgbaColor>,
     bgra: Vec<u8>,
     size: (u32, u32),
 }
 
 impl Canvas {
-    fn take(size: (u32, u32)) -> Result<Self, String> {
+    pub(crate) fn take(size: (u32, u32)) -> Result<Self, String> {
         let window = CREATED.with(|c| c.borrow_mut().take()).ok_or("no window was created")?;
         window.set_size(PhysicalSize::new(size.0, size.1));
         let n = (size.0 * size.1) as usize;
@@ -84,7 +86,7 @@ impl Canvas {
     }
 
     /// Renders when the component asked for a redraw; returns BGRA rows.
-    fn render(&mut self) -> Option<&[u8]> {
+    pub(crate) fn render(&mut self) -> Option<&[u8]> {
         slint::platform::update_timers_and_animations();
         let mut drew = false;
         self.window.draw_if_needed(|r| {
@@ -102,7 +104,7 @@ impl Canvas {
 }
 
 /// Installs the offscreen platform (once per process; must be the UI thread).
-fn ensure_platform() {
+pub(crate) fn ensure_platform() {
     // Err means it is already installed, which is fine.
     let _ = slint::platform::set_platform(Box::new(OffscreenPlatform { start: Instant::now() }));
 }

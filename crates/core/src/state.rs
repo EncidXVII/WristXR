@@ -14,11 +14,13 @@ pub struct State {
     pub panels: Vec<Panel>,
     pub chatbox: bool,
     pub typing_sounds: bool,
+    /// First-run flow finished (hand, main screen, keyboard test).
+    pub onboarded: bool,
 }
 
 impl Default for State {
     fn default() -> Self {
-        Self { dominant: Hand::Right, panels: Vec::new(), chatbox: false, typing_sounds: false }
+        Self { dominant: Hand::Right, panels: Vec::new(), chatbox: false, typing_sounds: false, onboarded: false }
     }
 }
 

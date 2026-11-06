@@ -1,4 +1,5 @@
-//! The VR session on Windows: OpenVR overlays, WGC capture, SendInput.
+//! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
+use crate::session::{Effect, MonitorInfo, Session};
 use dvr_capture_win::{Capture, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
@@ -12,7 +13,7 @@ use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
-use dvr_ui::{WRIST_SIZE, Wrist, WristInfo};
+use dvr_ui::{MENU_SIZE, Menu, Strings, WRIST_SIZE, Wrist, WristInfo};
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -57,35 +58,21 @@ fn keyboard_image(chat: Option<&str>) -> raster::Image {
 }
 
 fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -> Result<Surface, String> {
+    let blank = |size: (u32, u32)| -> Result<Surface, String> {
+        let tex = gpu.texture(size.0, size.1, None).map_err(err)?;
+        Ok(Surface { tex, capture: None, rect: None, needs_submit: false })
+    };
     let (img, rect) = match panel.source {
         Source::Keyboard => (keyboard_image(chat), None),
         Source::Monitor(i) => match monitors.get(i as usize) {
-            Some(m) => {
-                return Ok(Surface {
-                    tex: gpu.texture(m.rect.w, m.rect.h, None).map_err(err)?,
-                    capture: None,
-                    rect: Some(m.rect),
-                    needs_submit: false,
-                });
-            }
+            Some(m) => return Ok(Surface { rect: Some(m.rect), ..blank((m.rect.w, m.rect.h))? }),
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
         },
         Source::Window(_) => (raster::placeholder(1280, 720, "WINDOW CLOSED"), None),
-        Source::Wrist => {
-            let tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
-            return Ok(Surface { tex, capture: None, rect: None, needs_submit: false });
-        }
+        Source::Wrist => return blank(WRIST_SIZE),
+        Source::Menu => return blank(MENU_SIZE),
     };
     Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true })
-}
-
-/// Every layout has a watch on the non-dominant hand.
-fn ensure_wrist(state: &mut State) {
-    if !state.panels.iter().any(|p| p.source == Source::Wrist) {
-        let id = state.next_id();
-        let aspect = WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32;
-        state.panels.push(Panel::on_wrist(id, state.dominant.other(), aspect));
-    }
 }
 
 fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<&(Toast, Instant)>) -> WristInfo {
@@ -106,29 +93,23 @@ fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<
     }
 }
 
-/// First run: primary monitor in front, keyboard below it.
-fn first_layout(state: &mut State, head: Pose, monitors: &[Monitor]) {
-    let primary = monitors.iter().position(|m| m.primary).unwrap_or(0);
-    let aspect = monitors.get(primary).map_or(9.0 / 16.0, |m| m.rect.h as f32 / m.rect.w as f32);
-    state.panels =
-        vec![Panel::in_front_of(1, Source::Monitor(primary as u32), head, aspect), Panel::keyboard_below(2, head)];
-}
-
 pub fn run() -> Result<(), String> {
     dvr_capture_win::init_process();
     let state_path = State::default_path().ok_or("no config directory")?;
     let dir = state_path.parent().ok_or("no config directory")?.to_path_buf();
     let manifest = crate::bindings::install(&dir.join("input")).map_err(err)?;
-    let mut state = State::load(&state_path);
 
     let mut vr = OpenVr::init(&manifest)?;
     let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
     let monitors = dvr_capture_win::monitors();
-    if state.panels.is_empty() {
-        first_layout(&mut state, vr.head_pose().unwrap_or(STANDING_HEAD), &monitors);
-    }
-    ensure_wrist(&mut state);
-    state.save(&state_path).map_err(err)?;
+    let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
+    let head = |vr: &OpenVr| vr.head_pose().unwrap_or(STANDING_HEAD);
+
+    let state = State::load(&state_path);
+    let mut panels = state.panels.clone();
+    let mut session = Session::new(state, &mut panels, head(&vr));
+    session.persist(&panels);
+    session.state.save(&state_path).map_err(err)?;
 
     let cursor = gpu.image(&raster::cursor(64)).map_err(err)?;
     for hand in Hand::BOTH {
@@ -137,19 +118,21 @@ pub fn run() -> Result<(), String> {
     let mut chat = ChatLine::default();
     let chat_text = |on: bool, line: &ChatLine| on.then(|| line.text().to_owned());
     let mut surfaces = HashMap::new();
-    for p in &state.panels {
-        surfaces.insert(p.id, surface(&gpu, p, &monitors, chat_text(state.chatbox, &chat).as_deref())?);
+    for p in &panels {
+        surfaces.insert(p.id, surface(&gpu, p, &monitors, chat_text(session.state.chatbox, &chat).as_deref())?);
     }
 
+    let strings = Strings::english()?;
     let chatbox = Chatbox::new(VRCHAT_ADDR.parse().map_err(err)?).map_err(err)?;
     let mut layout = dvr_input_win::layout_id();
     let mut layout_checked = Instant::now();
-    let mut engine = Engine::new(state.panels.clone());
+    let mut engine = Engine::new(panels);
     let mut injector = Injector::new();
     let mut input = FrameInput::default();
     let mut events = Vec::with_capacity(64);
     let mut dirty: Option<Instant> = None;
     let mut wrist = Wrist::new()?;
+    let mut menu = Menu::new()?;
     let mut sampler = dvr_sys::Sampler::new();
     let mut load = dvr_sys::Load::default();
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
@@ -160,19 +143,25 @@ pub fn run() -> Result<(), String> {
     let mut stats_at = Instant::now() - STATS_PERIOD;
     let start = Instant::now();
 
-    while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
+    'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
         events.clear();
         engine.step(&input, &mut events);
         let poses = [input.hands[0].pose, input.hands[1].pose];
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut redraw_keyboard = false;
+        let selected = session.selected;
+        session.pointer(&events, &menu);
+        let mut menu_dirty = session.selected != selected;
         for e in &events {
             let rect = |panel: u32| surfaces.get(&panel).and_then(|s: &Surface| s.rect);
             if let Event::Hover { hand, panel, uv, .. } = *e {
                 cursors[hand.index()] = Some((panel, uv));
             }
             match *e {
-                Event::Key { scancode, down } if state.chatbox => {
+                Event::Key { scancode, down } if session.key(scancode, down, dvr_input_win::key_char) => {
+                    menu_dirty = true;
+                }
+                Event::Key { scancode, down } if session.state.chatbox => {
                     let sent = match chat.key(scancode, down, dvr_input_win::key_char) {
                         ChatAction::None => Ok(()),
                         ChatAction::Edited => {
@@ -192,8 +181,9 @@ pub fn run() -> Result<(), String> {
                     injector.apply(e, rect);
                 }
                 Event::ChatToggle => {
-                    state.chatbox = !state.chatbox;
-                    if !state.chatbox {
+                    menu_dirty = true;
+                    session.state.chatbox = !session.state.chatbox;
+                    if !session.state.chatbox {
                         let _ = chatbox.typing(false);
                     }
                     redraw_keyboard = true;
@@ -202,12 +192,33 @@ pub fn run() -> Result<(), String> {
                 Event::Haptic { hand } => vr.haptic(hand),
                 Event::Moved { .. } => dirty = Some(Instant::now()),
                 Event::MenuToggle => {
-                    for p in engine.panels.iter_mut().filter(|p| p.source == Source::Keyboard) {
-                        p.visible = !p.visible;
-                    }
-                    dirty = Some(Instant::now());
+                    session.toggle_menu(&mut engine.panels, head(&vr));
+                    menu_dirty = true;
                 }
             }
+            if session.state.typing_sounds && matches!(*e, Event::Key { down: true, .. }) {
+                dvr_sys::play_click();
+            }
+        }
+
+        for click in menu.take_inputs() {
+            for fx in session.input(click, &mut engine.panels, head(&vr), &poses, &screens) {
+                match fx {
+                    Effect::Added(id) => {
+                        if let Some(p) = engine.panels.iter().find(|p| p.id == id) {
+                            surfaces.insert(id, surface(&gpu, p, &monitors, None)?);
+                        }
+                    }
+                    Effect::Removed(id) => {
+                        surfaces.remove(&id);
+                        vr.remove_panel(id);
+                    }
+                    Effect::RedrawKeyboard => redraw_keyboard = true,
+                    Effect::Quit => break 'frames,
+                }
+            }
+            dirty = Some(Instant::now());
+            menu_dirty = true;
         }
 
         if layout_checked.elapsed() >= LAYOUT_POLL {
@@ -216,35 +227,48 @@ pub fn run() -> Result<(), String> {
             redraw_keyboard |= id != layout;
             layout = id;
         }
-        let mut refresh_wrist = stats_at.elapsed() >= STATS_PERIOD;
+
+        let mut refresh_wrist = false;
+        if stats_at.elapsed() >= STATS_PERIOD {
+            stats_at = Instant::now();
+            load = sampler.sample();
+            refresh_wrist = true;
+        }
         if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
             toast = Some((t, Instant::now()));
-            vr.haptic(state.dominant.other());
+            vr.haptic(session.state.dominant.other());
             refresh_wrist = true;
         }
         if toast.as_ref().is_some_and(|(t, at)| at.elapsed().as_secs_f32() >= t.timeout_s) {
             toast = None;
             refresh_wrist = true;
         }
-        if stats_at.elapsed() >= STATS_PERIOD {
-            stats_at = Instant::now();
-            load = sampler.sample();
-        }
         if refresh_wrist {
             wrist.set(&wrist_info(&vr, &load, timer.last_ms(), toast.as_ref()));
         }
+        // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
+        if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {
+            menu.set(&session.model(&engine.panels, &screens, &strings, (timer.last_ms(), load.own_cpu_percent)));
+        }
 
+        // All GPU work back to back inside the timer; one flush; then hand textures to SteamVR.
         timer.begin(&gpu);
-        if let Some(px) = wrist.render() {
-            for p in engine.panels.iter().filter(|p| p.source == Source::Wrist) {
+        let upload = |px: &[u8], source: Source, width: u32, surfaces: &mut HashMap<u32, Surface>| {
+            for p in engine.panels.iter().filter(|p| p.source == source) {
                 if let Some(s) = surfaces.get_mut(&p.id) {
-                    gpu.update(&s.tex, px, WRIST_SIZE.0);
+                    gpu.update(&s.tex, px, width);
                     s.needs_submit = true;
                 }
             }
+        };
+        if let Some(px) = wrist.render() {
+            upload(px, Source::Wrist, WRIST_SIZE.0, &mut surfaces);
+        }
+        if let Some(px) = menu.render() {
+            upload(px, Source::Menu, MENU_SIZE.0, &mut surfaces);
         }
         if redraw_keyboard {
-            let img = keyboard_image(chat_text(state.chatbox, &chat).as_deref());
+            let img = keyboard_image(chat_text(session.state.chatbox, &chat).as_deref());
             for p in engine.panels.iter().filter(|p| p.source == Source::Keyboard) {
                 if let Some(s) = surfaces.get_mut(&p.id) {
                     s.tex = gpu.image(&img).map_err(err)?;
@@ -252,7 +276,6 @@ pub fn run() -> Result<(), String> {
                 }
             }
         }
-
         for p in &engine.panels {
             vr.place_panel(p, p.world_pose(&poses));
             let Some(s) = surfaces.get_mut(&p.id) else { continue };
@@ -265,7 +288,6 @@ pub fn run() -> Result<(), String> {
             let new_frame = s.capture.as_ref().is_some_and(|c| c.copy_latest(&gpu.context, &s.tex).unwrap_or(false));
             s.needs_submit |= new_frame;
         }
-        // GPU work above ran back to back inside the timer; one flush, then hand textures to SteamVR.
         timer.end(&gpu);
         gpu.flush();
         for p in &engine.panels {
@@ -287,12 +309,12 @@ pub fn run() -> Result<(), String> {
         }
 
         if dirty.is_some_and(|t| t.elapsed() >= SAVE_DELAY) {
-            state.panels.clone_from(&engine.panels);
-            state.save(&state_path).map_err(err)?;
+            session.persist(&engine.panels);
+            session.state.save(&state_path).map_err(err)?;
             dirty = None;
         }
         vr.wait_frame(20);
     }
-    state.panels.clone_from(&engine.panels);
-    state.save(&state_path).map_err(err)
+    session.persist(&engine.panels);
+    session.state.save(&state_path).map_err(err)
 }

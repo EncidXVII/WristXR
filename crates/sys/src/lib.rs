@@ -169,6 +169,52 @@ fn memory_load() -> Option<f32> {
     Some(m.dwMemoryLoad as f32 / 100.0)
 }
 
+/// Short key click: 25 ms decaying 2 kHz tone with a soft noise attack, 16-bit mono WAV, generated once.
+fn click_wav() -> &'static [u8] {
+    static WAV: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+    WAV.get_or_init(|| {
+        const RATE: u32 = 22_050;
+        let n = RATE as usize / 40;
+        let mut seed = 0x1234_5678u32;
+        let samples: Vec<i16> = (0..n)
+            .map(|i| {
+                let t = i as f32 / RATE as f32;
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                let noise = (seed as f32 / u32::MAX as f32 - 0.5) * (-t * 900.0).exp();
+                let tone = (t * 2000.0 * std::f32::consts::TAU).sin() * (-t * 220.0).exp();
+                ((tone * 0.35 + noise * 0.25) * f32::from(i16::MAX)) as i16
+            })
+            .collect();
+        let data = (samples.len() * 2) as u32;
+        let mut w = Vec::with_capacity(44 + data as usize);
+        w.extend(b"RIFF");
+        w.extend((36 + data).to_le_bytes());
+        w.extend(b"WAVEfmt ");
+        w.extend(16u32.to_le_bytes());
+        w.extend(1u16.to_le_bytes());
+        w.extend(1u16.to_le_bytes());
+        w.extend(RATE.to_le_bytes());
+        w.extend((RATE * 2).to_le_bytes());
+        w.extend(2u16.to_le_bytes());
+        w.extend(16u16.to_le_bytes());
+        w.extend(b"data");
+        w.extend(data.to_le_bytes());
+        samples.iter().for_each(|s| w.extend(s.to_le_bytes()));
+        w
+    })
+}
+
+/// Plays the key click without blocking (a new click cuts the previous one).
+pub fn play_click() {
+    use windows::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
+    // SAFETY: SND_MEMORY reads the static WAV buffer, which lives for the whole process.
+    unsafe {
+        let _ = PlaySoundW(PCWSTR(click_wav().as_ptr().cast()), None, SND_ASYNC | SND_MEMORY | SND_NODEFAULT);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

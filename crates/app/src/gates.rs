@@ -47,7 +47,7 @@ const FRAME_MS: u64 = 11;
 /// Scripted test channel: injects poses and buttons, records every event.
 pub(crate) struct Rig {
     pub(crate) engine: Engine,
-    now: u64,
+    pub(crate) now: u64,
     pub(crate) hands: [HandInput; 2],
     log: Vec<Event>,
     buf: Vec<Event>,
@@ -103,7 +103,7 @@ impl Rig {
 
 type MouseEv = (u32, [f32; 2], MouseButton, bool);
 
-fn mouse(events: &[Event]) -> Vec<MouseEv> {
+pub(crate) fn mouse(events: &[Event]) -> Vec<MouseEv> {
     events
         .iter()
         .filter_map(|e| match *e {
@@ -369,7 +369,7 @@ fn osc_chatbox() -> GateResult {
 }
 
 /// US layout stand-in for the OS layout lookup.
-fn us_char(sc: u16, shift: bool, caps: bool) -> Option<char> {
+pub(crate) fn us_char(sc: u16, shift: bool, caps: bool) -> Option<char> {
     let key = keyboard::ROWS.iter().flat_map(|r| r.iter()).find(|k| k.sc == sc && k.label.chars().count() == 1)?;
     let c = key.label.chars().next()?;
     Some(if shift ^ caps { c.to_ascii_uppercase() } else { c })

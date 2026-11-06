@@ -3,9 +3,13 @@ mod gates;
 #[cfg(windows)]
 mod gates_input;
 #[cfg(windows)]
+mod gates_menu;
+#[cfg(windows)]
 mod gates_vr;
 #[cfg(windows)]
 mod run;
+#[cfg(windows)]
+mod session;
 
 use std::process::ExitCode;
 
@@ -31,6 +35,8 @@ fn main() -> ExitCode {
 fn selftest() -> ExitCode {
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut results: Vec<_> = gates::GATES.iter().map(|(name, gate)| (*name, gate())).collect();
+    #[cfg(windows)]
+    results.push(("4c first run + menu", gates_menu::first_run_and_menu()));
     #[cfg(windows)]
     if std::env::args().any(|a| a == "--vr") {
         results.push(("1+2+5+P live overlay", gates_vr::overlay_live()));

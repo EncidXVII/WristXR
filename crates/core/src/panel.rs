@@ -37,7 +37,13 @@ pub enum Source {
     Window(u64),
     Keyboard,
     Wrist,
+    /// The in-VR menu; never persisted.
+    Menu,
 }
+
+/// Fixed id of the menu panel (outside the range persisted layouts use).
+pub const MENU_ID: u32 = u32::MAX - 1;
+pub const MENU_WIDTH_M: f32 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Anchor {
@@ -107,6 +113,13 @@ impl Panel {
         let rot = facing(f) * Quat::from_axis_angle(Vec3::X, -0.6);
         let aspect = keyboard::ROWS.len() as f32 / keyboard::ROW_UNITS;
         Self::new(id, Source::Keyboard, Pose::new(pos, rot), KEYBOARD_WIDTH_M, aspect)
+    }
+
+    /// Menu: closer and smaller than a monitor panel, slightly below eye line, facing the user.
+    pub fn menu_in_front(head: Pose, aspect: f32) -> Self {
+        let f = flat_forward(head);
+        let pos = head.pos + f * 0.6 + Vec3::new(0.0, -0.1, 0.0);
+        Self::new(MENU_ID, Source::Menu, Pose::new(pos, facing(f)), MENU_WIDTH_M, aspect)
     }
 
     /// Watch on the given hand: behind the pointer tip, facing up out of the controller, top toward the tip.
