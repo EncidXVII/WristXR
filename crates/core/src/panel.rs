@@ -7,6 +7,7 @@ pub const DEFAULT_DISTANCE_M: f32 = 1.0;
 /// Panels spawn slightly below eye line.
 pub const DEFAULT_DROP_M: f32 = 0.15;
 pub const KEYBOARD_WIDTH_M: f32 = 0.6;
+pub const WRIST_WIDTH_M: f32 = 0.14;
 pub const MIN_WIDTH_M: f32 = 0.1;
 pub const MAX_WIDTH_M: f32 = 10.0;
 
@@ -35,6 +36,7 @@ pub enum Source {
     Monitor(u32),
     Window(u64),
     Keyboard,
+    Wrist,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +107,14 @@ impl Panel {
         let rot = facing(f) * Quat::from_axis_angle(Vec3::X, -0.6);
         let aspect = keyboard::ROWS.len() as f32 / keyboard::ROW_UNITS;
         Self::new(id, Source::Keyboard, Pose::new(pos, rot), KEYBOARD_WIDTH_M, aspect)
+    }
+
+    /// Watch on the given hand: behind the pointer tip, facing up out of the controller, top toward the tip.
+    pub fn on_wrist(id: u32, hand: Hand, aspect: f32) -> Self {
+        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16), Quat::from_axis_angle(Vec3::X, -std::f32::consts::FRAC_PI_2));
+        let mut p = Self::new(id, Source::Wrist, pose, WRIST_WIDTH_M, aspect);
+        p.anchor = Anchor::Hand(hand);
+        p
     }
 
     pub fn height_m(&self) -> f32 {

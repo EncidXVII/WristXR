@@ -7,9 +7,10 @@ use std::ffi::c_void;
 use windows::Win32::Foundation::{E_POINTER, HMODULE};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_RESOURCE_MISC_SHARED, D3D11_SDK_VERSION,
-    D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice, ID3D11Device,
-    ID3D11DeviceContext, ID3D11Texture2D,
+    D3D11_ASYNC_GETDATA_DONOTFLUSH, D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT, D3D11_QUERY_DESC, D3D11_QUERY_TIMESTAMP, D3D11_QUERY_TIMESTAMP_DISJOINT,
+    D3D11_RESOURCE_MISC_SHARED, D3D11_SDK_VERSION, D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
+    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Query, ID3D11Texture2D,
 };
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
 use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory1};
@@ -82,6 +83,12 @@ impl Gpu {
         self.texture(img.w, img.h, Some(&img.bgra))
     }
 
+    /// Replaces a texture's pixels (tightly packed BGRA rows of `width`). For UI, which changes rarely.
+    pub fn update(&self, tex: &ID3D11Texture2D, bgra: &[u8], width: u32) {
+        // SAFETY: `bgra` covers the whole texture; row pitch matches.
+        unsafe { self.context.UpdateSubresource(tex, 0, None, bgra.as_ptr().cast(), width * 4, 0) };
+    }
+
     /// Submits queued GPU work so the compositor sees finished copies.
     pub fn flush(&self) {
         // SAFETY: immediate context owned by this device.
@@ -92,4 +99,94 @@ impl Gpu {
 /// Raw `ID3D11Texture2D*` for OpenVR's `Texture_t`.
 pub fn raw(tex: &ID3D11Texture2D) -> *mut c_void {
     tex.as_raw()
+}
+
+const TIMER_SETS: usize = 4;
+
+/// Measures the GPU time of our own work (captures copies, UI uploads) with timestamp queries.
+/// Results are read a few frames later without stalling; `last_ms` is a smoothed per-frame value.
+pub struct GpuTimer {
+    sets: Vec<[ID3D11Query; 3]>,
+    pending: [bool; TIMER_SETS],
+    next: usize,
+    last_ms: f32,
+}
+
+impl GpuTimer {
+    pub fn new(gpu: &Gpu) -> Result<Self> {
+        let query = |kind| -> Result<ID3D11Query> {
+            let mut q = None;
+            // SAFETY: valid descriptor and out-param.
+            unsafe { gpu.device.CreateQuery(&D3D11_QUERY_DESC { Query: kind, MiscFlags: 0 }, Some(&mut q))? };
+            q.ok_or_else(|| Error::from(E_POINTER))
+        };
+        let sets = (0..TIMER_SETS)
+            .map(|_| {
+                Ok([
+                    query(D3D11_QUERY_TIMESTAMP_DISJOINT)?,
+                    query(D3D11_QUERY_TIMESTAMP)?,
+                    query(D3D11_QUERY_TIMESTAMP)?,
+                ])
+            })
+            .collect::<Result<_>>()?;
+        Ok(Self { sets, pending: [false; TIMER_SETS], next: 0, last_ms: 0.0 })
+    }
+
+    /// Smoothed GPU milliseconds per frame spent on our work.
+    pub fn last_ms(&self) -> f32 {
+        self.last_ms
+    }
+
+    pub fn begin(&self, gpu: &Gpu) {
+        let [disjoint, start, _] = &self.sets[self.next];
+        // SAFETY: queries belong to this device.
+        unsafe {
+            gpu.context.Begin(disjoint);
+            gpu.context.End(start);
+        }
+    }
+
+    pub fn end(&mut self, gpu: &Gpu) {
+        let [disjoint, _, stop] = &self.sets[self.next];
+        // SAFETY: queries belong to this device.
+        unsafe {
+            gpu.context.End(stop);
+            gpu.context.End(disjoint);
+        }
+        self.pending[self.next] = true;
+        self.next = (self.next + 1) % TIMER_SETS;
+        self.collect(gpu);
+    }
+
+    /// Reads finished sets without flushing; unfinished ones stay pending (sentinels stay zero).
+    fn collect(&mut self, gpu: &Gpu) {
+        for i in (0..TIMER_SETS).map(|k| (self.next + k) % TIMER_SETS) {
+            if !self.pending[i] {
+                continue;
+            }
+            let [disjoint, start, stop] = &self.sets[i];
+            let mut d = D3D11_QUERY_DATA_TIMESTAMP_DISJOINT::default();
+            let (mut t0, mut t1) = (0u64, 0u64);
+            let flags = D3D11_ASYNC_GETDATA_DONOTFLUSH.0 as u32;
+            // SAFETY: output buffers match each query's data size.
+            unsafe {
+                let read = |q: &ID3D11Query, p: *mut c_void, n: usize| gpu.context.GetData(q, Some(p), n as u32, flags);
+                if read(disjoint, (&raw mut d).cast(), size_of::<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>()).is_err()
+                    || d.Frequency == 0
+                {
+                    return;
+                }
+                let _ = read(start, (&raw mut t0).cast(), 8);
+                let _ = read(stop, (&raw mut t1).cast(), 8);
+            }
+            if t0 == 0 || t1 == 0 {
+                return;
+            }
+            self.pending[i] = false;
+            if !d.Disjoint.as_bool() && t1 >= t0 {
+                let ms = (t1 - t0) as f64 / d.Frequency as f64 * 1000.0;
+                self.last_ms = self.last_ms * 0.9 + ms as f32 * 0.1;
+            }
+        }
+    }
 }

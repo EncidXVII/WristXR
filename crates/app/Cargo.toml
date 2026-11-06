@@ -17,6 +17,8 @@ dvr-vr.workspace = true
 dvr-gfx-d3d11.workspace = true
 dvr-capture-win.workspace = true
 dvr-input-win.workspace = true
+dvr-sys.workspace = true
+dvr-ui.workspace = true
 windows.workspace = true
 
 [lints]

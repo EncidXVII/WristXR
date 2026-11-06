@@ -9,8 +9,8 @@ use dvr_core::engine::FrameInput;
 use dvr_core::math::Pose;
 use dvr_core::panel::{Hand, Panel, Source};
 use ffi::{
-    ActiveActionSet, AnalogData, ClientCore, DigitalData, Mat34, PoseData, Table, TrackedPose, VrEvent, input, overlay,
-    system,
+    ActiveActionSet, AnalogData, ClientCore, DigitalData, FrameTiming, Mat34, PoseData, Table, TrackedPose, VrEvent,
+    compositor, input, overlay, system,
 };
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
@@ -36,6 +36,17 @@ pub fn cursor_key(hand: Hand) -> u64 {
     u64::MAX - 1 + hand.index() as u64
 }
 
+/// Numbers for the wrist: what the game and the user's devices are doing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct VrStats {
+    /// Frame rate of the scene app (game); `None` when no game is presenting.
+    pub game_fps: Option<f32>,
+    /// Battery 0..1 per hand (`Hand::index()`).
+    pub controllers: [Option<f32>; 2],
+    /// Lowest battery among trackers.
+    pub lowest_tracker: Option<f32>,
+}
+
 struct Actions {
     set: u64,
     pointer: u64,
@@ -58,6 +69,7 @@ pub struct OpenVr {
     system: Table,
     overlay: Table,
     input: Table,
+    compositor: Table,
     actions: Actions,
     overlays: HashMap<u64, Placed>,
 }
@@ -126,9 +138,10 @@ impl OpenVr {
                 interface(ffi::SYSTEM_VERSION)?,
                 interface(ffi::OVERLAY_VERSION)?,
                 interface(ffi::INPUT_VERSION)?,
+                interface(ffi::COMPOSITOR_VERSION)?,
             ))
         })();
-        let (system, overlay, input) = match tables {
+        let (system, overlay, input, compositor) = match tables {
             Ok(t) => t,
             Err(e) => {
                 // SAFETY: balances the successful init above.
@@ -141,6 +154,7 @@ impl OpenVr {
             system,
             overlay,
             input,
+            compositor,
             actions: Actions { set: 0, pointer: 0, click: 0, grab: 0, stick: 0, menu: 0, haptic: 0, hands: [0; 2] },
             overlays: HashMap::new(),
         };
@@ -223,6 +237,40 @@ impl OpenVr {
         let e = call!(self.overlay, overlay::WAIT_FRAME_SYNC, fn(u32) -> i32, timeout_ms);
         if e != 0 {
             std::thread::sleep(std::time::Duration::from_millis(u64::from(timeout_ms)));
+        }
+    }
+
+    fn battery(&self, device: u32) -> Option<f32> {
+        if device >= ffi::MAX_DEVICES {
+            return None;
+        }
+        let mut e = 0i32;
+        let v = call!(
+            self.system,
+            system::GET_FLOAT_TRACKED_DEVICE_PROPERTY,
+            fn(u32, i32, *mut i32) -> f32,
+            device,
+            ffi::PROP_BATTERY_PERCENT,
+            &mut e
+        );
+        (e == 0).then_some(v)
+    }
+
+    pub fn stats(&self) -> VrStats {
+        let mut timing = FrameTiming { size: size_of::<FrameTiming>() as u32, ..FrameTiming::default() };
+        let ok = call!(self.compositor, compositor::GET_FRAME_TIMING, fn(*mut FrameTiming, u32) -> u8, &mut timing, 0);
+        let interval = timing.client_frame_interval_ms;
+        let role = |r: i32| call!(self.system, system::GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE, fn(i32) -> u32, r);
+        let lowest_tracker = (0..ffi::MAX_DEVICES)
+            .filter(|&d| {
+                call!(self.system, system::GET_TRACKED_DEVICE_CLASS, fn(u32) -> i32, d) == ffi::CLASS_GENERIC_TRACKER
+            })
+            .filter_map(|d| self.battery(d))
+            .reduce(f32::min);
+        VrStats {
+            game_fps: (ok != 0 && timing.presents > 0 && interval > 0.0).then(|| 1000.0 / interval),
+            controllers: [self.battery(role(ffi::ROLE_LEFT_HAND)), self.battery(role(ffi::ROLE_RIGHT_HAND))],
+            lowest_tracker,
         }
     }
 

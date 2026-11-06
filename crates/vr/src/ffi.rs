@@ -8,15 +8,24 @@ pub const TEXTURE_DIRECTX: i32 = 0;
 pub const COLOR_SPACE_AUTO: i32 = 0;
 pub const EVENT_QUIT: u32 = 700;
 pub const HMD_INDEX: usize = 0;
+pub const MAX_DEVICES: u32 = 64;
+pub const ROLE_LEFT_HAND: i32 = 1;
+pub const ROLE_RIGHT_HAND: i32 = 2;
+pub const CLASS_GENERIC_TRACKER: i32 = 3;
+pub const PROP_BATTERY_PERCENT: i32 = 1012;
 
 pub const SYSTEM_VERSION: &CStr = c"FnTable:IVRSystem_026";
 pub const OVERLAY_VERSION: &CStr = c"FnTable:IVROverlay_028";
 pub const INPUT_VERSION: &CStr = c"FnTable:IVRInput_011";
+pub const COMPOSITOR_VERSION: &CStr = c"FnTable:IVRCompositor_029";
 pub const CLIENT_CORE_VERSION: &CStr = c"IVRClientCore_003";
 
 pub mod system {
     pub const GET_DXGI_OUTPUT_INFO: usize = 8;
     pub const GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE: usize = 12;
+    pub const GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE: usize = 18;
+    pub const GET_TRACKED_DEVICE_CLASS: usize = 20;
+    pub const GET_FLOAT_TRACKED_DEVICE_PROPERTY: usize = 23;
     pub const POLL_NEXT_EVENT: usize = 30;
     pub const ACKNOWLEDGE_QUIT_EXITING: usize = 47;
 }
@@ -32,6 +41,9 @@ pub mod overlay {
     pub const HIDE_OVERLAY: usize = 44;
     pub const WAIT_FRAME_SYNC: usize = 47;
     pub const SET_OVERLAY_TEXTURE: usize = 60;
+}
+pub mod compositor {
+    pub const GET_FRAME_TIMING: usize = 10;
 }
 pub mod input {
     pub const SET_ACTION_MANIFEST_PATH: usize = 0;
@@ -96,6 +108,28 @@ pub struct ActiveActionSet {
     pub secondary: u64,
     pub padding: u32,
     pub priority: i32,
+}
+
+/// `Compositor_FrameTiming`; only the fields we read are named.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FrameTiming {
+    pub size: u32,
+    pub frame_index: u32,
+    pub presents: u32,
+    pub mispresented: u32,
+    pub dropped: u32,
+    pub reprojection_flags: u32,
+    pub system_time_s: f64,
+    /// Pre-submit GPU .. compositor idle CPU (6 fields).
+    pub render_ms: [f32; 6],
+    pub client_frame_interval_ms: f32,
+    /// Present-call CPU .. compositor render start (9 fields).
+    pub timeline_ms: [f32; 9],
+    pub hmd_pose: TrackedPose,
+    pub vsyncs_ready: u32,
+    pub vsyncs_to_first_view: u32,
+    pub transfer_latency_ms: f32,
 }
 
 #[repr(C)]
@@ -220,6 +254,14 @@ mod tests {
             ("IVRSystem", "GetDXGIOutputInfo", system::GET_DXGI_OUTPUT_INFO),
             ("IVRSystem", "GetDeviceToAbsoluteTrackingPose", system::GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE),
             ("IVRSystem", "PollNextEvent", system::POLL_NEXT_EVENT),
+            (
+                "IVRSystem",
+                "GetTrackedDeviceIndexForControllerRole",
+                system::GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE,
+            ),
+            ("IVRSystem", "GetTrackedDeviceClass", system::GET_TRACKED_DEVICE_CLASS),
+            ("IVRSystem", "GetFloatTrackedDeviceProperty", system::GET_FLOAT_TRACKED_DEVICE_PROPERTY),
+            ("IVRCompositor", "GetFrameTiming", compositor::GET_FRAME_TIMING),
             ("IVRSystem", "AcknowledgeQuit_Exiting", system::ACKNOWLEDGE_QUIT_EXITING),
             ("IVROverlay", "CreateOverlay", overlay::CREATE_OVERLAY),
             ("IVROverlay", "DestroyOverlay", overlay::DESTROY_OVERLAY),
@@ -245,7 +287,12 @@ mod tests {
         for (t, f, i) in checks {
             assert_eq!(table(t).get(*i).map(String::as_str), Some(*f), "{t}::{f}");
         }
-        for (v, t) in [(SYSTEM_VERSION, "IVRSystem"), (OVERLAY_VERSION, "IVROverlay"), (INPUT_VERSION, "IVRInput")] {
+        for (v, t) in [
+            (SYSTEM_VERSION, "IVRSystem"),
+            (OVERLAY_VERSION, "IVROverlay"),
+            (INPUT_VERSION, "IVRInput"),
+            (COMPOSITOR_VERSION, "IVRCompositor"),
+        ] {
             let name = v.to_str().expect("ascii").trim_start_matches("FnTable:");
             assert!(HEADER.contains(&format!("{t}_Version = \"{name}\"")), "{name}");
         }
@@ -259,6 +306,7 @@ mod tests {
         assert_eq!(size_of::<AnalogData>(), 48);
         assert_eq!(size_of::<PoseData>(), 96);
         assert_eq!(size_of::<ActiveActionSet>(), 32);
+        assert_eq!(size_of::<FrameTiming>(), 192);
         assert_eq!(size_of::<VrEvent>(), if cfg!(unix) { 60 } else { 64 });
     }
 }

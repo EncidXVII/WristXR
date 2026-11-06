@@ -1,0 +1,12 @@
+[package]
+name = "dvr-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+fluent.workspace = true
+slint.workspace = true
+
+[lints]
+workspace = true

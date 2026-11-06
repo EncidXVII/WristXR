@@ -8,9 +8,11 @@ use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{Hand, Panel, PixelRect, Source};
 use dvr_core::raster;
 use dvr_core::state::State;
-use dvr_gfx_d3d11::{Gpu, raw};
+use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
 use dvr_input_win::Injector;
+use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
+use dvr_ui::{WRIST_SIZE, Wrist, WristInfo};
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -20,6 +22,7 @@ const SAVE_DELAY: Duration = Duration::from_secs(1);
 const CURSOR_LIFT_M: f32 = 0.003;
 const STANDING_HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
 const LAYOUT_POLL: Duration = Duration::from_millis(500);
+const STATS_PERIOD: Duration = Duration::from_secs(1);
 /// Characters of the chat line that fit on the space bar.
 const SPACE_BAR_CHARS: usize = 28;
 
@@ -68,8 +71,39 @@ fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
         },
         Source::Window(_) => (raster::placeholder(1280, 720, "WINDOW CLOSED"), None),
+        Source::Wrist => {
+            let tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
+            return Ok(Surface { tex, capture: None, rect: None, needs_submit: false });
+        }
     };
     Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true })
+}
+
+/// Every layout has a watch on the non-dominant hand.
+fn ensure_wrist(state: &mut State) {
+    if !state.panels.iter().any(|p| p.source == Source::Wrist) {
+        let id = state.next_id();
+        let aspect = WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32;
+        state.panels.push(Panel::on_wrist(id, state.dominant.other(), aspect));
+    }
+}
+
+fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<&(Toast, Instant)>) -> WristInfo {
+    let (hour, minute) = dvr_sys::local_time();
+    let stats = vr.stats();
+    WristInfo {
+        hour,
+        minute,
+        game_fps: stats.game_fps,
+        controllers: stats.controllers,
+        lowest_tracker: stats.lowest_tracker,
+        cpu: load.cpu,
+        ram: load.ram,
+        gpu: load.gpu,
+        own_gpu_ms,
+        own_cpu_percent: load.own_cpu_percent,
+        toast: toast.map(|(t, _)| (t.title.clone(), t.content.clone())),
+    }
 }
 
 /// First run: primary monitor in front, keyboard below it.
@@ -92,8 +126,9 @@ pub fn run() -> Result<(), String> {
     let monitors = dvr_capture_win::monitors();
     if state.panels.is_empty() {
         first_layout(&mut state, vr.head_pose().unwrap_or(STANDING_HEAD), &monitors);
-        state.save(&state_path).map_err(err)?;
     }
+    ensure_wrist(&mut state);
+    state.save(&state_path).map_err(err)?;
 
     let cursor = gpu.image(&raster::cursor(64)).map_err(err)?;
     for hand in Hand::BOTH {
@@ -114,6 +149,15 @@ pub fn run() -> Result<(), String> {
     let mut input = FrameInput::default();
     let mut events = Vec::with_capacity(64);
     let mut dirty: Option<Instant> = None;
+    let mut wrist = Wrist::new()?;
+    let mut sampler = dvr_sys::Sampler::new();
+    let mut load = dvr_sys::Load::default();
+    let mut timer = GpuTimer::new(&gpu).map_err(err)?;
+    // Another app (e.g. XSOverlay) may own the port; the overlay still runs without toasts.
+    let mut notifications =
+        Listener::bind(dvr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
+    let mut toast: Option<(Toast, Instant)> = None;
+    let mut stats_at = Instant::now() - STATS_PERIOD;
     let start = Instant::now();
 
     while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
@@ -172,6 +216,33 @@ pub fn run() -> Result<(), String> {
             redraw_keyboard |= id != layout;
             layout = id;
         }
+        let mut refresh_wrist = stats_at.elapsed() >= STATS_PERIOD;
+        if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
+            toast = Some((t, Instant::now()));
+            vr.haptic(state.dominant.other());
+            refresh_wrist = true;
+        }
+        if toast.as_ref().is_some_and(|(t, at)| at.elapsed().as_secs_f32() >= t.timeout_s) {
+            toast = None;
+            refresh_wrist = true;
+        }
+        if stats_at.elapsed() >= STATS_PERIOD {
+            stats_at = Instant::now();
+            load = sampler.sample();
+        }
+        if refresh_wrist {
+            wrist.set(&wrist_info(&vr, &load, timer.last_ms(), toast.as_ref()));
+        }
+
+        timer.begin(&gpu);
+        if let Some(px) = wrist.render() {
+            for p in engine.panels.iter().filter(|p| p.source == Source::Wrist) {
+                if let Some(s) = surfaces.get_mut(&p.id) {
+                    gpu.update(&s.tex, px, WRIST_SIZE.0);
+                    s.needs_submit = true;
+                }
+            }
+        }
         if redraw_keyboard {
             let img = keyboard_image(chat_text(state.chatbox, &chat).as_deref());
             for p in engine.panels.iter().filter(|p| p.source == Source::Keyboard) {
@@ -191,15 +262,18 @@ pub fn run() -> Result<(), String> {
             if !p.visible {
                 s.capture = None;
             }
-            let fresh = match &s.capture {
-                Some(c) => c.copy_latest(&gpu.context, &s.tex).unwrap_or(false),
-                None => std::mem::take(&mut s.needs_submit),
-            };
-            if fresh {
-                gpu.flush();
-                if let Err(e) = vr.set_texture_d3d11(u64::from(p.id), raw(&s.tex)) {
-                    tracing::warn!(%e, panel = p.id, "panel texture rejected");
-                }
+            let new_frame = s.capture.as_ref().is_some_and(|c| c.copy_latest(&gpu.context, &s.tex).unwrap_or(false));
+            s.needs_submit |= new_frame;
+        }
+        // GPU work above ran back to back inside the timer; one flush, then hand textures to SteamVR.
+        timer.end(&gpu);
+        gpu.flush();
+        for p in &engine.panels {
+            if let Some(s) = surfaces.get_mut(&p.id)
+                && std::mem::take(&mut s.needs_submit)
+                && let Err(e) = vr.set_texture_d3d11(u64::from(p.id), raw(&s.tex))
+            {
+                tracing::warn!(%e, panel = p.id, "panel texture rejected");
             }
         }
 
