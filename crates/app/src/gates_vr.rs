@@ -2,7 +2,7 @@
 //! Uses the same meters as the wrist cost readout (dvr_sys::Sampler, GpuTimer), so gate P and the UI agree.
 
 use crate::gates::GateResult;
-use dvr_capture_win::Capture;
+use dvr_capture_win::{Capture, Frame};
 use dvr_core::backend::VrBackend;
 use dvr_core::engine::FrameInput;
 use dvr_core::math::Vec3;
@@ -49,7 +49,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
     wrist_panel.pose.pos = panel.pose.pos + Vec3::new(0.0, -0.45, 0.2);
     let tex = gpu.texture(monitor.rect.w, monitor.rect.h, None).map_err(err)?;
     let wrist_tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
-    let capture = Capture::monitor(&gpu.device, monitor.handle).map_err(err)?;
+    let mut capture = Capture::monitor(&gpu.device, monitor.handle).map_err(err)?;
     let mut wrist = Wrist::new()?;
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
     let mut sampler = dvr_sys::Sampler::new();
@@ -93,7 +93,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
             }
             None => false,
         };
-        let capture_new = capture.copy_latest(&gpu.context, &tex).map_err(err)?;
+        let capture_new = capture.copy_latest(&gpu.context, &tex).map_err(err)? == Frame::Copied;
         timer.end(&gpu);
         gpu.flush();
         if wrist_new {

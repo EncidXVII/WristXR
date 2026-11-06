@@ -1,12 +1,12 @@
 //! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
 use crate::session::{Effect, MonitorInfo, Session};
-use dvr_capture_win::{Capture, Monitor};
+use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput};
 use dvr_core::keyboard::{CHAT, KeyDef, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{Hand, Panel, PixelRect, Source};
+use dvr_core::panel::{Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
 use dvr_core::state::State;
 use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
@@ -24,6 +24,8 @@ const CURSOR_LIFT_M: f32 = 0.003;
 const STANDING_HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
 const LAYOUT_POLL: Duration = Duration::from_millis(500);
 const STATS_PERIOD: Duration = Duration::from_secs(1);
+/// A popped-out window appears this far in front of the hand that pulled it.
+const POP_OUT_DISTANCE_M: f32 = 0.3;
 /// Characters of the chat line that fit on the space bar.
 const SPACE_BAR_CHARS: usize = 28;
 
@@ -33,7 +35,11 @@ struct Surface {
     capture: Option<Capture>,
     rect: Option<PixelRect>,
     needs_submit: bool,
+    /// Source is gone (window closed): showing a placeholder, no capture attempts.
+    dead: bool,
 }
+
+const WINDOW_CLOSED: &str = "WINDOW CLOSED";
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -60,7 +66,7 @@ fn keyboard_image(chat: Option<&str>) -> raster::Image {
 fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -> Result<Surface, String> {
     let blank = |size: (u32, u32)| -> Result<Surface, String> {
         let tex = gpu.texture(size.0, size.1, None).map_err(err)?;
-        Ok(Surface { tex, capture: None, rect: None, needs_submit: false })
+        Ok(Surface { tex, capture: None, rect: None, needs_submit: false, dead: false })
     };
     let (img, rect) = match panel.source {
         Source::Keyboard => (keyboard_image(chat), None),
@@ -68,11 +74,18 @@ fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -
             Some(m) => return Ok(Surface { rect: Some(m.rect), ..blank((m.rect.w, m.rect.h))? }),
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
         },
-        Source::Window(_) => (raster::placeholder(1280, 720, "WINDOW CLOSED"), None),
+        Source::Window(h) => match dvr_capture_win::window_rect(h as isize) {
+            Some(r) => return Ok(Surface { rect: Some(r), ..blank((r.w, r.h))? }),
+            None => {
+                let img = raster::placeholder(1280, 720, WINDOW_CLOSED);
+                let tex = gpu.image(&img).map_err(err)?;
+                return Ok(Surface { tex, capture: None, rect: None, needs_submit: true, dead: true });
+            }
+        },
         Source::Wrist => return blank(WRIST_SIZE),
         Source::Menu => return blank(MENU_SIZE),
     };
-    Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true })
+    Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true, dead: false })
 }
 
 fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<&(Toast, Instant)>) -> WristInfo {
@@ -94,7 +107,6 @@ fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<
 }
 
 pub fn run() -> Result<(), String> {
-    dvr_capture_win::init_process();
     let state_path = State::default_path().ok_or("no config directory")?;
     let dir = state_path.parent().ok_or("no config directory")?.to_path_buf();
     let manifest = crate::bindings::install(&dir.join("input")).map_err(err)?;
@@ -105,9 +117,14 @@ pub fn run() -> Result<(), String> {
     let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
     let head = |vr: &OpenVr| vr.head_pose().unwrap_or(STANDING_HEAD);
 
-    let state = State::load(&state_path);
+    let mut state = State::load(&state_path);
+    let imported = if state.onboarded { None } else { crate::import::detect() };
+    if let Some(imp) = &imported {
+        crate::import::apply(&mut state, imp);
+    }
     let mut panels = state.panels.clone();
     let mut session = Session::new(state, &mut panels, head(&vr));
+    session.imported = imported.is_some();
     session.persist(&panels);
     session.state.save(&state_path).map_err(err)?;
 
@@ -131,6 +148,7 @@ pub fn run() -> Result<(), String> {
     let mut input = FrameInput::default();
     let mut events = Vec::with_capacity(64);
     let mut dirty: Option<Instant> = None;
+    let mut resized: Vec<(u32, u32, u32)> = Vec::with_capacity(8);
     let mut wrist = Wrist::new()?;
     let mut menu = Menu::new()?;
     let mut sampler = dvr_sys::Sampler::new();
@@ -149,6 +167,21 @@ pub fn run() -> Result<(), String> {
         let poses = [input.hands[0].pose, input.hands[1].pose];
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut redraw_keyboard = false;
+        // Popped-out windows can move on the desktop; input maps through their current rectangle.
+        for p in &engine.panels {
+            if let (Source::Window(h), Some(s)) = (p.source, surfaces.get_mut(&p.id))
+                && !s.dead
+            {
+                s.rect = dvr_capture_win::window_rect(h as isize);
+                if s.rect.is_none() {
+                    s.dead = true;
+                    s.capture = None;
+                    s.tex = gpu.image(&raster::placeholder(1280, 720, WINDOW_CLOSED)).map_err(err)?;
+                    s.needs_submit = true;
+                }
+            }
+        }
+        let mut pop = None;
         let selected = session.selected;
         session.pointer(&events, &menu);
         let mut menu_dirty = session.selected != selected;
@@ -157,7 +190,13 @@ pub fn run() -> Result<(), String> {
             if let Event::Hover { hand, panel, uv, .. } = *e {
                 cursors[hand.index()] = Some((panel, uv));
             }
+            if let Event::Mouse { panel, down: true, .. } = *e
+                && let Some(Source::Window(h)) = engine.panels.iter().find(|p| p.id == panel).map(|p| p.source)
+            {
+                dvr_capture_win::focus(h as isize);
+            }
             match *e {
+                Event::PopOut { hand, panel, uv } => pop = Some((hand, panel, uv)),
                 Event::Key { scancode, down } if session.key(scancode, down, dvr_input_win::key_char) => {
                     menu_dirty = true;
                 }
@@ -199,6 +238,26 @@ pub fn run() -> Result<(), String> {
             if session.state.typing_sounds && matches!(*e, Event::Key { down: true, .. }) {
                 dvr_sys::play_click();
             }
+        }
+
+        if let Some((hand, panel, uv)) = pop
+            && let Some(from) = engine.panels.iter().find(|p| p.id == panel).copied()
+            && let Some(rect) = surfaces.get(&panel).and_then(|s| s.rect)
+            && let Some(h) = dvr_capture_win::window_at(rect.pixel_at(uv))
+            && let Some(wr) = dvr_capture_win::window_rect(h)
+        {
+            // Same physical scale it had on the monitor, in front of the hand that pulled it.
+            let id = crate::session::next_id(&engine.panels);
+            let width = (from.width_m * wr.w as f32 / rect.w as f32).max(MIN_WIDTH_M);
+            let at = poses[hand.index()];
+            let pose = Pose::new(at.pos + at.forward() * POP_OUT_DISTANCE_M, from.world_pose(&poses).rot);
+            let p = Panel::new(id, Source::Window(h as u64), pose, width, wr.h as f32 / wr.w as f32);
+            surfaces.insert(id, surface(&gpu, &p, &monitors, None)?);
+            engine.panels.push(p);
+            engine.start_grab(hand, id, &poses);
+            session.selected = Some(id);
+            menu_dirty = true;
+            dirty = Some(Instant::now());
         }
 
         for click in menu.take_inputs() {
@@ -279,17 +338,35 @@ pub fn run() -> Result<(), String> {
         for p in &engine.panels {
             vr.place_panel(p, p.world_pose(&poses));
             let Some(s) = surfaces.get_mut(&p.id) else { continue };
-            if let (Source::Monitor(i), true, None) = (p.source, p.visible, &s.capture) {
-                s.capture = monitors.get(i as usize).and_then(|m| Capture::monitor(&gpu.device, m.handle).ok());
+            if p.visible && s.capture.is_none() && !s.dead {
+                s.capture = match p.source {
+                    Source::Monitor(i) => {
+                        monitors.get(i as usize).and_then(|m| Capture::monitor(&gpu.device, m.handle).ok())
+                    }
+                    Source::Window(h) => Capture::window(&gpu.device, h as isize).ok(),
+                    _ => None,
+                };
             }
             if !p.visible {
                 s.capture = None;
             }
-            let new_frame = s.capture.as_ref().is_some_and(|c| c.copy_latest(&gpu.context, &s.tex).unwrap_or(false));
-            s.needs_submit |= new_frame;
+            match s.capture.as_mut().map(|c| c.copy_latest(&gpu.context, &s.tex)) {
+                Some(Ok(Frame::Copied)) => s.needs_submit = true,
+                Some(Ok(Frame::Resized(w, h))) => {
+                    s.tex = gpu.texture(w, h, None).map_err(err)?;
+                    resized.push((p.id, w, h));
+                }
+                _ => {}
+            }
         }
         timer.end(&gpu);
         gpu.flush();
+        for (id, w, h) in resized.drain(..) {
+            if let Some(p) = engine.panels.iter_mut().find(|p| p.id == id) {
+                p.aspect = h as f32 / w as f32;
+                dirty = Some(Instant::now());
+            }
+        }
         for p in &engine.panels {
             if let Some(s) = surfaces.get_mut(&p.id)
                 && std::mem::take(&mut s.needs_submit)

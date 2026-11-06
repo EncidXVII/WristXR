@@ -829,6 +829,7 @@ dependencies = [
  "dvr-ui",
  "dvr-vr",
  "rosc",
+ "serde",
  "serde_json",
  "tracing",
  "windows 0.61.3",

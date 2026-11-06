@@ -18,6 +18,10 @@ pub const STICK_DEADZONE: f32 = 0.2;
 pub const SCROLL_NOTCHES_PER_S: f32 = 12.0;
 pub const PUSH_PULL_M_PER_S: f32 = 1.5;
 const MIN_GRAB_DISTANCE_M: f32 = 0.1;
+/// Window pop-out: grip a monitor panel and yank toward yourself this far, this straight, this fast.
+pub const POP_OUT_PULL_M: f32 = 0.2;
+pub const POP_OUT_LATERAL_M: f32 = 0.1;
+pub const POP_OUT_WINDOW_MS: u64 = 800;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HandInput {
@@ -74,6 +78,13 @@ pub enum Event {
         hand: Hand,
     },
     MenuToggle,
+    /// Grip-and-yank on a monitor panel: the window under `uv` should become its own panel. The monitor panel is
+    /// already back where it was; the app creates the window panel and calls `start_grab` to keep it in hand.
+    PopOut {
+        hand: Hand,
+        panel: u32,
+        uv: [f32; 2],
+    },
     /// The keyboard's Chat key: toggle "send to VRChat chatbox".
     ChatToggle,
 }
@@ -117,6 +128,7 @@ enum Grab {
         hand: Hand,
         panel: u32,
         rel: Pose,
+        popout: Option<PopOutWatch>,
     },
     Two {
         panel: u32,
@@ -126,6 +138,16 @@ enum Grab {
         pose0: Pose,
         width0: f32,
     },
+}
+
+/// Watches the first moments of a monitor-panel grab for the pop-out yank.
+#[derive(Clone, Copy, Debug)]
+struct PopOutWatch {
+    t0: u64,
+    hand0: Vec3,
+    toward_user: Vec3,
+    uv: [f32; 2],
+    world0: Pose,
 }
 
 #[derive(Debug, Default)]
@@ -151,6 +173,14 @@ impl Engine {
         match self.grab {
             Grab::Idle => None,
             Grab::One { panel, .. } | Grab::Two { panel, .. } => Some(panel),
+        }
+    }
+
+    /// Puts `panel` in `hand` as if just gripped (used after a pop-out creates a window panel).
+    pub fn start_grab(&mut self, hand: Hand, panel: u32, poses: &[Pose; 2]) {
+        if let Some(i) = self.index_of(panel) {
+            let rel = poses[hand.index()].inverse() * self.panels[i].world_pose(poses);
+            self.grab = Grab::One { hand, panel, rel, popout: None };
         }
     }
 
@@ -195,7 +225,7 @@ impl Engine {
         let cur = input.hands[hand.index()];
         let prev = self.hands[hand.index()].prev;
         if cur.grip && !prev.grip && cur.tracked {
-            let Some((i, _)) = self.hit(hand, poses) else { return };
+            let Some((i, uv)) = self.hit(hand, poses) else { return };
             let p = self.panels[i];
             if p.locked {
                 return;
@@ -203,7 +233,15 @@ impl Engine {
             let world = p.world_pose(poses);
             match self.grab {
                 Grab::Idle => {
-                    self.grab = Grab::One { hand, panel: p.id, rel: poses[hand.index()].inverse() * world };
+                    let ray = poses[hand.index()];
+                    let popout = matches!(p.source, Source::Monitor(_)).then_some(PopOutWatch {
+                        t0: input.now_ms,
+                        hand0: ray.pos,
+                        toward_user: -ray.forward(),
+                        uv,
+                        world0: world,
+                    });
+                    self.grab = Grab::One { hand, panel: p.id, rel: ray.inverse() * world, popout };
                 }
                 Grab::One { hand: other, panel, .. } if panel == p.id && other != hand => {
                     let (a, b) = (poses[0].pos, poses[1].pos);
@@ -230,6 +268,7 @@ impl Engine {
                             hand: other,
                             panel,
                             rel: poses[other.index()].inverse() * self.panels[i].world_pose(poses),
+                            popout: None,
                         },
                         None => Grab::Idle,
                     };
@@ -240,9 +279,20 @@ impl Engine {
     }
 
     fn update_grab(&mut self, input: &FrameInput, poses: &[Pose; 2], dt: f32, out: &mut Vec<Event>) {
+        let mut pop = None;
         let (panel, world, width) = match &mut self.grab {
             Grab::Idle => return,
-            Grab::One { hand, panel, rel } => {
+            Grab::One { hand, panel, rel, popout } => {
+                if let Some(w) = *popout {
+                    let d = poses[hand.index()].pos - w.hand0;
+                    let along = d.dot(w.toward_user);
+                    let lateral = (d - w.toward_user * along).length();
+                    if input.now_ms.saturating_sub(w.t0) > POP_OUT_WINDOW_MS || lateral > POP_OUT_LATERAL_M {
+                        *popout = None;
+                    } else if along >= POP_OUT_PULL_M {
+                        pop = Some((*hand, w.uv, w.world0));
+                    }
+                }
                 let y = input.hands[hand.index()].stick[1];
                 if y.abs() > STICK_DEADZONE {
                     let d = (rel.pos.length() + y * PUSH_PULL_M_PER_S * dt).max(MIN_GRAB_DISTANCE_M);
@@ -265,6 +315,14 @@ impl Engine {
             return;
         };
         let p = &mut self.panels[i];
+        if let Some((hand, uv, world0)) = pop {
+            p.set_world_pose(world0, poses);
+            self.grab = Grab::Idle;
+            out.push(Event::Moved { panel });
+            out.push(Event::PopOut { hand, panel, uv });
+            out.push(Event::Haptic { hand });
+            return;
+        }
         p.set_world_pose(world, poses);
         if let Some(w) = width {
             p.width_m = w;

@@ -8,14 +8,19 @@ use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{Hand, Panel, PixelRect, Source};
 use dvr_input_win::Injector;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
+    CallNextHookEx, KBDLLHOOKSTRUCT, LLKHF_INJECTED, LLMHF_INJECTED, MSLLHOOKSTRUCT, SetWindowsHookExW,
+    UnhookWindowsHookEx, WH_KEYBOARD_LL, WH_MOUSE_LL,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetCursorPos, GetForegroundWindow, GetMessageW, MSG,
     PostMessageW, PostQuitMessage, RegisterClassW, SetCursorPos, TranslateMessage, WM_CHAR, WM_CLOSE, WM_DESTROY,
-    WM_LBUTTONDOWN, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_SETFOCUS, WNDCLASSW, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
-    WS_VISIBLE,
+    WM_LBUTTONDOWN, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_SETFOCUS, WNDCLASSW, WS_EX_TOOLWINDOW,
+    WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 use windows::core::w;
 
@@ -28,6 +33,33 @@ enum Seen {
 }
 
 static SEEN: Mutex<Vec<Seen>> = Mutex::new(Vec::new());
+/// Set when real (non-injected) mouse or keyboard input happens during the gate: the result is then inconclusive.
+static PHYSICAL_INPUT: AtomicBool = AtomicBool::new(false);
+
+extern "system" fn mouse_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if code >= 0 {
+        // SAFETY: for WH_MOUSE_LL, lParam points at an MSLLHOOKSTRUCT for the duration of the call.
+        let info = unsafe { &*(lp.0 as *const MSLLHOOKSTRUCT) };
+        // Moves are ignored: SetCursorPos produces non-injected moves, and the cursor is re-placed before clicks.
+        if info.flags & LLMHF_INJECTED == 0 && wp.0 as u32 != WM_MOUSEMOVE {
+            PHYSICAL_INPUT.store(true, Ordering::Relaxed);
+        }
+    }
+    // SAFETY: pass the event on unchanged.
+    unsafe { CallNextHookEx(None, code, wp, lp) }
+}
+
+extern "system" fn keyboard_hook(code: i32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if code >= 0 {
+        // SAFETY: for WH_KEYBOARD_LL, lParam points at a KBDLLHOOKSTRUCT for the duration of the call.
+        let info = unsafe { &*(lp.0 as *const KBDLLHOOKSTRUCT) };
+        if info.flags.0 & LLKHF_INJECTED.0 == 0 {
+            PHYSICAL_INPUT.store(true, Ordering::Relaxed);
+        }
+    }
+    // SAFETY: pass the event on unchanged.
+    unsafe { CallNextHookEx(None, code, wp, lp) }
+}
 
 fn seen() -> Vec<Seen> {
     SEEN.lock().map(|mut s| std::mem::take(&mut *s)).unwrap_or_default()
@@ -89,10 +121,18 @@ impl TestWindow {
                     None,
                 );
                 let _ = tx.send(hwnd.map(|h| h.0 as isize).map_err(|e| e.to_string()));
+                // Low-level hooks run on this thread's message loop and only observe (never block) input.
+                let hooks = [
+                    SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_hook), None, 0).ok(),
+                    SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), None, 0).ok(),
+                ];
                 let mut msg = MSG::default();
                 while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                     let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
+                }
+                for hook in hooks.into_iter().flatten() {
+                    let _ = UnhookWindowsHookEx(hook);
                 }
             }
         });
@@ -128,7 +168,11 @@ pub fn input_live() -> GateResult {
     let mut saved = POINT::default();
     // SAFETY: plain cursor query.
     let _ = unsafe { GetCursorPos(&mut saved) };
+    PHYSICAL_INPUT.store(false, Ordering::Relaxed);
     let result = run(index as u32, screen, win);
+    if result.is_err() && PHYSICAL_INPUT.load(Ordering::Relaxed) {
+        return Err("inconclusive: real mouse/keyboard input during the test; rerun hands-off".into());
+    }
     // SAFETY: restores the user's cursor position.
     let _ = unsafe { SetCursorPos(saved.x, saved.y) };
     result
@@ -166,7 +210,11 @@ fn run(monitor: u32, screen: PixelRect, win: PixelRect) -> GateResult {
         .iter()
         .any(|s| matches!(*s, Seen::Down { x, y, right: false } if (x - cx).abs() <= 1 && (y - cy).abs() <= 1));
     if !hit {
-        return Err(format!("left click did not land at ({cx},{cy}) in the test window: {got:?}"));
+        let under = dvr_capture_win::window_at((win.x + cx, win.y + cy));
+        return Err(format!(
+            "left click did not land at ({cx},{cy}) in the test window {}: saw {got:?}, window under target {under:?}",
+            window.hwnd
+        ));
     }
 
     rig.hold_ms(500);
@@ -214,5 +262,42 @@ fn run(monitor: u32, screen: PixelRect, win: PixelRect) -> GateResult {
     if typed != expected {
         return Err(format!("typed {typed:?}, expected {expected:?} (current layout)"));
     }
-    Ok(())
+
+    // Gate 5b live: yank the test window out of the desktop panel; it must resolve to our window and capture.
+    rig.aim(r, DESK, uv(win.x + 320, win.y + 200))?;
+    rig.frames(1);
+    rig.take();
+    rig.hand(r).grip = true;
+    rig.frames(1);
+    let toward = -rig.hands[1].pose.forward();
+    for _ in 0..5 {
+        rig.hand(r).pose.pos = rig.hands[1].pose.pos + toward * 0.05;
+        rig.frames(1);
+    }
+    rig.hand(r).grip = false;
+    rig.frames(1);
+    let pop = rig.take().into_iter().find_map(|e| match e {
+        dvr_core::engine::Event::PopOut { panel, uv, .. } => Some((panel, uv)),
+        _ => None,
+    });
+    let (panel, at) = pop.ok_or("yank did not pop out")?;
+    let hwnd = (panel == DESK).then(|| dvr_capture_win::window_at(screen.pixel_at(at))).flatten();
+    if hwnd != Some(window.hwnd) {
+        return Err(format!("popped window {hwnd:?} is not the test window {}", window.hwnd));
+    }
+    let gpu = dvr_gfx_d3d11::Gpu::new(None).map_err(err)?;
+    let rect = dvr_capture_win::window_rect(window.hwnd).ok_or("test window has no rectangle")?;
+    if (rect.w, rect.h) != (win.w, win.h) {
+        return Err(format!("window rectangle {rect:?} does not match {win:?}"));
+    }
+    let mut tex = gpu.texture(rect.w, rect.h, None).map_err(err)?;
+    let mut capture = dvr_capture_win::Capture::window(&gpu.device, window.hwnd).map_err(err)?;
+    for _ in 0..100 {
+        match capture.copy_latest(&gpu.context, &tex).map_err(err)? {
+            dvr_capture_win::Frame::Copied => return Ok(()),
+            dvr_capture_win::Frame::Resized(w, h) => tex = gpu.texture(w, h, None).map_err(err)?,
+            dvr_capture_win::Frame::Unchanged => std::thread::sleep(Duration::from_millis(10)),
+        }
+    }
+    Err("popped-out window produced no capture frame".into())
 }

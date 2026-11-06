@@ -21,7 +21,8 @@ pub const GATES: &[Gate] = &[
     ("4 osc chatbox", osc_chatbox),
     ("4 chat mode", chat_mode),
     ("4b controls", controls),
-    ("5b grab", grab),
+    ("5b grab + pop-out", grab),
+    ("5c switch-over import", switch_over_import),
     ("6 notifications", notifications),
 ];
 
@@ -502,6 +503,49 @@ fn grab() -> GateResult {
     rig.hand(r).pose.pos = rig.hands[1].pose.pos + Vec3::X;
     rig.frames(1);
     ensure!(rig.engine.grabbed().is_none() && rig.engine.panels[0] == locked, "locked panel moved");
+    rig.hand(r).grip = false;
+    rig.frames(1);
+
+    // Pop-out: a quick yank toward the user (25 cm in ~55 ms) emits PopOut and leaves the monitor in place.
+    rig.engine.panels[0] = Panel::new(1, Source::Monitor(0), start, 1.0, 0.5);
+    rig.hand(r).pose.pos = Vec3::new(0.2, 1.4, -0.2);
+    rig.aim(r, 1, [0.3, 0.4])?;
+    rig.take();
+    rig.hand(r).grip = true;
+    rig.frames(1);
+    let toward = -rig.hands[1].pose.forward();
+    for _ in 0..5 {
+        rig.hand(r).pose.pos = rig.hands[1].pose.pos + toward * 0.05;
+        rig.frames(1);
+    }
+    rig.hand(r).grip = false;
+    rig.frames(1);
+    let ev = rig.take();
+    let pop = ev.iter().find_map(|e| match *e {
+        Event::PopOut { hand, panel, uv } => Some((hand, panel, uv)),
+        _ => None,
+    });
+    ensure!(
+        pop.is_some_and(|(h, p, uv)| h == r && p == 1 && close(uv, [0.3, 0.4], 1e-3)),
+        "yank must pop out the window under the laser: {pop:?}"
+    );
+    ensure!((rig.panel(1)?.pose.pos - start.pos).length() < 1e-4, "monitor panel must stay where it was");
+
+    // A slow pull is an ordinary move.
+    rig.hand(r).pose.pos = Vec3::new(0.2, 1.4, -0.2);
+    rig.aim(r, 1, [0.3, 0.4])?;
+    rig.hand(r).grip = true;
+    rig.frames(1);
+    let toward = -rig.hands[1].pose.forward();
+    for _ in 0..100 {
+        rig.hand(r).pose.pos = rig.hands[1].pose.pos + toward * 0.0025;
+        rig.frames(1);
+    }
+    rig.hand(r).grip = false;
+    rig.frames(1);
+    let ev = rig.take();
+    ensure!(!ev.iter().any(|e| matches!(e, Event::PopOut { .. })), "slow pull must not pop out");
+    ensure!((rig.panel(1)?.pose.pos - start.pos).length() > 0.2, "slow pull must move the panel");
     Ok(())
 }
 
@@ -527,4 +571,24 @@ fn notifications() -> GateResult {
         ensure!(Instant::now() < deadline, "no toast received");
         std::thread::sleep(Duration::from_millis(5));
     }
+}
+
+/// Fixture written from the observed XSOverlay settings format (only the keys we import).
+pub(crate) const XSOVERLAY_FIXTURE: &str = include_str!("../fixtures/xsoverlay_overlaySettings.json");
+
+fn switch_over_import() -> GateResult {
+    use crate::import::{Imported, apply, xsoverlay};
+    let imp = xsoverlay(XSOVERLAY_FIXTURE).ok_or("fixture did not parse")?;
+    let want =
+        Imported { dominant: Some(Hand::Left), typing_sounds: Some(true), curved: Some(true), opacity: Some(0.85) };
+    ensure!(imp == want, "imported {imp:?}");
+    let mut state = State::default();
+    apply(&mut state, &imp);
+    ensure!(
+        state.dominant == Hand::Left && state.typing_sounds && state.default_curved && state.default_opacity == 0.85,
+        "applied {state:?}"
+    );
+    ensure!(xsoverlay("{ not json").is_none(), "garbage must not import");
+    ensure!(xsoverlay("{}") == Some(Imported::default()), "missing keys import nothing");
+    Ok(())
 }

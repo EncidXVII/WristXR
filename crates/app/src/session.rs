@@ -43,9 +43,11 @@ pub struct Session {
     pub selected: Option<u32>,
     test: ChatLine,
     menu_hovered: bool,
+    /// Settings came from another overlay (shown on the first-run page).
+    pub imported: bool,
 }
 
-fn next_id(panels: &[Panel]) -> u32 {
+pub fn next_id(panels: &[Panel]) -> u32 {
     panels.iter().filter(|p| p.id != MENU_ID).map(|p| p.id + 1).max().unwrap_or(1)
 }
 
@@ -72,7 +74,7 @@ impl Session {
         panels.retain(|p| p.id != MENU_ID);
         panels.push(menu);
         let page = if state.onboarded { Page::Tab(0) } else { Page::FirstHand };
-        Self { state, page, selected: None, test: ChatLine::default(), menu_hovered: false }
+        Self { state, page, selected: None, test: ChatLine::default(), menu_hovered: false, imported: false }
     }
 
     pub fn menu_open(&self, panels: &[Panel]) -> bool {
@@ -158,7 +160,7 @@ impl Session {
             Page::FirstHand => (
                 0,
                 t("first-hand-title"),
-                t("first-hand-hint"),
+                t(if self.imported { "first-hand-imported" } else { "first-hand-hint" }),
                 vec![
                     slot(t("first-hand-left"), self.state.dominant == Hand::Left, true),
                     slot(t("first-hand-right"), self.state.dominant == Hand::Right, true),
@@ -249,6 +251,14 @@ impl Session {
         MenuModel { tabs: if first_run { Vec::new() } else { tabs }, tab, title, subtitle, slots }
     }
 
+    /// A new screen panel with the user's defaults (curvature, opacity).
+    fn new_screen(&self, id: u32, monitor: u32, head: Pose, m: &MonitorInfo) -> Panel {
+        let mut p = Panel::in_front_of(id, Source::Monitor(monitor), head, aspect(m));
+        p.curvature = if self.state.default_curved { CURVATURE } else { 0.0 };
+        p.opacity = self.state.default_opacity;
+        p
+    }
+
     fn set_dominant(&mut self, hand: Hand, panels: &mut [Panel]) {
         self.state.dominant = hand;
         self.wear_wrist(hand.other(), panels);
@@ -303,7 +313,7 @@ impl Session {
             (Page::FirstMonitor, i) => {
                 if let Some(m) = monitors.get(i) {
                     let id = next_id(panels);
-                    panels.push(Panel::in_front_of(id, Source::Monitor(i as u32), head, aspect(m)));
+                    panels.push(self.new_screen(id, i as u32, head, m));
                     if let Some(k) = find(panels, Source::Keyboard) {
                         k.pose = Panel::keyboard_below(k.id, head).pose;
                         k.visible = true;
@@ -323,7 +333,7 @@ impl Session {
             (Page::Tab(0), 0) => {
                 if let Some(i) = Self::unshown_monitor(panels, monitors) {
                     let id = next_id(panels);
-                    panels.push(Panel::in_front_of(id, Source::Monitor(i), head, aspect(&monitors[i as usize])));
+                    panels.push(self.new_screen(id, i, head, &monitors[i as usize]));
                     self.selected = Some(id);
                     fx.push(Effect::Added(id));
                 }

@@ -40,6 +40,7 @@ menu-opacity = Opacity { $pct }%
 menu-quit = Quit overlay
 first-hand-title = Welcome
 first-hand-hint = Which hand do you point with?
+first-hand-imported = Settings imported from XSOverlay. Which hand do you point with?
 first-hand-left = Left hand
 first-hand-right = Right hand
 first-monitor-title = Pick your main screen

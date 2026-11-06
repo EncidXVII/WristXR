@@ -8,6 +8,7 @@ license.workspace = true
 dvr-core.workspace = true
 dvr-osc.workspace = true
 dvr-notify-api.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 rosc.workspace = true
 tracing.workspace = true

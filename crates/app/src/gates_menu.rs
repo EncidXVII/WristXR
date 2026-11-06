@@ -56,7 +56,11 @@ impl Ctx {
 pub fn first_run_and_menu() -> GateResult {
     let screen = |x, w, h, primary| MonitorInfo { rect: PixelRect { x, y: 0, w, h }, primary };
     let mut panels = Vec::new();
-    let session = Session::new(State::default(), &mut panels, HEAD);
+    let mut state = State::default();
+    let imp = crate::import::xsoverlay(crate::gates::XSOVERLAY_FIXTURE).ok_or("fixture")?;
+    crate::import::apply(&mut state, &imp);
+    let mut session = Session::new(state, &mut panels, HEAD);
+    session.imported = true;
     let mut c = Ctx {
         menu: Menu::new()?,
         session,
@@ -69,6 +73,9 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("first run must open the menu on the hand question".into());
     }
 
+    if !c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0)).subtitle.contains("XSOverlay") {
+        return Err("first run must say settings were imported".into());
+    }
     c.click(slot_center(1))?;
     if c.session.state.dominant != Hand::Right || c.session.page != Page::FirstMonitor {
         return Err(format!("hand step: dominant {:?}, page {:?}", c.session.state.dominant, c.session.page));
@@ -79,6 +86,9 @@ pub fn first_run_and_menu() -> GateResult {
     c.click(slot_center(0))?;
     if c.panel(Source::Monitor(0)).is_none() || c.session.page != Page::FirstKeyboard {
         return Err(format!("screen step: page {:?}", c.session.page));
+    }
+    if !c.panel(Source::Monitor(0)).is_some_and(|p| p.curvature > 0.0 && (p.opacity - 0.85).abs() < 1e-6) {
+        return Err("new screen must use the imported curve/opacity defaults".into());
     }
     for (i, ch) in TEST_WORD.chars().enumerate() {
         let hand = if i % 2 == 0 { Hand::Left } else { Hand::Right };
@@ -127,8 +137,9 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("Settings: pointing hand / wrist swap failed".into());
     }
     c.click(tab_center(1))?;
+    let sounds = c.session.state.typing_sounds;
     c.click(slot_center(2))?;
-    if !c.session.state.typing_sounds {
+    if c.session.state.typing_sounds == sounds {
         return Err("Keyboard tab: typing sounds toggle failed".into());
     }
     c.session.persist(&c.rig.engine.panels);

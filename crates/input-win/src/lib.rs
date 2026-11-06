@@ -8,15 +8,11 @@ use dvr_core::panel::PixelRect;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyboardLayout, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VSC_TO_VK_EX, MOUSE_EVENT_FLAGS,
-    MOUSEEVENTF_ABSOLUTE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN,
-    MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_VIRTUALDESK, MOUSEEVENTF_WHEEL, MOUSEINPUT, MapVirtualKeyExW, SendInput,
-    ToUnicodeEx, VIRTUAL_KEY,
+    MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
+    MOUSEINPUT, MapVirtualKeyExW, SendInput, ToUnicodeEx, VIRTUAL_KEY,
 };
 use windows::Win32::UI::Input::KeyboardAndMouse::{VK_CAPITAL, VK_SHIFT};
-use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetSystemMetrics, GetWindowThreadProcessId, SM_CXVIRTUALSCREEN, SM_CYVIRTUALSCREEN,
-    SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-};
+use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, SetCursorPos};
 
 const WHEEL_DELTA: i32 = 120;
 
@@ -50,38 +46,39 @@ impl Injector {
     }
 
     /// Absolute move over the whole virtual desktop; skipped when the pixel did not change.
-    pub fn move_to(&mut self, p: (i32, i32)) {
-        if self.last == Some(p) {
-            return;
+    /// Exact physical-pixel positioning. SendInput's normalized absolute coordinates are off by several pixels
+    /// (or clamp at monitor edges) on mixed-DPI desktops, so the cursor is placed with SetCursorPos instead.
+    fn place(p: (i32, i32)) {
+        // SAFETY: plain cursor call; the process is per-monitor DPI aware.
+        unsafe {
+            let _ = SetCursorPos(p.0, p.1);
         }
-        self.last = Some(p);
-        // SAFETY: plain metric queries.
-        let (vx, vy, vw, vh) = unsafe {
-            (
-                GetSystemMetrics(SM_XVIRTUALSCREEN),
-                GetSystemMetrics(SM_YVIRTUALSCREEN),
-                GetSystemMetrics(SM_CXVIRTUALSCREEN).max(2),
-                GetSystemMetrics(SM_CYVIRTUALSCREEN).max(2),
-            )
-        };
-        let nx = ((p.0 - vx) as i64 * 65535 / (vw - 1) as i64) as i32;
-        let ny = ((p.1 - vy) as i64 * 65535 / (vh - 1) as i64) as i32;
-        send(&[mouse(nx, ny, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK)]);
     }
 
+    /// Hover: moves the cursor; skipped when the pixel did not change.
+    pub fn move_to(&mut self, p: (i32, i32)) {
+        if self.last != Some(p) {
+            self.last = Some(p);
+            Self::place(p);
+        }
+    }
+
+    /// Always re-places the cursor right before the button, in case the physical mouse moved it.
     pub fn button(&mut self, p: (i32, i32), right: bool, down: bool) {
-        self.move_to(p);
         let flags = match (right, down) {
             (false, true) => MOUSEEVENTF_LEFTDOWN,
             (false, false) => MOUSEEVENTF_LEFTUP,
             (true, true) => MOUSEEVENTF_RIGHTDOWN,
             (true, false) => MOUSEEVENTF_RIGHTUP,
         };
+        self.last = Some(p);
+        Self::place(p);
         send(&[mouse(0, 0, 0, flags)]);
     }
 
     pub fn scroll(&mut self, p: (i32, i32), notches: i32) {
-        self.move_to(p);
+        self.last = Some(p);
+        Self::place(p);
         send(&[mouse(0, 0, notches * WHEEL_DELTA, MOUSEEVENTF_WHEEL)]);
     }
 

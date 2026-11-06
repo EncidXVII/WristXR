@@ -6,6 +6,7 @@ mod gates_input;
 mod gates_menu;
 #[cfg(windows)]
 mod gates_vr;
+mod import;
 #[cfg(windows)]
 mod run;
 #[cfg(windows)]
@@ -16,6 +17,9 @@ use std::process::ExitCode;
 const REPORT: &str = "selftest-report.json";
 
 fn main() -> ExitCode {
+    // Physical pixels everywhere (capture, input, monitor rects) — must precede any window or monitor call.
+    #[cfg(windows)]
+    dvr_capture_win::init_process();
     if std::env::args().any(|a| a == "--selftest") {
         return selftest();
     }
@@ -43,7 +47,7 @@ fn selftest() -> ExitCode {
     }
     #[cfg(windows)]
     if std::env::args().any(|a| a == "--input") {
-        results.push(("3+4 live input", gates_input::input_live()));
+        results.push(("3+4+5b live input + pop-out", gates_input::input_live()));
     }
     for (name, r) in &results {
         match r {

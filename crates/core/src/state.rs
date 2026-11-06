@@ -16,11 +16,22 @@ pub struct State {
     pub typing_sounds: bool,
     /// First-run flow finished (hand, main screen, keyboard test).
     pub onboarded: bool,
+    /// Defaults for newly added screens (can come from the switch-over import).
+    pub default_curved: bool,
+    pub default_opacity: f32,
 }
 
 impl Default for State {
     fn default() -> Self {
-        Self { dominant: Hand::Right, panels: Vec::new(), chatbox: false, typing_sounds: false, onboarded: false }
+        Self {
+            dominant: Hand::Right,
+            panels: Vec::new(),
+            chatbox: false,
+            typing_sounds: false,
+            onboarded: false,
+            default_curved: false,
+            default_opacity: 1.0,
+        }
     }
 }
 
