@@ -74,6 +74,8 @@ pub enum Event {
         hand: Hand,
     },
     MenuToggle,
+    /// The keyboard's Chat key: toggle "send to VRChat chatbox".
+    ChatToggle,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

@@ -1,6 +1,8 @@
 mod bindings;
 mod gates;
 #[cfg(windows)]
+mod gates_input;
+#[cfg(windows)]
 mod gates_vr;
 #[cfg(windows)]
 mod run;
@@ -27,10 +29,15 @@ fn main() -> ExitCode {
 }
 
 fn selftest() -> ExitCode {
+    #[cfg_attr(not(windows), allow(unused_mut))]
     let mut results: Vec<_> = gates::GATES.iter().map(|(name, gate)| (*name, gate())).collect();
     #[cfg(windows)]
     if std::env::args().any(|a| a == "--vr") {
         results.push(("1+2+P live overlay", gates_vr::overlay_live()));
+    }
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == "--input") {
+        results.push(("3+4 live input", gates_input::input_live()));
     }
     for (name, r) in &results {
         match r {

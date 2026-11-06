@@ -1,5 +1,6 @@
 //! AUTO GATES that need no VR runtime. Shared by `cargo test` and `--selftest`.
 use crate::bindings::{FILES, MANIFEST};
+use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput, HandInput, MouseButton};
 use dvr_core::keyboard::{self, LCTRL, LSHIFT};
 use dvr_core::math::{Pose, Quat, Vec3};
@@ -18,6 +19,7 @@ pub const GATES: &[Gate] = &[
     ("3 pointer", pointer),
     ("4 keyboard", keyboard_typing),
     ("4 osc chatbox", osc_chatbox),
+    ("4 chat mode", chat_mode),
     ("4b controls", controls),
     ("5b grab", grab),
     ("6 notifications", notifications),
@@ -38,21 +40,21 @@ macro_rules! ensure {
     }};
 }
 
-const HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
+pub(crate) const HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
 const ORIGIN: [Vec3; 2] = [Vec3::new(-0.2, 1.3, -0.2), Vec3::new(0.2, 1.3, -0.2)];
 const FRAME_MS: u64 = 11;
 
 /// Scripted test channel: injects poses and buttons, records every event.
-struct Rig {
-    engine: Engine,
+pub(crate) struct Rig {
+    pub(crate) engine: Engine,
     now: u64,
-    hands: [HandInput; 2],
+    pub(crate) hands: [HandInput; 2],
     log: Vec<Event>,
     buf: Vec<Event>,
 }
 
 impl Rig {
-    fn new(panels: Vec<Panel>) -> Self {
+    pub(crate) fn new(panels: Vec<Panel>) -> Self {
         let hand = |o: Vec3| HandInput { pose: Pose::aim(o, o + Vec3::FORWARD), tracked: true, ..HandInput::default() };
         Self {
             engine: Engine::new(panels),
@@ -62,14 +64,14 @@ impl Rig {
             buf: Vec::with_capacity(64),
         }
     }
-    fn hand(&mut self, h: Hand) -> &mut HandInput {
+    pub(crate) fn hand(&mut self, h: Hand) -> &mut HandInput {
         &mut self.hands[h.index()]
     }
     fn panel(&self, id: u32) -> Result<Panel, String> {
         self.engine.panels.iter().find(|p| p.id == id).copied().ok_or_else(|| format!("no panel {id}"))
     }
     /// Point the hand's laser at a uv on a panel, keeping the hand's position.
-    fn aim(&mut self, h: Hand, panel: u32, uv: [f32; 2]) -> GateResult {
+    pub(crate) fn aim(&mut self, h: Hand, panel: u32, uv: [f32; 2]) -> GateResult {
         let poses = [self.hands[0].pose, self.hands[1].pose];
         let p = self.panel(panel)?;
         let target = p.world_pose(&poses).transform_point(p.local_point(uv));
@@ -77,7 +79,7 @@ impl Rig {
         self.hand(h).pose = Pose::aim(from, target);
         Ok(())
     }
-    fn frames(&mut self, n: u64) {
+    pub(crate) fn frames(&mut self, n: u64) {
         for _ in 0..n {
             self.now += FRAME_MS;
             self.buf.clear();
@@ -85,16 +87,16 @@ impl Rig {
             self.log.extend_from_slice(&self.buf);
         }
     }
-    fn hold_ms(&mut self, ms: u64) {
+    pub(crate) fn hold_ms(&mut self, ms: u64) {
         self.frames(ms.div_ceil(FRAME_MS));
     }
-    fn tap(&mut self, h: Hand) {
+    pub(crate) fn tap(&mut self, h: Hand) {
         self.hand(h).trigger = true;
         self.frames(1);
         self.hand(h).trigger = false;
         self.frames(1);
     }
-    fn take(&mut self) -> Vec<Event> {
+    pub(crate) fn take(&mut self) -> Vec<Event> {
         std::mem::take(&mut self.log)
     }
 }
@@ -111,7 +113,7 @@ fn mouse(events: &[Event]) -> Vec<MouseEv> {
         .collect()
 }
 
-fn keys(events: &[Event]) -> Vec<(u16, bool)> {
+pub(crate) fn keys(events: &[Event]) -> Vec<(u16, bool)> {
     events
         .iter()
         .filter_map(|e| match *e {
@@ -125,7 +127,7 @@ fn close(a: [f32; 2], b: [f32; 2], tol: f32) -> bool {
     (a[0] - b[0]).abs() <= tol && (a[1] - b[1]).abs() <= tol
 }
 
-fn err(e: impl std::fmt::Display) -> String {
+pub(crate) fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
@@ -279,11 +281,11 @@ fn xorshift(seed: &mut u32) -> f32 {
     *seed as f32 / u32::MAX as f32 * 2.0 - 1.0
 }
 
-fn key_sc(label: &str) -> Result<u16, String> {
+pub(crate) fn key_sc(label: &str) -> Result<u16, String> {
     keyboard::key_for_label(label).map(|k| k.sc).ok_or_else(|| format!("no key {label:?}"))
 }
 
-fn press_key(rig: &mut Rig, h: Hand, sc: u16) -> GateResult {
+pub(crate) fn press_key(rig: &mut Rig, h: Hand, sc: u16) -> GateResult {
     let (center, _) = keyboard::key_rect(sc).ok_or_else(|| format!("no rect for {sc:#x}"))?;
     rig.aim(h, 1, center)?;
     rig.frames(1);
@@ -333,27 +335,69 @@ fn keyboard_typing() -> GateResult {
     Ok(())
 }
 
-fn osc_chatbox() -> GateResult {
+/// Mock VRChat: a local UDP socket plus a chatbox client pointed at it.
+fn mock_vrchat() -> Result<(UdpSocket, dvr_osc::Chatbox), String> {
     let server = UdpSocket::bind("127.0.0.1:0").map_err(err)?;
     server.set_read_timeout(Some(Duration::from_secs(2))).map_err(err)?;
     let chat = dvr_osc::Chatbox::new(server.local_addr().map_err(err)?).map_err(err)?;
-    let long = "x".repeat(200);
+    Ok((server, chat))
+}
+
+/// Next `/chatbox/input` text the mock received.
+fn received_chat(server: &UdpSocket) -> Result<String, String> {
     let mut buf = [0u8; 2048];
+    let n = server.recv(&mut buf).map_err(err)?;
+    let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).map_err(|e| format!("{e:?}"))?;
+    match packet {
+        rosc::OscPacket::Message(m) if m.addr == "/chatbox/input" => match m.args.first() {
+            Some(rosc::OscType::String(s)) => Ok(s.clone()),
+            other => Err(format!("first arg {other:?}")),
+        },
+        other => Err(format!("unexpected packet {other:?}")),
+    }
+}
+
+fn osc_chatbox() -> GateResult {
+    let (server, chat) = mock_vrchat()?;
+    let long = "x".repeat(200);
     for (text, want) in [("hello vr", 8), (long.as_str(), dvr_osc::CHATBOX_MAX_CHARS)] {
         chat.send(text).map_err(err)?;
-        let n = server.recv(&mut buf).map_err(err)?;
-        let (_, packet) = rosc::decoder::decode_udp(&buf[..n]).map_err(|e| format!("{e:?}"))?;
-        let rosc::OscPacket::Message(m) = packet else {
-            return Err("expected an OSC message".into());
-        };
-        ensure!(m.addr == "/chatbox/input", "address {}", m.addr);
-        match m.args.first() {
-            Some(rosc::OscType::String(s)) => {
-                ensure!(s.chars().count() == want && text.starts_with(s.as_str()), "chatbox text {s:?}")
-            }
-            other => return Err(format!("first arg {other:?}")),
+        let s = received_chat(&server)?;
+        ensure!(s.chars().count() == want && text.starts_with(s.as_str()), "chatbox text {s:?}");
+    }
+    Ok(())
+}
+
+/// US layout stand-in for the OS layout lookup.
+fn us_char(sc: u16, shift: bool, caps: bool) -> Option<char> {
+    let key = keyboard::ROWS.iter().flat_map(|r| r.iter()).find(|k| k.sc == sc && k.label.chars().count() == 1)?;
+    let c = key.label.chars().next()?;
+    Some(if shift ^ caps { c.to_ascii_uppercase() } else { c })
+}
+
+/// Chat key toggles chat mode without touching the OS; typed text reaches VRChat on Enter.
+fn chat_mode() -> GateResult {
+    let (server, chatbox) = mock_vrchat()?;
+    let mut rig = Rig::new(vec![Panel::keyboard_below(1, HEAD)]);
+    press_key(&mut rig, Hand::Right, keyboard::CHAT)?;
+    let ev = rig.take();
+    let toggles = ev.iter().filter(|e| matches!(e, Event::ChatToggle)).count();
+    ensure!(toggles == 1 && keys(&ev).is_empty(), "Chat key: {toggles} toggles, keys {:?}", keys(&ev));
+    for (i, label) in ["Shift", "h", "i", "Bksp", "Enter"].iter().enumerate() {
+        let h = if i % 2 == 0 { Hand::Left } else { Hand::Right };
+        press_key(&mut rig, h, key_sc(label)?)?;
+    }
+    let mut line = ChatLine::default();
+    let mut sent = None;
+    for (sc, down) in keys(&rig.take()) {
+        if let ChatAction::Send(text) = line.key(sc, down, us_char) {
+            chatbox.send(&text).map_err(err)?;
+            sent = Some(text);
         }
     }
+    ensure!(sent.as_deref() == Some("H"), "chat line sent {sent:?}");
+    let got = received_chat(&server)?;
+    ensure!(got == "H", "VRChat received {got:?}");
     Ok(())
 }
 

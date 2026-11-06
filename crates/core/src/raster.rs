@@ -62,8 +62,8 @@ pub fn drawable(s: &str) -> bool {
     s.chars().all(|c| glyph(c).is_some())
 }
 
-/// Keyboard texture, 100 px per key unit. `label` maps a key to the text shown on it.
-pub fn keyboard(label: impl Fn(&KeyDef) -> String) -> Image {
+/// Keyboard texture, 100 px per key unit. `label` maps a key to its text; keys in `lit` are highlighted.
+pub fn keyboard(label: impl Fn(&KeyDef) -> String, lit: &[u16]) -> Image {
     const U: i32 = 100;
     const GAP: i32 = 6;
     let mut img = Image::new(ROW_UNITS as u32 * U as u32, ROWS.len() as u32 * U as u32, BG);
@@ -72,11 +72,18 @@ pub fn keyboard(label: impl Fn(&KeyDef) -> String) -> Image {
         for key in row.iter() {
             let (x, w) = ((left * U as f32) as i32, (key.w * U as f32) as i32);
             let y = r as i32 * U;
-            img.fill_rect(x + GAP, y + GAP, w - 2 * GAP, U - 2 * GAP, RAISED);
+            let on = lit.contains(&key.sc);
+            img.fill_rect(x + GAP, y + GAP, w - 2 * GAP, U - 2 * GAP, if on { ACCENT } else { RAISED });
             let text = label(key);
             let len = text.chars().count().max(1) as i32;
             let scale = ((w - 4 * GAP) / (len * 6)).clamp(2, 6);
-            let color = if key.w > 1.0 || len > 1 { INK2 } else { INK };
+            let color = if on {
+                BG
+            } else if key.w > 1.0 || len > 1 {
+                INK2
+            } else {
+                INK
+            };
             img.text(x + w / 2, y + U / 2, scale, &text, color);
             left += key.w;
         }
@@ -165,7 +172,7 @@ mod tests {
 
     #[test]
     fn keyboard_texture_has_keys() {
-        let img = keyboard(|k| k.label.to_owned());
+        let img = keyboard(|k| k.label.to_owned(), &[]);
         assert_eq!(img.bgra.len(), (img.w * img.h * 4) as usize);
         let at = |x: u32, y: u32| &img.bgra[((y * img.w + x) * 4) as usize..][..4];
         assert_eq!(at(3, 3), BG);
