@@ -1,0 +1,26 @@
+{
+  "controller_type": "vive_controller",
+  "name": "Default",
+  "description": "Default desktop overlay bindings",
+  "bindings": {
+    "/actions/main": {
+      "poses": [
+        { "output": "/actions/main/in/pointer", "path": "/user/hand/left/pose/tip" },
+        { "output": "/actions/main/in/pointer", "path": "/user/hand/right/pose/tip" }
+      ],
+      "haptics": [
+        { "output": "/actions/main/out/haptic", "path": "/user/hand/left/output/haptic" },
+        { "output": "/actions/main/out/haptic", "path": "/user/hand/right/output/haptic" }
+      ],
+      "sources": [
+        { "path": "/user/hand/left/input/trigger", "mode": "trigger", "inputs": { "click": { "output": "/actions/main/in/click" } } },
+        { "path": "/user/hand/right/input/trigger", "mode": "trigger", "inputs": { "click": { "output": "/actions/main/in/click" } } },
+        { "path": "/user/hand/left/input/grip", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/grab" } } },
+        { "path": "/user/hand/right/input/grip", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/grab" } } },
+        { "path": "/user/hand/left/input/trackpad", "mode": "trackpad", "inputs": { "position": { "output": "/actions/main/in/stick" } } },
+        { "path": "/user/hand/right/input/trackpad", "mode": "trackpad", "inputs": { "position": { "output": "/actions/main/in/stick" } } },
+        { "path": "/user/hand/left/input/application_menu", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/menu" } } }
+      ]
+    }
+  }
+}

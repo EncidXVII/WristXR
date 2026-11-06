@@ -1,0 +1,109 @@
+{
+  "name": "Night Lime (warm)",
+  "color": {
+    "bg": "#0C0B0A",
+    "surface": "#15130F",
+    "raised": "#1F1C18",
+    "line": "#2A2622",
+    "ink": "#F4F1EC",
+    "ink2": "#AAA49B",
+    "ink3": "#8A847B",
+    "edge": "#645E56",
+    "accent": "#C6FF1A",
+    "on_accent": "#0C0B0A",
+    "danger": "#FF5A3C"
+  },
+  "font": {
+    "display": "Anton",
+    "body": "Ubuntu"
+  },
+  "type": {
+    "display": 96,
+    "title": 48,
+    "heading": 32,
+    "body": 28,
+    "small": 24,
+    "watch_big": 112,
+    "watch_small": 40
+  },
+  "space": {
+    "1": 4,
+    "2": 8,
+    "3": 12,
+    "4": 16,
+    "5": 24,
+    "6": 32,
+    "7": 48
+  },
+  "radius": {
+    "none": 0
+  },
+  "motion": {
+    "fast_ms": 120,
+    "slow_ms": 240
+  },
+  "size": {
+    "control": 64,
+    "target_min": 48
+  },
+  "checks": {
+    "min_text_px": 24,
+    "text_pairs": [
+      [
+        "ink",
+        "bg"
+      ],
+      [
+        "ink2",
+        "bg"
+      ],
+      [
+        "ink3",
+        "bg"
+      ],
+      [
+        "ink",
+        "surface"
+      ],
+      [
+        "ink2",
+        "surface"
+      ],
+      [
+        "ink",
+        "raised"
+      ],
+      [
+        "on_accent",
+        "accent"
+      ],
+      [
+        "accent",
+        "bg"
+      ]
+    ],
+    "ui_pairs": [
+      [
+        "edge",
+        "bg"
+      ],
+      [
+        "accent",
+        "surface"
+      ]
+    ],
+    "min_desktop_text_px": 14
+  },
+  "desktop": {
+    "type": {
+      "display": 64,
+      "title": 40,
+      "heading": 24,
+      "body": 17,
+      "small": 15
+    },
+    "size": {
+      "control": 44
+    }
+  }
+}

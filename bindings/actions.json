@@ -1,0 +1,29 @@
+{
+  "default_bindings": [
+    { "controller_type": "knuckles", "binding_url": "bindings_knuckles.json" },
+    { "controller_type": "oculus_touch", "binding_url": "bindings_oculus_touch.json" },
+    { "controller_type": "vive_controller", "binding_url": "bindings_vive_controller.json" },
+    { "controller_type": "holographic_controller", "binding_url": "bindings_holographic_controller.json" }
+  ],
+  "actions": [
+    { "name": "/actions/main/in/pointer", "type": "pose" },
+    { "name": "/actions/main/in/click", "type": "boolean" },
+    { "name": "/actions/main/in/grab", "type": "boolean" },
+    { "name": "/actions/main/in/stick", "type": "vector2" },
+    { "name": "/actions/main/in/menu", "type": "boolean" },
+    { "name": "/actions/main/out/haptic", "type": "vibration" }
+  ],
+  "action_sets": [{ "name": "/actions/main", "usage": "leftright" }],
+  "localization": [
+    {
+      "language_tag": "en_US",
+      "/actions/main": "Desktop overlay",
+      "/actions/main/in/pointer": "Pointer",
+      "/actions/main/in/click": "Click / type",
+      "/actions/main/in/grab": "Grab panel",
+      "/actions/main/in/stick": "Scroll / push-pull",
+      "/actions/main/in/menu": "Menu (double-tap)",
+      "/actions/main/out/haptic": "Haptic"
+    }
+  ]
+}

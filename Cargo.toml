@@ -1,0 +1,31 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+rust-version = "1.85"
+
+[workspace.dependencies]
+dvr-core = { path = "crates/core" }
+dvr-osc = { path = "crates/osc" }
+dvr-notify-api = { path = "crates/notify-api" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rosc = "0.10"
+tracing = "0.1"
+directories = "6"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+dbg_macro = "deny"
+todo = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

@@ -1,0 +1,15 @@
+[package]
+name = "dvr-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+dvr-core.workspace = true
+dvr-osc.workspace = true
+dvr-notify-api.workspace = true
+serde_json.workspace = true
+rosc.workspace = true
+
+[lints]
+workspace = true
