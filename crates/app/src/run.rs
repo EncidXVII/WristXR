@@ -224,6 +224,7 @@ pub fn run() -> Result<(), String> {
         }
         events.clear();
         engine.step(&input, &mut events);
+        vr.set_exclusive(Hand::BOTH.map(|h| engine.engaged(h)));
         let poses = [input.hands[0].pose, input.hands[1].pose];
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut redraw_keyboard = false;

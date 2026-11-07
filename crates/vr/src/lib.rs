@@ -18,6 +18,8 @@ use std::mem::size_of;
 use std::path::{Path, PathBuf};
 
 const CURSOR_WIDTH_M: f32 = 0.015;
+/// `k_nActionSetOverlayGlobalPriorityMin`: input bound at this priority is not delivered to the game.
+const OVERLAY_PRIORITY: i32 = 0x0100_0000;
 const CURSOR_SORT: u32 = 10;
 const KEYBOARD_SORT: u32 = 5;
 
@@ -72,6 +74,8 @@ pub struct OpenVr {
     compositor: Table,
     applications: Table,
     actions: Actions,
+    exclusive: [bool; 2],
+    input_error: i32,
     overlays: HashMap<u64, Placed>,
 }
 
@@ -158,6 +162,8 @@ impl OpenVr {
             input,
             compositor,
             applications,
+            exclusive: [false; 2],
+            input_error: 0,
             actions: Actions { set: 0, pointer: 0, click: 0, grab: 0, stick: 0, menu: 0, haptic: 0, hands: [0; 2] },
             overlays: HashMap::new(),
         };
@@ -242,6 +248,16 @@ impl OpenVr {
             key.as_ptr()
         );
         if e != 0 { Err(format!("IdentifyApplication: EVRApplicationError {e}")) } else { Ok(()) }
+    }
+
+    /// Per hand: take that hand's input away from the game (while it points at, presses or holds a panel).
+    pub fn set_exclusive(&mut self, hands: [bool; 2]) {
+        self.exclusive = hands;
+    }
+
+    /// EVRInputError of the last action-state update (0 = fine).
+    pub fn input_error(&self) -> i32 {
+        self.input_error
     }
 
     /// Whether SteamVR starts us together with itself.
@@ -374,14 +390,20 @@ impl VrBackend for OpenVr {
                 return false;
             }
         }
-        let mut set = ActiveActionSet { set: self.actions.set, ..ActiveActionSet::default() };
-        call!(
+        // One set per hand; a hand that is using a panel gets overlay priority, so the game stops seeing its input.
+        let mut sets = Hand::BOTH.map(|h| ActiveActionSet {
+            set: self.actions.set,
+            restricted_to_device: self.actions.hands[h.index()],
+            priority: if self.exclusive[h.index()] { OVERLAY_PRIORITY } else { 0 },
+            ..ActiveActionSet::default()
+        });
+        self.input_error = call!(
             self.input,
             input::UPDATE_ACTION_STATE,
             fn(*mut ActiveActionSet, u32, u32) -> i32,
-            &mut set,
+            sets.as_mut_ptr(),
             size_of::<ActiveActionSet>() as u32,
-            1
+            2
         );
         for hand in Hand::BOTH {
             let dev = self.actions.hands[hand.index()];

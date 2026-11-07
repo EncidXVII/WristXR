@@ -188,6 +188,12 @@ fn pointer() -> GateResult {
             .any(|e| matches!(e, Event::Hover { panel: 1, uv, cursor: true, .. } if close(*uv, [0.25, 0.75], 1e-3))),
         "hover uv/cursor wrong"
     );
+    // Input exclusivity: only a hand whose laser is on a panel is taken from the game.
+    let up = rig.hands[0].pose.pos + Vec3::new(0.0, 2.0, 0.0);
+    rig.hand(Hand::Left).pose = Pose::aim(rig.hands[0].pose.pos, up);
+    rig.frames(1);
+    ensure!(rig.engine.engaged(r) && !rig.engine.engaged(Hand::Left), "engaged: only the hand on a panel");
+    rig.take();
 
     // 100 %, 150 %, 200 % scaled monitors, one left of the primary (negative origin).
     let rects = [

@@ -1,3 +1,6 @@
+// No console window when started by double-click or by SteamVR; --selftest re-attaches to the caller's console.
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
+
 mod bindings;
 mod gates;
 #[cfg(windows)]
@@ -24,6 +27,8 @@ fn main() -> ExitCode {
     #[cfg(windows)]
     dvr_capture_win::init_process();
     if std::env::args().any(|a| a == "--selftest") {
+        #[cfg(windows)]
+        dvr_sys::attach_parent_console();
         return selftest();
     }
     #[cfg(windows)]
@@ -33,10 +38,18 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("{e}");
+            fatal(&e);
             ExitCode::FAILURE
         }
     }
+}
+
+/// A startup failure the user must see (e.g. SteamVR missing): a dialog on Windows, stderr elsewhere.
+fn fatal(message: &str) {
+    #[cfg(windows)]
+    dvr_sys::error_dialog("DesktopVR", message);
+    #[cfg(not(windows))]
+    eprintln!("{message}");
 }
 
 fn selftest() -> ExitCode {

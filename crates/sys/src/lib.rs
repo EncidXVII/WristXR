@@ -232,6 +232,24 @@ pub fn pump_messages() {
     }
 }
 
+/// Windowed builds have no console: print to the terminal that started us (no-op otherwise).
+pub fn attach_parent_console() {
+    use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+    // SAFETY: plain call; fails harmlessly when there is no parent console.
+    let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+}
+
+/// Blocking error dialog for failures the user must see (e.g. SteamVR missing).
+pub fn error_dialog(title: &str, message: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    let text: Vec<u16> = message.encode_utf16().chain([0]).collect();
+    let title: Vec<u16> = title.encode_utf16().chain([0]).collect();
+    // SAFETY: NUL-terminated UTF-16 strings that outlive the call.
+    unsafe {
+        MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), MB_OK | MB_ICONERROR);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

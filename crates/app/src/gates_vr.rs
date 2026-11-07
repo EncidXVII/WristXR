@@ -66,6 +66,13 @@ fn run(manifest: &std::path::Path) -> GateResult {
     let mut sampler = dvr_sys::Sampler::new();
 
     let mut input = FrameInput::default();
+    // Per-hand overlay priority (game input blocked for a hand on a panel) must be accepted by SteamVR.
+    vr.set_exclusive([true, false]);
+    vr.poll(0, &mut input);
+    if vr.input_error() != 0 {
+        return Err(format!("UpdateActionState with per-hand priority: EVRInputError {}", vr.input_error()));
+    }
+    vr.set_exclusive([false, false]);
     let (mut frames, mut captured, mut wrist_frames) = (0u32, 0u32, 0u32);
     let start = Instant::now();
     let mut tick = start;

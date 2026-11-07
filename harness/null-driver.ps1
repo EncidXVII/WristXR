@@ -25,12 +25,27 @@ try {
     Set-Key $s.steamvr 'enableHomeApp' $false
     Set-Key $s.driver_null 'enable' $true
     [IO.File]::WriteAllText($settings, ($s | ConvertTo-Json -Depth 32))
-    & $Command @Arguments
-    $code = $LASTEXITCODE
+    # Windowed (GUI-subsystem) apps are not waited for by `&`; start explicitly and wait. Output goes via files.
+    $out = [IO.Path]::GetTempFileName(); $err = [IO.Path]::GetTempFileName()
+    $start = @{ FilePath = $Command; PassThru = $true; NoNewWindow = $true; RedirectStandardOutput = $out; RedirectStandardError = $err }
+    if ($Arguments) { $start.ArgumentList = $Arguments }
+    $p = Start-Process @start
+    $null = $p.Handle  # cache the handle so ExitCode is available after exit
+    # WaitForExit, not -Wait: -Wait would also wait for SteamVR if it was started as our child.
+    $p.WaitForExit()
+    Get-Content $out, $err
+    Remove-Item $out, $err -ErrorAction SilentlyContinue
+    $code = $p.ExitCode
 } finally {
-    Get-Process vrmonitor, vrserver, vrcompositor, vrdashboard, vrwebhelper, vrstartup -ErrorAction SilentlyContinue | Stop-Process -Force
-    Start-Sleep -Seconds 2
+    # SteamVR rewrites its settings while running: stop it completely before restoring, then verify the restore.
+    $deadline = (Get-Date).AddSeconds(30)
+    do {
+        Get-Process vrmonitor, vrserver, vrcompositor, vrdashboard, vrwebhelper, vrstartup -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Process vrserver, vrmonitor, vrcompositor -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline)
+    $expected = (Get-FileHash $backup).Hash
     Move-Item $backup $settings -Force
+    if ((Get-FileHash $settings).Hash -ne $expected) { Write-Error 'steamvr.vrsettings was NOT restored; check it by hand'; $code = 1 }
     if ($hadAppconfig) { Move-Item $appBackup $appconfig -Force } elseif (Test-Path $appconfig) { Remove-Item $appconfig -Force }
 }
 exit $code

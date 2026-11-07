@@ -118,6 +118,8 @@ struct HandState {
     last_click: Option<(u32, [f32; 2], u64)>,
     scroll: f32,
     menu_tap: Option<u64>,
+    /// Laser hit a panel this frame.
+    on_panel: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -167,6 +169,18 @@ impl Engine {
 
     pub fn keyboard(&self) -> &Keyboard {
         &self.keyboard
+    }
+
+    /// The hand is using the overlay: laser on a panel, a press or drag in progress, or holding a panel.
+    /// The app gives such a hand's input to the overlay alone so the game never sees it.
+    pub fn engaged(&self, hand: Hand) -> bool {
+        let st = &self.hands[hand.index()];
+        let holding = match self.grab {
+            Grab::One { hand: h, .. } => h == hand,
+            Grab::Two { .. } => true,
+            Grab::Idle => false,
+        };
+        st.on_panel || holding || !matches!(st.press, Press::Idle)
     }
 
     pub fn grabbed(&self) -> Option<u32> {
@@ -355,6 +369,7 @@ impl Engine {
         } else {
             None
         };
+        st.on_panel = hit.is_some();
         let trigger_down = cur.trigger && !st.prev.trigger;
 
         st.press = match st.press {
