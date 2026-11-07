@@ -5,6 +5,11 @@ $ErrorActionPreference = 'Stop'
 if (Get-Process vrserver -ErrorAction SilentlyContinue) { throw 'SteamVR is running; close it first (the harness swaps its settings).' }
 $paths = Get-Content (Join-Path $env:LOCALAPPDATA 'openvr\openvrpaths.vrpath') -Raw | ConvertFrom-Json
 $settings = Join-Path $paths.config[0] 'steamvr.vrsettings'
+# A previous run cut short (crash, power loss) leaves backups behind: put the user's files back first.
+foreach ($leftover in Get-ChildItem $paths.config[0] -Filter '*.dvr-backup' -ErrorAction SilentlyContinue) {
+    Move-Item $leftover.FullName ($leftover.FullName -replace '\.dvr-backup$', '') -Force
+    Write-Output "restored leftover $($leftover.Name)"
+}
 $backup = "$settings.dvr-backup"
 Copy-Item $settings $backup -Force
 # App registrations (vrmanifest paths) live here; tests register the dev build, so restore it too.
