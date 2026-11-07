@@ -250,6 +250,15 @@ pub fn error_dialog(title: &str, message: &str) {
     }
 }
 
+/// Working set of this process in bytes (RAM budget and soak memory growth).
+pub fn working_set_bytes() -> u64 {
+    use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+    let mut c = PROCESS_MEMORY_COUNTERS { cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32, ..Default::default() };
+    // SAFETY: pseudo-handle of the current process; cb set.
+    let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) }.is_ok();
+    if ok { c.WorkingSetSize as u64 } else { 0 }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

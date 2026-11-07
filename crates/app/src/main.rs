@@ -62,6 +62,10 @@ fn selftest() -> ExitCode {
         results.push(("1+2+5+P live overlay", gates_vr::overlay_live()));
     }
     #[cfg(windows)]
+    if let Some(minutes) = std::env::args().skip_while(|a| a != "--soak").nth(1).and_then(|m| m.parse().ok()) {
+        results.push(("8+P soak S1", gates_vr::soak(minutes)));
+    }
+    #[cfg(windows)]
     if std::env::args().any(|a| a == "--input") {
         results.push(("3+4+5b live input + pop-out", gates_input::input_live()));
     }
