@@ -166,3 +166,10 @@ pub fn key_char(scancode: u16, shift: bool, caps: bool) -> Option<char> {
     let c = chars.next()?;
     chars.next().is_none().then_some(c)
 }
+
+/// Caps Lock is on (shown on the VR keyboard).
+pub fn caps_lock() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
+    // SAFETY: plain query; the low bit is the toggle state.
+    unsafe { GetKeyState(i32::from(VK_CAPITAL.0)) & 1 != 0 }
+}

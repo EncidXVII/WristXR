@@ -6,7 +6,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 slint::slint! {
-    export struct SlotView { label: string, on: bool, enabled: bool }
+    // kind: 0 action, 1 on/off setting, 2 choice (lit = chosen), 3 danger (on = armed, tap again), 4 hidden
+    export struct SlotView { label: string, on: bool, enabled: bool, kind: int }
 
     export component MenuView inherits Window {
         in property <[string]> tabs;
@@ -14,6 +15,9 @@ slint::slint! {
         in property <string> heading;
         in property <string> subtitle;
         in property <[SlotView]> slots;
+        in property <string> body;
+        in property <string> on-text;
+        in property <string> off-text;
         callback tab-clicked(int);
         callback slot-clicked(int);
         width: 800px;
@@ -31,15 +35,36 @@ slint::slint! {
         }
         Text { x: 32px; y: 104px; text: root.heading; font-size: 40px; font-weight: 700; color: #F4F1EC; }
         Text { x: 32px; y: 160px; width: 736px; text: root.subtitle; font-size: 28px; color: #AAA49B; overflow: elide; }
+        if root.body != "" : Text {
+            x: 32px; y: 216px; width: 736px; height: 240px;
+            text: root.body; font-size: 28px; color: #F4F1EC; wrap: word-wrap;
+        }
         for slot[i] in root.slots : Rectangle {
             x: 32px + mod(i, 2) * 376px;
             y: 216px + floor(i / 2) * 128px;
             width: 360px;
             height: 112px;
+            visible: slot.kind != 4;
             opacity: slot.enabled ? 1.0 : 0.4;
-            background: slot.on ? #C6FF1A : touch.has-hover && slot.enabled ? #2A2622 : #1F1C18;
-            Text { text: slot.label; font-size: 30px; color: slot.on ? #0C0B0A : #F4F1EC; }
-            touch := TouchArea { enabled: slot.enabled; clicked => { root.slot-clicked(i); } }
+            background: slot.kind == 2 && slot.on ? #C6FF1A
+                : slot.kind == 3 && slot.on ? #FF5A3C
+                : touch.has-hover && slot.enabled ? #2A2622 : #1F1C18;
+            if slot.kind != 1 : Text {
+                text: slot.label;
+                font-size: 30px;
+                color: slot.on && (slot.kind == 2 || slot.kind == 3) ? #0C0B0A : slot.kind == 3 ? #FF5A3C : #F4F1EC;
+            }
+            if slot.kind == 1 : Text {
+                x: 24px; width: parent.width - 120px; text: slot.label; font-size: 30px; color: #F4F1EC; overflow: elide;
+            }
+            if slot.kind == 1 : Text {
+                x: parent.width - self.width - 24px;
+                text: slot.on ? root.on-text : root.off-text;
+                font-size: 28px;
+                font-weight: slot.on ? 700 : 400;
+                color: slot.on ? #C6FF1A : #AAA49B;
+            }
+            touch := TouchArea { enabled: slot.enabled && slot.kind != 4; clicked => { root.slot-clicked(i); } }
         }
     }
 }
@@ -57,12 +82,28 @@ pub fn slot_center(i: usize) -> (f32, f32) {
     (32.0 + (i % 2) as f32 * 376.0 + 180.0, 216.0 + (i / 2) as f32 * 128.0 + 56.0)
 }
 
+/// How a button looks and what `on` means for it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SlotKind {
+    /// One-off action.
+    #[default]
+    Action,
+    /// Setting with an On/Off readout.
+    Toggle,
+    /// One of several options; `on` = chosen (accent fill).
+    Choice,
+    /// Destructive; `on` = armed (tap again to confirm).
+    Danger,
+    /// Empty grid cell.
+    Hidden,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Slot {
     pub label: String,
-    /// Drawn lit (accent): an active toggle or the recommended choice.
     pub on: bool,
     pub enabled: bool,
+    pub kind: SlotKind,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -72,6 +113,8 @@ pub struct MenuModel {
     pub tab: usize,
     pub title: String,
     pub subtitle: String,
+    /// Multi-line text above the bottom row (tips); empty for button pages.
+    pub body: String,
     pub slots: Vec<Slot>,
 }
 
@@ -99,6 +142,9 @@ impl Menu {
         view.on_tab_clicked(move |i| q.borrow_mut().push(MenuInput::Tab(i.max(0) as usize)));
         let q = inputs.clone();
         view.on_slot_clicked(move |i| q.borrow_mut().push(MenuInput::Slot(i.max(0) as usize)));
+        let strings = crate::Strings::english()?;
+        view.set_on_text(strings.get("menu-on", &[]).into());
+        view.set_off_text(strings.get("menu-off", &[]).into());
         Ok(Self { view, canvas, inputs, shown: MenuModel::default() })
     }
 
@@ -112,11 +158,12 @@ impl Menu {
         self.view.set_tab(m.tab as i32);
         self.view.set_heading(m.title.as_str().into());
         self.view.set_subtitle(m.subtitle.as_str().into());
+        self.view.set_body(m.body.as_str().into());
         let slots: Vec<SlotView> = m
             .slots
             .iter()
             .take(SLOTS)
-            .map(|s| SlotView { label: s.label.as_str().into(), on: s.on, enabled: s.enabled })
+            .map(|s| SlotView { label: s.label.as_str().into(), on: s.on, enabled: s.enabled, kind: s.kind as i32 })
             .collect();
         self.view.set_slots(ModelRc::new(VecModel::from(slots)));
         self.shown = m.clone();
@@ -163,12 +210,13 @@ mod tests {
     #[test]
     fn clicks_map_to_tabs_and_slots_and_hover_never_clicks() {
         let mut menu = Menu::new().expect("menu");
-        let slot = |label: &str, enabled| Slot { label: label.into(), on: false, enabled };
+        let slot = |label: &str, enabled| Slot { label: label.into(), on: false, enabled, kind: SlotKind::Action };
         menu.set(&MenuModel {
             tabs: vec!["A".into(), "B".into(), "C".into(), "D".into()],
             tab: 0,
             title: "Title".into(),
             subtitle: String::new(),
+            body: String::new(),
             slots: vec![
                 slot("1", true),
                 slot("2", true),

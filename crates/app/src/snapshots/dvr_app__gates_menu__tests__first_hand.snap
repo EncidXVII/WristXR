@@ -5,18 +5,21 @@ expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
 MenuModel {
     tabs: [],
     tab: 0,
-    title: "Welcome",
-    subtitle: "Which hand do you point with?",
+    title: "Which hand do you point with?",
+    subtitle: "Step 1 of 4",
+    body: "",
     slots: [
         Slot {
             label: "Left hand",
             on: false,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Right hand",
             on: true,
             enabled: true,
+            kind: Choice,
         },
     ],
 }

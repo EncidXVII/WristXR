@@ -10,38 +10,45 @@ MenuModel {
         "Settings",
     ],
     tab: 0,
-    title: "Screen 1",
-    subtitle: "Click or grab a panel to select it.",
+    title: "Selected: Screen 1",
+    subtitle: "Yank a screen toward you to pop out a window.",
+    body: "",
     slots: [
         Slot {
             label: "Add screen 2",
             on: false,
             enabled: true,
+            kind: Action,
         },
         Slot {
             label: "Recenter",
             on: false,
             enabled: true,
+            kind: Action,
         },
         Slot {
             label: "Lock",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Curved",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Attach to hand",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Remove",
             on: false,
             enabled: true,
+            kind: Danger,
         },
     ],
 }

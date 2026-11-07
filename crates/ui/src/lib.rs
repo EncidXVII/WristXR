@@ -2,10 +2,12 @@
 //! Strings come from Fluent (`locales/`), English shipped.
 
 mod i18n;
+mod keyboard;
 mod menu;
 
 pub use i18n::Strings;
-pub use menu::{MENU_SIZE, Menu, MenuInput, MenuModel, SLOTS, Slot, slot_center, tab_center};
+pub use keyboard::{KEYBOARD_SIZE, KeyFace, Keyboard};
+pub use menu::{MENU_SIZE, Menu, MenuInput, MenuModel, SLOTS, Slot, SlotKind, slot_center, tab_center};
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType};
 use slint::platform::{Platform, WindowAdapter};
@@ -36,6 +38,7 @@ slint::slint! {
         in property <string> toast-title;
         in property <string> toast-body;
         in property <string> media;
+        in property <bool> battery-low;
         in property <string> prev-label;
         in property <string> play-label;
         in property <string> next-label;
@@ -52,7 +55,7 @@ slint::slint! {
         if root.toast-title == "" : VerticalLayout {
             x: 24px; y: 128px; width: 552px; height: 160px; spacing: 4px;
             Text { text: root.game; font-size: 32px; color: #F4F1EC; }
-            Text { text: root.battery; font-size: 28px; color: #AAA49B; }
+            Text { text: root.battery; font-size: 28px; color: root.battery-low ? #FF5A3C : #AAA49B; }
             Text { text: root.load; font-size: 28px; color: #AAA49B; }
         }
         if root.media != "" : Text {
@@ -61,9 +64,12 @@ slint::slint! {
         if root.media != "" : WristButton { x: 24px; y: 336px; label: root.prev-label; clicked => { root.media-clicked(0); } }
         if root.media != "" : WristButton { x: 212px; y: 336px; label: root.play-label; clicked => { root.media-clicked(1); } }
         if root.media != "" : WristButton { x: 400px; y: 336px; label: root.next-label; clicked => { root.media-clicked(2); } }
-        Text { x: 24px; y: 432px; text: root.cost; font-size: 24px; color: #C6FF1A; }
+        Text { x: 24px; y: 432px; text: root.cost; font-size: 24px; color: #AAA49B; }
     }
 }
+
+/// Battery level (0..1) below which the wrist warns.
+pub const LOW_BATTERY: f32 = 0.2;
 
 pub const WRIST_SIZE: (u32, u32) = (600, 480);
 
@@ -227,6 +233,8 @@ impl Wrist {
             }
             .into(),
         );
+        let low = w.controllers.iter().chain([&w.lowest_tracker]).flatten().any(|b| *b < LOW_BATTERY);
+        self.view.set_battery_low(low);
         let (left, right) = (percent(w.controllers[0]), percent(w.controllers[1]));
         self.view.set_battery(
             match w.lowest_tracker {
@@ -349,6 +357,10 @@ mod a11y {
             (0xAAA49B, 0x15130F, "secondary on hovered tab"),
             (0xC6FF1A, 0x1F1C18, "accent on active tab"),
             (0x0C0B0A, 0xC6FF1A, "bg on lit button / key"),
+            (0xFF5A3C, 0x1F1C18, "danger label on button"),
+            (0xFF5A3C, 0x0C0B0A, "low battery on bg"),
+            (0x0C0B0A, 0xFF5A3C, "bg on armed danger button"),
+            (0xC6FF1A, 0x2A2622, "On readout on hovered button"),
         ];
         for (fg, bg, what) in pairs {
             let c = contrast(fg, bg);
@@ -358,9 +370,14 @@ mod a11y {
 
     #[test]
     fn no_text_below_24px() {
-        for src in [include_str!("lib.rs"), include_str!("menu.rs")] {
-            let sizes: Vec<u32> =
-                src.split("font-size: ").skip(1).filter_map(|p| p.split("px").next()?.trim().parse().ok()).collect();
+        for src in [include_str!("lib.rs"), include_str!("menu.rs"), include_str!("keyboard.rs")] {
+            // Every `<n>px` inside each font-size expression (conditional sizes included).
+            let sizes: Vec<u32> = src
+                .split("font-size: ")
+                .skip(1)
+                .filter_map(|p| p.split(';').next())
+                .flat_map(|expr| expr.split("px").filter_map(|t| t.rsplit(' ').next()?.parse().ok()))
+                .collect();
             assert!(!sizes.is_empty(), "no font sizes found");
             assert!(sizes.iter().all(|&px| px >= 24), "font sizes below 24px: {sizes:?}");
         }

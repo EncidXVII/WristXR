@@ -12,26 +12,31 @@ MenuModel {
     tab: 3,
     title: "Settings",
     subtitle: "This overlay: 0.05 ms GPU · 1.2% CPU",
+    body: "",
     slots: [
         Slot {
             label: "Point with left",
             on: false,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Point with right",
             on: true,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Opacity 100%",
             on: false,
             enabled: true,
+            kind: Action,
         },
         Slot {
             label: "Quit overlay",
             on: false,
             enabled: true,
+            kind: Danger,
         },
     ],
 }

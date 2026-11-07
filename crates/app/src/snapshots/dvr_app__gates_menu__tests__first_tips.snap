@@ -1,0 +1,43 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [],
+    tab: 0,
+    title: "Good to know",
+    subtitle: "Step 4 of 4",
+    body: "Trigger: click · hold for right click · hold and move to drag\nThumbstick on a screen: scroll\nGrip: move a panel · grip with both hands: resize and turn\nGrip a screen and yank it toward you: pop out a window\nDouble-tap the left menu button: open this menu",
+    slots: [
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "Got it",
+            on: true,
+            enabled: true,
+            kind: Choice,
+        },
+    ],
+}

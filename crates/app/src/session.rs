@@ -5,7 +5,7 @@ use dvr_core::engine::{Event, MouseButton};
 use dvr_core::math::Pose;
 use dvr_core::panel::{Anchor, Hand, MENU_ID, Panel, PixelRect, Source};
 use dvr_core::state::State;
-use dvr_ui::{MENU_SIZE, Menu, MenuInput, MenuModel, Slot, Strings, WRIST_SIZE};
+use dvr_ui::{MENU_SIZE, Menu, MenuInput, MenuModel, Slot, SlotKind, Strings, WRIST_SIZE};
 
 const OPACITY_STEPS: [f32; 4] = [1.0, 0.85, 0.7, 0.5];
 const CURVATURE: f32 = 0.15;
@@ -24,6 +24,8 @@ pub enum Page {
     FirstHand,
     FirstMonitor,
     FirstKeyboard,
+    /// Gesture tips; finishing it completes onboarding.
+    FirstTips,
     /// Panels, Keyboard, Wrist, Settings.
     Tab(usize),
 }
@@ -45,6 +47,10 @@ pub struct Session {
     menu_hovered: bool,
     /// Settings came from another overlay (shown on the first-run page).
     pub imported: bool,
+    /// False when another app holds the notification port (shown on the Wrist tab).
+    pub notifications_ok: bool,
+    /// Danger button waiting for its confirming second tap.
+    armed: Option<(Page, usize)>,
 }
 
 pub fn next_id(panels: &[Panel]) -> u32 {
@@ -74,7 +80,16 @@ impl Session {
         panels.retain(|p| p.id != MENU_ID);
         panels.push(menu);
         let page = if state.onboarded { Page::Tab(0) } else { Page::FirstHand };
-        Self { state, page, selected: None, test: ChatLine::default(), menu_hovered: false, imported: false }
+        Self {
+            state,
+            page,
+            selected: None,
+            test: ChatLine::default(),
+            menu_hovered: false,
+            imported: false,
+            notifications_ok: true,
+            armed: None,
+        }
     }
 
     pub fn menu_open(&self, panels: &[Panel]) -> bool {
@@ -150,20 +165,30 @@ impl Session {
 
     /// What the menu shows now. `cost` is (GPU ms, CPU %) of this overlay.
     pub fn model(&self, panels: &[Panel], monitors: &[MonitorInfo], s: &Strings, cost: (f32, f32)) -> MenuModel {
-        let slot = |label: String, on: bool, enabled: bool| Slot { label, on, enabled };
         let t = |id: &str| s.get(id, &[]);
+        let mk = |label: String, kind: SlotKind, on: bool, enabled: bool| Slot { label, on, enabled, kind };
+        let action = |label: String, enabled: bool| mk(label, SlotKind::Action, false, enabled);
+        let toggle = |label: String, on: bool, enabled: bool| mk(label, SlotKind::Toggle, on, enabled);
+        let choice = |label: String, on: bool| mk(label, SlotKind::Choice, on, true);
+        let hidden = || mk(String::new(), SlotKind::Hidden, false, false);
+        // A danger button shows "tap again" once armed.
+        let danger = |id: &str, slot: usize, enabled: bool| {
+            let armed = self.armed == Some((self.page, slot));
+            mk(if armed { t("menu-confirm") } else { t(id) }, SlotKind::Danger, armed, enabled)
+        };
         let selected = self.selected.and_then(|id| panels.iter().find(|p| p.id == id));
         let tabs = ["menu-tab-panels", "menu-tab-keyboard", "menu-tab-wrist", "menu-tab-settings"].map(t).to_vec();
         let visible = |src: Source| panels.iter().any(|p| p.source == src && p.visible);
         let wrist_hand = panels.iter().find(|p| p.source == Source::Wrist).map(|p| p.anchor);
+        let mut body = String::new();
         let (tab, title, subtitle, slots) = match self.page {
             Page::FirstHand => (
                 0,
                 t("first-hand-title"),
                 t(if self.imported { "first-hand-imported" } else { "first-hand-hint" }),
                 vec![
-                    slot(t("first-hand-left"), self.state.dominant == Hand::Left, true),
-                    slot(t("first-hand-right"), self.state.dominant == Hand::Right, true),
+                    choice(t("first-hand-left"), self.state.dominant == Hand::Left),
+                    choice(t("first-hand-right"), self.state.dominant == Hand::Right),
                 ],
             ),
             Page::FirstMonitor => (
@@ -176,7 +201,7 @@ impl Session {
                     .map(|(i, m)| {
                         let args =
                             [("n", (i + 1).to_string()), ("w", m.rect.w.to_string()), ("h", m.rect.h.to_string())];
-                        slot(s.get("first-monitor", &args), m.primary, true)
+                        choice(s.get("first-monitor", &args), m.primary)
                     })
                     .collect(),
             ),
@@ -186,7 +211,16 @@ impl Session {
                     0,
                     t("first-keyboard-title"),
                     s.get("first-keyboard-hint", &[("typed", self.test.text().to_owned())]),
-                    vec![slot(t("first-done"), typed.contains(TEST_WORD), true), slot(t("first-skip"), false, true)],
+                    vec![choice(t("first-done"), typed.contains(TEST_WORD)), action(t("first-skip"), true)],
+                )
+            }
+            Page::FirstTips => {
+                body = t("first-tips-body");
+                (
+                    0,
+                    t("first-tips-title"),
+                    t("first-tips-hint"),
+                    vec![hidden(), hidden(), hidden(), hidden(), choice(t("first-got-it"), true)],
                 )
             }
             Page::Tab(0) => {
@@ -196,17 +230,21 @@ impl Session {
                     Some(i) => s.get("menu-add-monitor", &[("n", (i + 1).to_string())]),
                     None => t("menu-add-monitor-none"),
                 };
+                let title = match selected {
+                    Some(p) => s.get("menu-selected", &[("name", Self::panel_name(s, p))]),
+                    None => t("panel-none"),
+                };
                 (
                     0,
-                    selected.map_or_else(|| t("panel-none"), |p| Self::panel_name(s, p)),
+                    title,
                     t("menu-panels-hint"),
                     vec![
-                        slot(add, false, next.is_some()),
-                        slot(t("menu-recenter"), false, true),
-                        slot(t("menu-lock"), selected.is_some_and(|p| p.locked), selected.is_some()),
-                        slot(t("menu-curved"), selected.is_some_and(|p| p.curvature > 0.0), selected.is_some()),
-                        slot(t("menu-attach"), selected.is_some_and(|p| p.anchor != Anchor::World), removable),
-                        slot(t("menu-remove"), false, removable),
+                        action(add, next.is_some()),
+                        action(t("menu-recenter"), true),
+                        toggle(t("menu-lock"), selected.is_some_and(|p| p.locked), selected.is_some()),
+                        toggle(t("menu-curved"), selected.is_some_and(|p| p.curvature > 0.0), selected.is_some()),
+                        toggle(t("menu-attach"), selected.is_some_and(|p| p.anchor != Anchor::World), removable),
+                        danger("menu-remove", 5, removable),
                     ],
                 )
             }
@@ -215,21 +253,21 @@ impl Session {
                 t("menu-keyboard-title"),
                 t("menu-keyboard-hint"),
                 vec![
-                    slot(t("menu-show-keyboard"), visible(Source::Keyboard), true),
-                    slot(t("menu-chat"), self.state.chatbox, true),
-                    slot(t("menu-sounds"), self.state.typing_sounds, true),
-                    slot(t("menu-keyboard-here"), false, true),
-                    slot(t("menu-now-playing"), self.state.media_to_chatbox, true),
+                    toggle(t("menu-show-keyboard"), visible(Source::Keyboard), true),
+                    toggle(t("menu-chat"), self.state.chatbox, true),
+                    toggle(t("menu-sounds"), self.state.typing_sounds, true),
+                    action(t("menu-keyboard-here"), true),
+                    toggle(t("menu-now-playing"), self.state.media_to_chatbox, true),
                 ],
             ),
             Page::Tab(2) => (
                 2,
                 t("menu-wrist-title"),
-                t("menu-wrist-hint"),
+                t(if self.notifications_ok { "menu-wrist-hint" } else { "menu-notifications-blocked" }),
                 vec![
-                    slot(t("menu-show-wrist"), visible(Source::Wrist), true),
-                    slot(t("menu-wrist-left"), wrist_hand == Some(Anchor::Hand(Hand::Left)), true),
-                    slot(t("menu-wrist-right"), wrist_hand == Some(Anchor::Hand(Hand::Right)), true),
+                    toggle(t("menu-show-wrist"), visible(Source::Wrist), true),
+                    choice(t("menu-wrist-left"), wrist_hand == Some(Anchor::Hand(Hand::Left))),
+                    choice(t("menu-wrist-right"), wrist_hand == Some(Anchor::Hand(Hand::Right))),
                 ],
             ),
             Page::Tab(_) => {
@@ -240,16 +278,16 @@ impl Session {
                     t("menu-settings-title"),
                     s.get("menu-cost", &cost),
                     vec![
-                        slot(t("menu-point-left"), self.state.dominant == Hand::Left, true),
-                        slot(t("menu-point-right"), self.state.dominant == Hand::Right, true),
-                        slot(s.get("menu-opacity", &[("pct", format!("{pct:.0}"))]), false, selected.is_some()),
-                        slot(t("menu-quit"), false, true),
+                        choice(t("menu-point-left"), self.state.dominant == Hand::Left),
+                        choice(t("menu-point-right"), self.state.dominant == Hand::Right),
+                        action(s.get("menu-opacity", &[("pct", format!("{pct:.0}"))]), selected.is_some()),
+                        danger("menu-quit", 3, true),
                     ],
                 )
             }
         };
-        let first_run = matches!(self.page, Page::FirstHand | Page::FirstMonitor | Page::FirstKeyboard);
-        MenuModel { tabs: if first_run { Vec::new() } else { tabs }, tab, title, subtitle, slots }
+        let first_run = !matches!(self.page, Page::Tab(_));
+        MenuModel { tabs: if first_run { Vec::new() } else { tabs }, tab, title, subtitle, body, slots }
     }
 
     /// A new screen panel with the user's defaults (curvature, opacity).
@@ -297,6 +335,7 @@ impl Session {
         let mut fx = Vec::new();
         let slot = match input {
             MenuInput::Tab(i) => {
+                self.armed = None;
                 if matches!(self.page, Page::Tab(_)) && i < TABS {
                     self.page = Page::Tab(i);
                 }
@@ -304,6 +343,13 @@ impl Session {
             }
             MenuInput::Slot(i) => i,
         };
+        // Destructive buttons need a second tap on the same button; any other click disarms.
+        let destructive = matches!((self.page, slot), (Page::Tab(0), 5) | (Page::Tab(3), 3));
+        if destructive && self.armed != Some((self.page, slot)) {
+            self.armed = Some((self.page, slot));
+            return fx;
+        }
+        self.armed = None;
         let selected = self.selected;
         let sel = |panels: &mut Vec<Panel>| -> Option<usize> { panels.iter().position(|p| Some(p.id) == selected) };
         match (self.page, slot) {
@@ -324,7 +370,8 @@ impl Session {
                     fx.push(Effect::Added(id));
                 }
             }
-            (Page::FirstKeyboard, 0 | 1) => {
+            (Page::FirstKeyboard, 0 | 1) => self.page = Page::FirstTips,
+            (Page::FirstTips, 4) => {
                 self.state.onboarded = true;
                 self.page = Page::Tab(0);
                 if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {

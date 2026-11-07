@@ -6,7 +6,7 @@ use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
-use dvr_core::keyboard::{CHAT, KeyDef, SPACE};
+use dvr_core::keyboard::{CAPS, CHAT, LALT, LCTRL, LSHIFT, ROWS, RSHIFT, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
@@ -16,7 +16,9 @@ use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
 use dvr_sys::{Media, MediaCommand, MediaInfo};
-use dvr_ui::{MENU_SIZE, Menu, Strings, WRIST_SIZE, Wrist, WristInfo, WristInput};
+use dvr_ui::{
+    KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, WRIST_SIZE, Wrist, WristInfo, WristInput,
+};
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -48,31 +50,48 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
-/// Keys show the active OS layout; in chat mode the Chat key is lit and the space bar shows the line being typed.
-fn keyboard_image(chat: Option<&str>) -> raster::Image {
-    let label = |key: &KeyDef| {
-        if let (SPACE, Some(text)) = (key.sc, chat) {
-            let shown: String = text.chars().filter(|c| raster::drawable(&c.to_string())).collect();
-            let skip = shown.chars().count().saturating_sub(SPACE_BAR_CHARS);
-            return shown.chars().skip(skip).collect();
-        }
-        if key.label.chars().count() == 1
-            && let Some(l) = dvr_input_win::key_label(key.sc).filter(|l| raster::drawable(l))
-        {
-            return l;
-        }
-        key.label.to_owned()
-    };
-    raster::keyboard(label, if chat.is_some() { &[CHAT] } else { &[] })
+/// Key labels in the active OS layout, in the case they will type (Shift latched / Caps Lock).
+fn layout_labels(shift: bool, caps: bool) -> Vec<String> {
+    ROWS.iter()
+        .flat_map(|r| r.iter())
+        .map(|key| {
+            let typed = (key.label.chars().count() == 1)
+                .then(|| dvr_input_win::key_char(key.sc, shift, caps))
+                .flatten()
+                .filter(|c| !c.is_whitespace());
+            typed.map_or_else(|| key.label.to_owned(), |c| c.to_string())
+        })
+        .collect()
 }
 
-fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -> Result<Surface, String> {
+/// What each key shows: label (space bar = chat line in chat mode), lit, laser hover.
+fn key_faces(
+    faces: &mut Vec<KeyFace>,
+    labels: &[String],
+    chat: Option<&str>,
+    lit: impl Fn(u16) -> bool,
+    hover: &[Option<u16>; 2],
+) {
+    faces.clear();
+    for (key, label) in ROWS.iter().flat_map(|r| r.iter()).zip(labels) {
+        let label = match (key.sc, chat) {
+            (SPACE, Some(text)) => {
+                let skip = text.chars().count().saturating_sub(SPACE_BAR_CHARS);
+                text.chars().skip(skip).collect()
+            }
+            _ => label.clone(),
+        };
+        faces.push(KeyFace { label, lit: lit(key.sc), hover: hover.contains(&Some(key.sc)) });
+    }
+}
+
+fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, String> {
     let blank = |size: (u32, u32)| -> Result<Surface, String> {
         let tex = gpu.texture(size.0, size.1, None).map_err(err)?;
         Ok(Surface { tex, capture: None, rect: None, needs_submit: false, dead: false })
     };
     let (img, rect) = match panel.source {
-        Source::Keyboard => (keyboard_image(chat), None),
+        Source::Keyboard => return blank(KEYBOARD_SIZE),
         Source::Monitor(i) => match monitors.get(i as usize) {
             Some(m) => return Ok(Surface { rect: Some(m.rect), ..blank((m.rect.w, m.rect.h))? }),
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
@@ -158,10 +177,9 @@ pub fn run() -> Result<(), String> {
         vr.set_texture_d3d11(cursor_key(hand), raw(&cursor))?;
     }
     let mut chat = ChatLine::default();
-    let chat_text = |on: bool, line: &ChatLine| on.then(|| line.text().to_owned());
     let mut surfaces = HashMap::new();
     for p in &panels {
-        surfaces.insert(p.id, surface(&gpu, p, &monitors, chat_text(session.state.chatbox, &chat).as_deref())?);
+        surfaces.insert(p.id, surface(&gpu, p, &monitors)?);
     }
 
     let strings = Strings::english()?;
@@ -188,7 +206,14 @@ pub fn run() -> Result<(), String> {
     // Another app (e.g. XSOverlay) may own the port; the overlay still runs without toasts.
     let mut notifications =
         Listener::bind(dvr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
+    session.notifications_ok = notifications.is_some();
     let mut toast: Option<(Toast, Instant)> = None;
+    let mut keyboard = Keyboard::new()?;
+    let mut faces: Vec<KeyFace> = Vec::with_capacity(80);
+    let mut held: Vec<u16> = Vec::with_capacity(8);
+    let mut labels = layout_labels(false, dvr_input_win::caps_lock());
+    let mut key_state = None;
+    let mut battery_low = [false; 2];
     let mut stats_at = Instant::now() - STATS_PERIOD;
     let start = Instant::now();
 
@@ -228,6 +253,7 @@ pub fn run() -> Result<(), String> {
         let poses = [input.hands[0].pose, input.hands[1].pose];
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut redraw_keyboard = false;
+        let mut key_hover: [Option<u16>; 2] = [None; 2];
         // Popped-out windows can move on the desktop; input maps through their current rectangle.
         for p in &engine.panels {
             if let (Source::Window(h), Some(s)) = (p.source, surfaces.get_mut(&p.id))
@@ -275,8 +301,16 @@ pub fn run() -> Result<(), String> {
         let mut menu_dirty = tray_open_menu || session.selected != selected;
         for e in &events {
             let rect = |panel: u32| surfaces.get(&panel).and_then(|s: &Surface| s.rect);
-            if let Event::Hover { hand, panel, uv, .. } = *e {
-                cursors[hand.index()] = Some((panel, uv));
+            match *e {
+                Event::Hover { hand, panel, uv, .. } => {
+                    cursors[hand.index()] = Some((panel, uv));
+                    if engine.panels.iter().any(|p| p.id == panel && p.source == Source::Keyboard) {
+                        key_hover[hand.index()] = dvr_core::keyboard::key_at(uv).map(|k| k.sc);
+                    }
+                }
+                Event::Key { scancode, down: true } if !held.contains(&scancode) => held.push(scancode),
+                Event::Key { scancode, down: false } => held.retain(|k| *k != scancode),
+                _ => {}
             }
             if let Event::Mouse { panel, down: true, .. } = *e
                 && let Some(Source::Window(h)) = engine.panels.iter().find(|p| p.id == panel).map(|p| p.source)
@@ -340,7 +374,7 @@ pub fn run() -> Result<(), String> {
             let at = poses[hand.index()];
             let pose = Pose::new(at.pos + at.forward() * POP_OUT_DISTANCE_M, from.world_pose(&poses).rot);
             let p = Panel::new(id, Source::Window(h as u64), pose, width, wr.h as f32 / wr.w as f32);
-            surfaces.insert(id, surface(&gpu, &p, &monitors, None)?);
+            surfaces.insert(id, surface(&gpu, &p, &monitors)?);
             engine.panels.push(p);
             engine.start_grab(hand, id, &poses);
             session.selected = Some(id);
@@ -353,7 +387,7 @@ pub fn run() -> Result<(), String> {
                 match fx {
                     Effect::Added(id) => {
                         if let Some(p) = engine.panels.iter().find(|p| p.id == id) {
-                            surfaces.insert(id, surface(&gpu, p, &monitors, None)?);
+                            surfaces.insert(id, surface(&gpu, p, &monitors)?);
                         }
                     }
                     Effect::Removed(id) => {
@@ -380,6 +414,14 @@ pub fn run() -> Result<(), String> {
             stats_at = Instant::now();
             load = sampler.sample();
             refresh_wrist = true;
+            let stats = vr.stats();
+            for hand in Hand::BOTH {
+                let low = stats.controllers[hand.index()].is_some_and(|b| b < LOW_BATTERY);
+                if low && !battery_low[hand.index()] {
+                    vr.haptic(hand);
+                }
+                battery_low[hand.index()] = low;
+            }
             let playing = media.info();
             let track = |m: &MediaInfo| (m.title.clone(), m.artist.clone());
             if session.state.media_to_chatbox
@@ -426,14 +468,40 @@ pub fn run() -> Result<(), String> {
         if let Some(px) = menu.render() {
             upload(px, Source::Menu, MENU_SIZE.0, &mut surfaces);
         }
-        if redraw_keyboard {
-            let img = keyboard_image(chat_text(session.state.chatbox, &chat).as_deref());
-            for p in engine.panels.iter().filter(|p| p.source == Source::Keyboard) {
-                if let Some(s) = surfaces.get_mut(&p.id) {
-                    s.tex = gpu.image(&img).map_err(err)?;
-                    s.needs_submit = true;
-                }
+        // Keyboard view: rebuilt only when what it shows changes (labels, lit keys, hover, chat line).
+        let latched = engine.keyboard().latched();
+        let caps = dvr_input_win::caps_lock();
+        let state = (
+            key_hover,
+            latched,
+            caps,
+            session.state.chatbox,
+            chat.text().len(),
+            layout,
+            held.len(),
+            held.first().copied(),
+        );
+        if redraw_keyboard || key_state != Some(state) {
+            if redraw_keyboard
+                || key_state.is_none_or(|k: (_, u8, bool, _, _, _, _, _)| (k.1 & 1) != (latched & 1) || k.2 != caps)
+            {
+                labels = layout_labels(latched & 1 != 0, caps);
             }
+            let lit = |sc: u16| {
+                held.contains(&sc)
+                    || (sc == CHAT && session.state.chatbox)
+                    || (sc == CAPS && caps)
+                    || (matches!(sc, LSHIFT | RSHIFT) && latched & 1 != 0)
+                    || (sc == LCTRL && latched & 2 != 0)
+                    || (sc == LALT && latched & 4 != 0)
+            };
+            let chat_line = session.state.chatbox.then_some(chat.text());
+            key_faces(&mut faces, &labels, chat_line, lit, &key_hover);
+            keyboard.set(&faces);
+            key_state = Some(state);
+        }
+        if let Some(px) = keyboard.render() {
+            upload(px, Source::Keyboard, KEYBOARD_SIZE.0, &mut surfaces);
         }
         for p in &engine.panels {
             vr.place_panel(p, p.world_pose(&poses));

@@ -1,5 +1,4 @@
 //! CPU images for static textures (keyboard, cursor, placeholder). Uploaded once, never per frame.
-use crate::keyboard::{KeyDef, ROW_UNITS, ROWS};
 
 /// BGRA8, the format desktop capture delivers.
 pub type Color = [u8; 4];
@@ -55,46 +54,6 @@ impl Image {
             }
         }
     }
-}
-
-/// True when the 5x7 font can draw every character of `s`.
-pub fn drawable(s: &str) -> bool {
-    s.chars().all(|c| glyph(c).is_some())
-}
-
-/// Keyboard texture, 100 px per key unit. `label` maps a key to its text; keys in `lit` are highlighted.
-pub fn keyboard(label: impl Fn(&KeyDef) -> String, lit: &[u16]) -> Image {
-    const U: i32 = 100;
-    const GAP: i32 = 6;
-    let mut img = Image::new(ROW_UNITS as u32 * U as u32, ROWS.len() as u32 * U as u32, BG);
-    for (r, row) in ROWS.iter().enumerate() {
-        let mut left = 0.0;
-        for key in row.iter() {
-            let (x, w) = ((left * U as f32) as i32, (key.w * U as f32) as i32);
-            let y = r as i32 * U;
-            let on = lit.contains(&key.sc);
-            img.fill_rect(x + GAP, y + GAP, w - 2 * GAP, U - 2 * GAP, if on { ACCENT } else { RAISED });
-            let text = label(key);
-            let scale = label_scale(key.w, &text);
-            let color = if on {
-                BG
-            } else if key.w > 1.0 || text.chars().count() > 1 {
-                INK2
-            } else {
-                INK
-            };
-            img.text(x + w / 2, y + U / 2, scale, &text, color);
-            left += key.w;
-        }
-    }
-    img
-}
-
-/// Pixel scale of the 5x7 font for a key label: as large as fits, never above 6. At 100 px per key unit a scale of 3
-/// is a 21 px cap height (about a 30 px font), the minimum readable size in VR.
-pub fn label_scale(key_w: f32, text: &str) -> i32 {
-    let len = text.chars().count().max(1) as i32;
-    (((key_w * 100.0) as i32 - 24) / (len * 6)).clamp(2, 6)
 }
 
 /// Laser dot: accent disc with a dark rim, transparent outside.
@@ -164,32 +123,4 @@ fn glyph(c: char) -> Option<[u8; 7]> {
         ' ' => [0; 7],
         _ => return None,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn every_us_label_is_drawable() {
-        for key in ROWS.iter().flat_map(|r| r.iter()) {
-            assert!(drawable(key.label), "{}", key.label);
-        }
-    }
-
-    #[test]
-    fn every_key_label_is_readable_in_vr() {
-        for key in ROWS.iter().flat_map(|r| r.iter()) {
-            assert!(label_scale(key.w, key.label) >= 3, "{} too small", key.label);
-        }
-    }
-
-    #[test]
-    fn keyboard_texture_has_keys() {
-        let img = keyboard(|k| k.label.to_owned(), &[]);
-        assert_eq!(img.bgra.len(), (img.w * img.h * 4) as usize);
-        let at = |x: u32, y: u32| &img.bgra[((y * img.w + x) * 4) as usize..][..4];
-        assert_eq!(at(3, 3), BG);
-        assert_eq!(at(10, 10), RAISED);
-    }
 }

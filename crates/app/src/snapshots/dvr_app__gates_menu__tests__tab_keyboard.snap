@@ -11,32 +11,38 @@ MenuModel {
     ],
     tab: 1,
     title: "Keyboard",
-    subtitle: "Chat sends what you type to VRChat.",
+    subtitle: "Chat mode sends what you type to VRChat.",
+    body: "",
     slots: [
         Slot {
             label: "Show keyboard",
             on: true,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
-            label: "Send to VRChat",
+            label: "Chat mode",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Typing sounds",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Keyboard here",
             on: false,
             enabled: true,
+            kind: Action,
         },
         Slot {
-            label: "Now playing to VRChat",
+            label: "Share now playing",
             on: false,
             enabled: true,
+            kind: Toggle,
         },
     ],
 }

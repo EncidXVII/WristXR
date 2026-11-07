@@ -976,6 +976,7 @@ dependencies = [
 name = "dvr-ui"
 version = "0.1.0"
 dependencies = [
+ "dvr-core",
  "fluent",
  "slint",
 ]

@@ -6,17 +6,20 @@ MenuModel {
     tabs: [],
     tab: 0,
     title: "Pick your main screen",
-    subtitle: "You can add more screens later.",
+    subtitle: "Step 2 of 4 · You can add more later",
+    body: "",
     slots: [
         Slot {
             label: "Screen 1 · 2560×1440",
             on: true,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Screen 2 · 1920×1080",
             on: false,
             enabled: true,
+            kind: Choice,
         },
     ],
 }

@@ -5,18 +5,21 @@ expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
 MenuModel {
     tabs: [],
     tab: 0,
-    title: "Try the keyboard",
-    subtitle: "Type hi with the keyboard below. Typed: ",
+    title: "Type hi on the keyboard below",
+    subtitle: "Step 3 of 4 · Typed: ",
+    body: "",
     slots: [
         Slot {
             label: "Done",
             on: false,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Skip",
             on: false,
             enabled: true,
+            kind: Action,
         },
     ],
 }

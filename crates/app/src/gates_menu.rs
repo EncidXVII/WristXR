@@ -14,6 +14,7 @@ struct Ctx {
     rig: Rig,
     strings: Strings,
     screens: Vec<MonitorInfo>,
+    effects: Vec<crate::session::Effect>,
 }
 
 impl Ctx {
@@ -32,7 +33,8 @@ impl Ctx {
         }
         let poses = [self.rig.hands[0].pose, self.rig.hands[1].pose];
         for click in self.menu.take_inputs() {
-            self.session.input(click, &mut self.rig.engine.panels, HEAD, &poses, &self.screens);
+            let fx = self.session.input(click, &mut self.rig.engine.panels, HEAD, &poses, &self.screens);
+            self.effects.extend(fx);
         }
         let model = self.session.model(&self.rig.engine.panels, &self.screens, &self.strings, (0.0, 0.0));
         self.menu.set(&model);
@@ -67,6 +69,7 @@ pub fn first_run_and_menu() -> GateResult {
         rig: Rig::new(panels),
         strings: Strings::english()?,
         screens: vec![screen(0, 2560, 1440, true), screen(2560, 1920, 1080, false)],
+        effects: Vec::new(),
     };
     c.pump();
     if !(c.session.menu_open(&c.rig.engine.panels) && c.session.page == Page::FirstHand) {
@@ -96,8 +99,12 @@ pub fn first_run_and_menu() -> GateResult {
         c.pump();
     }
     c.click(slot_center(0))?;
+    if c.session.page != Page::FirstTips {
+        return Err(format!("Done must show the gesture tips, page {:?}", c.session.page));
+    }
+    c.click(slot_center(4))?;
     if !c.session.state.onboarded || c.session.menu_open(&c.rig.engine.panels) {
-        return Err("Done must finish onboarding and close the menu".into());
+        return Err("Got it must finish onboarding and close the menu".into());
     }
     if c.rig.now >= FIRST_RUN_BUDGET_MS {
         return Err(format!("first run took {} ms of scripted time", c.rig.now));
@@ -146,6 +153,16 @@ pub fn first_run_and_menu() -> GateResult {
     if c.session.state.typing_sounds == sounds {
         return Err("Keyboard tab: typing sounds toggle failed".into());
     }
+    // Quit is destructive: the first tap only arms it.
+    c.click(tab_center(3))?;
+    c.click(slot_center(3))?;
+    if c.effects.contains(&crate::session::Effect::Quit) {
+        return Err("Quit must ask for a second tap".into());
+    }
+    c.click(slot_center(3))?;
+    if !c.effects.contains(&crate::session::Effect::Quit) {
+        return Err("second tap on Quit must quit".into());
+    }
     c.session.persist(&c.rig.engine.panels);
     if c.session.state.panels.iter().any(|p| p.id == MENU_ID) {
         return Err("menu must never be persisted".into());
@@ -179,6 +196,7 @@ mod tests {
             ("first_hand", Page::FirstHand),
             ("first_monitor", Page::FirstMonitor),
             ("first_keyboard", Page::FirstKeyboard),
+            ("first_tips", Page::FirstTips),
             ("tab_panels", Page::Tab(0)),
             ("tab_keyboard", Page::Tab(1)),
             ("tab_wrist", Page::Tab(2)),

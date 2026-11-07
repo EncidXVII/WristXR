@@ -12,21 +12,25 @@ MenuModel {
     tab: 2,
     title: "Wrist",
     subtitle: "Time, batteries, load and notifications.",
+    body: "",
     slots: [
         Slot {
             label: "Show wrist",
             on: true,
             enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "On left hand",
             on: true,
             enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "On right hand",
             on: false,
             enabled: true,
+            kind: Choice,
         },
     ],
 }
