@@ -1,3 +1,4 @@
 /target
 /.agent
 selftest-report.json
+/dist
