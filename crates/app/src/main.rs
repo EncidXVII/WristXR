@@ -11,6 +11,8 @@ mod import;
 mod run;
 #[cfg(windows)]
 mod session;
+#[cfg(windows)]
+mod tray;
 
 use std::process::ExitCode;
 

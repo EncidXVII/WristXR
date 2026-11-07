@@ -36,6 +36,17 @@ pub fn overlay_live() -> GateResult {
 
 fn run(manifest: &std::path::Path) -> GateResult {
     let mut vr = OpenVr::init(manifest)?;
+    // Gate C (tray / autostart): register the app with SteamVR and round-trip auto-launch.
+    let dir = manifest.parent().ok_or("manifest has no folder")?;
+    let exe = std::env::current_exe().map_err(err)?;
+    let app = crate::bindings::install_vrmanifest(dir, &exe).map_err(err)?;
+    vr.register_app(&app, crate::bindings::APP_KEY)?;
+    for on in [true, false] {
+        vr.set_auto_launch(crate::bindings::APP_KEY, on)?;
+        if vr.auto_launch(crate::bindings::APP_KEY) != on {
+            return Err(format!("auto-launch did not become {on}"));
+        }
+    }
     let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
     let head = vr.head_pose().ok_or("HMD pose not valid")?;
     let monitors = dvr_capture_win::monitors();

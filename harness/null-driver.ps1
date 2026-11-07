@@ -7,6 +7,11 @@ $paths = Get-Content (Join-Path $env:LOCALAPPDATA 'openvr\openvrpaths.vrpath') -
 $settings = Join-Path $paths.config[0] 'steamvr.vrsettings'
 $backup = "$settings.dvr-backup"
 Copy-Item $settings $backup -Force
+# App registrations (vrmanifest paths) live here; tests register the dev build, so restore it too.
+$appconfig = Join-Path $paths.config[0] 'appconfig.json'
+$appBackup = "$appconfig.dvr-backup"
+$hadAppconfig = Test-Path $appconfig
+if ($hadAppconfig) { Copy-Item $appconfig $appBackup -Force }
 $code = 1
 try {
     $s = Get-Content $settings -Raw | ConvertFrom-Json
@@ -26,5 +31,6 @@ try {
     Get-Process vrmonitor, vrserver, vrcompositor, vrdashboard, vrwebhelper, vrstartup -ErrorAction SilentlyContinue | Stop-Process -Force
     Start-Sleep -Seconds 2
     Move-Item $backup $settings -Force
+    if ($hadAppconfig) { Move-Item $appBackup $appconfig -Force } elseif (Test-Path $appconfig) { Remove-Item $appconfig -Force }
 }
 exit $code

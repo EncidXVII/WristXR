@@ -2,6 +2,10 @@
 #![cfg(windows)]
 #![allow(unsafe_code)]
 
+mod media;
+
+pub use media::{Media, MediaCommand, MediaInfo};
+
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Performance::{
@@ -212,6 +216,19 @@ pub fn play_click() {
     // SAFETY: SND_MEMORY reads the static WAV buffer, which lives for the whole process.
     unsafe {
         let _ = PlaySoundW(PCWSTR(click_wav().as_ptr().cast()), None, SND_ASYNC | SND_MEMORY | SND_NODEFAULT);
+    }
+}
+
+/// Dispatches pending window messages for this thread without blocking (tray icon, hidden windows).
+pub fn pump_messages() {
+    use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage};
+    let mut msg = MSG::default();
+    // SAFETY: standard message loop on the calling thread.
+    unsafe {
+        while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
 }
 

@@ -1,8 +1,7 @@
 //! In-VR menu: tabs, a title, and a fixed 2x3 grid of large buttons. Content and wording come from the app;
 //! this view only draws and reports which tab/slot was clicked. Geometry is fixed so tests can click it.
 use crate::{Canvas, ensure_platform};
-use slint::platform::{PointerEventButton, WindowEvent};
-use slint::{ComponentHandle, LogicalPosition, ModelRc, SharedString, VecModel};
+use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -123,32 +122,17 @@ impl Menu {
         self.shown = m.clone();
     }
 
-    fn dispatch(&self, event: WindowEvent) {
-        // An event the window cannot take (e.g. not shown yet) is simply dropped.
-        let _ = self.canvas.window.dispatch_event_with_result(event);
-    }
-
-    fn position(uv: [f32; 2]) -> LogicalPosition {
-        LogicalPosition::new(uv[0] * MENU_SIZE.0 as f32, uv[1] * MENU_SIZE.1 as f32)
-    }
-
     /// Laser moved over the menu (uv in 0..1).
     pub fn pointer_move(&self, uv: [f32; 2]) {
-        self.dispatch(WindowEvent::PointerMoved { position: Self::position(uv) });
+        self.canvas.pointer_move(uv);
     }
 
     pub fn pointer_button(&self, uv: [f32; 2], down: bool) {
-        let position = Self::position(uv);
-        let button = PointerEventButton::Left;
-        self.dispatch(if down {
-            WindowEvent::PointerPressed { position, button }
-        } else {
-            WindowEvent::PointerReleased { position, button }
-        });
+        self.canvas.pointer_button(uv, down);
     }
 
     pub fn pointer_leave(&self) {
-        self.dispatch(WindowEvent::PointerExited);
+        self.canvas.pointer_leave();
     }
 
     /// Clicks since the last call, in order.

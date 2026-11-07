@@ -18,6 +18,7 @@ pub const SYSTEM_VERSION: &CStr = c"FnTable:IVRSystem_026";
 pub const OVERLAY_VERSION: &CStr = c"FnTable:IVROverlay_028";
 pub const INPUT_VERSION: &CStr = c"FnTable:IVRInput_011";
 pub const COMPOSITOR_VERSION: &CStr = c"FnTable:IVRCompositor_029";
+pub const APPLICATIONS_VERSION: &CStr = c"FnTable:IVRApplications_008";
 pub const CLIENT_CORE_VERSION: &CStr = c"IVRClientCore_003";
 
 pub mod system {
@@ -41,6 +42,12 @@ pub mod overlay {
     pub const HIDE_OVERLAY: usize = 44;
     pub const WAIT_FRAME_SYNC: usize = 47;
     pub const SET_OVERLAY_TEXTURE: usize = 60;
+}
+pub mod applications {
+    pub const ADD_APPLICATION_MANIFEST: usize = 0;
+    pub const IDENTIFY_APPLICATION: usize = 11;
+    pub const SET_APPLICATION_AUTO_LAUNCH: usize = 17;
+    pub const GET_APPLICATION_AUTO_LAUNCH: usize = 18;
 }
 pub mod compositor {
     pub const GET_FRAME_TIMING: usize = 10;
@@ -262,6 +269,10 @@ mod tests {
             ("IVRSystem", "GetTrackedDeviceClass", system::GET_TRACKED_DEVICE_CLASS),
             ("IVRSystem", "GetFloatTrackedDeviceProperty", system::GET_FLOAT_TRACKED_DEVICE_PROPERTY),
             ("IVRCompositor", "GetFrameTiming", compositor::GET_FRAME_TIMING),
+            ("IVRApplications", "AddApplicationManifest", applications::ADD_APPLICATION_MANIFEST),
+            ("IVRApplications", "IdentifyApplication", applications::IDENTIFY_APPLICATION),
+            ("IVRApplications", "SetApplicationAutoLaunch", applications::SET_APPLICATION_AUTO_LAUNCH),
+            ("IVRApplications", "GetApplicationAutoLaunch", applications::GET_APPLICATION_AUTO_LAUNCH),
             ("IVRSystem", "AcknowledgeQuit_Exiting", system::ACKNOWLEDGE_QUIT_EXITING),
             ("IVROverlay", "CreateOverlay", overlay::CREATE_OVERLAY),
             ("IVROverlay", "DestroyOverlay", overlay::DESTROY_OVERLAY),
@@ -292,6 +303,7 @@ mod tests {
             (OVERLAY_VERSION, "IVROverlay"),
             (INPUT_VERSION, "IVRInput"),
             (COMPOSITOR_VERSION, "IVRCompositor"),
+            (APPLICATIONS_VERSION, "IVRApplications"),
         ] {
             let name = v.to_str().expect("ascii").trim_start_matches("FnTable:");
             assert!(HEADER.contains(&format!("{t}_Version = \"{name}\"")), "{name}");

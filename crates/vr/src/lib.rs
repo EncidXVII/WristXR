@@ -10,7 +10,7 @@ use dvr_core::math::Pose;
 use dvr_core::panel::{Hand, Panel, Source};
 use ffi::{
     ActiveActionSet, AnalogData, ClientCore, DigitalData, FrameTiming, Mat34, PoseData, Table, TrackedPose, VrEvent,
-    compositor, input, overlay, system,
+    applications, compositor, input, overlay, system,
 };
 use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
@@ -70,6 +70,7 @@ pub struct OpenVr {
     overlay: Table,
     input: Table,
     compositor: Table,
+    applications: Table,
     actions: Actions,
     overlays: HashMap<u64, Placed>,
 }
@@ -139,9 +140,10 @@ impl OpenVr {
                 interface(ffi::OVERLAY_VERSION)?,
                 interface(ffi::INPUT_VERSION)?,
                 interface(ffi::COMPOSITOR_VERSION)?,
+                interface(ffi::APPLICATIONS_VERSION)?,
             ))
         })();
-        let (system, overlay, input, compositor) = match tables {
+        let (system, overlay, input, compositor, applications) = match tables {
             Ok(t) => t,
             Err(e) => {
                 // SAFETY: balances the successful init above.
@@ -155,6 +157,7 @@ impl OpenVr {
             overlay,
             input,
             compositor,
+            applications,
             actions: Actions { set: 0, pointer: 0, click: 0, grab: 0, stick: 0, menu: 0, haptic: 0, hands: [0; 2] },
             overlays: HashMap::new(),
         };
@@ -215,6 +218,50 @@ impl OpenVr {
         }
         self.overlays.insert(key, Placed { handle, last: None, shown: false });
         Ok(handle)
+    }
+
+    /// Registers our `.vrmanifest` (permanent) and tells SteamVR this process is that app.
+    pub fn register_app(&self, manifest: &Path, app_key: &str) -> Result<(), String> {
+        let path = cstring(&manifest.to_string_lossy())?;
+        let key = cstring(app_key)?;
+        let e = call!(
+            self.applications,
+            applications::ADD_APPLICATION_MANIFEST,
+            fn(*const c_char, u8) -> i32,
+            path.as_ptr(),
+            0
+        );
+        if e != 0 {
+            return Err(format!("AddApplicationManifest: EVRApplicationError {e}"));
+        }
+        let e = call!(
+            self.applications,
+            applications::IDENTIFY_APPLICATION,
+            fn(u32, *const c_char) -> i32,
+            std::process::id(),
+            key.as_ptr()
+        );
+        if e != 0 { Err(format!("IdentifyApplication: EVRApplicationError {e}")) } else { Ok(()) }
+    }
+
+    /// Whether SteamVR starts us together with itself.
+    pub fn auto_launch(&self, app_key: &str) -> bool {
+        cstring(app_key).is_ok_and(|k| {
+            call!(self.applications, applications::GET_APPLICATION_AUTO_LAUNCH, fn(*const c_char) -> u8, k.as_ptr())
+                != 0
+        })
+    }
+
+    pub fn set_auto_launch(&self, app_key: &str, on: bool) -> Result<(), String> {
+        let k = cstring(app_key)?;
+        let e = call!(
+            self.applications,
+            applications::SET_APPLICATION_AUTO_LAUNCH,
+            fn(*const c_char, u8) -> i32,
+            k.as_ptr(),
+            u8::from(on)
+        );
+        if e != 0 { Err(format!("SetApplicationAutoLaunch: EVRApplicationError {e}")) } else { Ok(()) }
     }
 
     /// DXGI adapter SteamVR renders on; textures must come from it.

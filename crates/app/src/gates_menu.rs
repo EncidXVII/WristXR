@@ -139,6 +139,10 @@ pub fn first_run_and_menu() -> GateResult {
     c.click(tab_center(1))?;
     let sounds = c.session.state.typing_sounds;
     c.click(slot_center(2))?;
+    c.click(slot_center(4))?;
+    if !c.session.state.media_to_chatbox {
+        return Err("Keyboard tab: now-playing toggle failed".into());
+    }
     if c.session.state.typing_sounds == sounds {
         return Err("Keyboard tab: typing sounds toggle failed".into());
     }

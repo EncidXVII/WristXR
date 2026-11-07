@@ -18,8 +18,17 @@ impl Chatbox {
 
     /// Sends immediately (no keyboard UI in VRChat), with the notification sound.
     pub fn send(&self, text: &str) -> io::Result<()> {
+        self.send_with(text, true)
+    }
+
+    /// Sends without the notification sound (automatic messages such as now-playing).
+    pub fn send_quiet(&self, text: &str) -> io::Result<()> {
+        self.send_with(text, false)
+    }
+
+    fn send_with(&self, text: &str, sound: bool) -> io::Result<()> {
         let text: String = text.chars().take(CHATBOX_MAX_CHARS).collect();
-        self.emit("/chatbox/input", vec![OscType::String(text), OscType::Bool(true), OscType::Bool(true)])
+        self.emit("/chatbox/input", vec![OscType::String(text), OscType::Bool(true), OscType::Bool(sound)])
     }
 
     pub fn typing(&self, on: bool) -> io::Result<()> {

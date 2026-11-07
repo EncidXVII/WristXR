@@ -219,6 +219,7 @@ impl Session {
                     slot(t("menu-chat"), self.state.chatbox, true),
                     slot(t("menu-sounds"), self.state.typing_sounds, true),
                     slot(t("menu-keyboard-here"), false, true),
+                    slot(t("menu-now-playing"), self.state.media_to_chatbox, true),
                 ],
             ),
             Page::Tab(2) => (
@@ -383,6 +384,7 @@ impl Session {
                     *k = Panel { id: k.id, ..Panel::keyboard_below(k.id, head) };
                 }
             }
+            (Page::Tab(1), 4) => self.state.media_to_chatbox = !self.state.media_to_chatbox,
             (Page::Tab(2), 0) => {
                 if let Some(w) = find(panels, Source::Wrist) {
                     w.visible = !w.visible;

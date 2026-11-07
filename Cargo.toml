@@ -24,6 +24,7 @@ rosc = "0.10"
 tracing = "0.1"
 directories = "6"
 fluent = "0.17"
+tray-icon = "0.26"
 slint = { version = "1", default-features = false, features = ["std", "compat-1-2", "renderer-software", "software-renderer-systemfonts"] }
 windows = { version = "0.61", features = [
     "Foundation",
@@ -31,6 +32,8 @@ windows = { version = "0.61", features = [
     "Graphics_Capture",
     "Graphics_DirectX",
     "Graphics_DirectX_Direct3D11",
+    "Media",
+    "Media_Control",
     "Win32_Media_Audio",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",

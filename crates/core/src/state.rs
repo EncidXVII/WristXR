@@ -19,6 +19,8 @@ pub struct State {
     /// Defaults for newly added screens (can come from the switch-over import).
     pub default_curved: bool,
     pub default_opacity: f32,
+    /// Send the current track to the VRChat chatbox when it changes.
+    pub media_to_chatbox: bool,
 }
 
 impl Default for State {
@@ -31,6 +33,7 @@ impl Default for State {
             onboarded: false,
             default_curved: false,
             default_opacity: 1.0,
+            media_to_chatbox: false,
         }
     }
 }

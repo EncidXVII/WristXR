@@ -1,0 +1,58 @@
+//! Tray icon: open the menu in VR, start with SteamVR, quit. Events arrive through the main thread's message pump.
+use dvr_core::raster::{ACCENT, BG, Image};
+use dvr_ui::Strings;
+use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrayCommand {
+    OpenMenu,
+    AutoLaunch(bool),
+    Quit,
+}
+
+pub struct Tray {
+    _icon: TrayIcon,
+    open: MenuItem,
+    autostart: CheckMenuItem,
+    quit: MenuItem,
+}
+
+/// 32x32 accent tile with a dark "D", drawn with the built-in font (RGBA for the tray API).
+fn icon() -> Result<Icon, String> {
+    let mut img = Image::new(32, 32, ACCENT);
+    img.text(16, 16, 3, "D", BG);
+    let rgba: Vec<u8> = img.bgra.as_chunks::<4>().0.iter().flat_map(|[b, g, r, a]| [*r, *g, *b, *a]).collect();
+    Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())
+}
+
+impl Tray {
+    pub fn new(s: &Strings, autostart: bool) -> Result<Self, String> {
+        let open = MenuItem::new(s.get("tray-open", &[]), true, None);
+        let autostart = CheckMenuItem::new(s.get("tray-autostart", &[]), true, autostart, None);
+        let quit = MenuItem::new(s.get("tray-quit", &[]), true, None);
+        let menu = Menu::new();
+        menu.append_items(&[&open, &autostart, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
+        let icon = TrayIconBuilder::new()
+            .with_menu(Box::new(menu))
+            .with_tooltip(s.get("tray-tooltip", &[]))
+            .with_icon(icon()?)
+            .build()
+            .map_err(|e| e.to_string())?;
+        Ok(Self { _icon: icon, open, autostart, quit })
+    }
+
+    /// Next tray command, if any (non-blocking).
+    pub fn poll(&self) -> Option<TrayCommand> {
+        let event = MenuEvent::receiver().try_recv().ok()?;
+        if event.id == *self.open.id() {
+            Some(TrayCommand::OpenMenu)
+        } else if event.id == *self.autostart.id() {
+            Some(TrayCommand::AutoLaunch(self.autostart.is_checked()))
+        } else if event.id == *self.quit.id() {
+            Some(TrayCommand::Quit)
+        } else {
+            None
+        }
+    }
+}

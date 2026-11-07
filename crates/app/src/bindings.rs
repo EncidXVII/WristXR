@@ -25,3 +25,26 @@ pub fn install(dir: &Path) -> io::Result<PathBuf> {
     }
     Ok(dir.join("actions.json"))
 }
+
+/// SteamVR application key for the `.vrmanifest` (auto-launch with SteamVR).
+#[cfg(windows)]
+pub const APP_KEY: &str = "desktopvr.overlay";
+
+/// Writes the SteamVR application manifest pointing at `exe` into `dir`.
+#[cfg(windows)]
+pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
+    let manifest = serde_json::json!({
+        "source": "builtin",
+        "applications": [{
+            "app_key": APP_KEY,
+            "launch_type": "binary",
+            "binary_path_windows": exe.to_string_lossy(),
+            "is_dashboard_overlay": true,
+            "strings": { "en_us": { "name": "DesktopVR", "description": "Your desktop in VR" } }
+        }]
+    });
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join("desktopvr.vrmanifest");
+    std::fs::write(&path, serde_json::to_vec_pretty(&manifest).map_err(io::Error::other)?)?;
+    Ok(path)
+}

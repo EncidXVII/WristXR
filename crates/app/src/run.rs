@@ -1,9 +1,11 @@
 //! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
+use crate::bindings::APP_KEY;
 use crate::session::{Effect, MonitorInfo, Session};
+use crate::tray::{Tray, TrayCommand};
 use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
-use dvr_core::engine::{Engine, Event, FrameInput};
+use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
 use dvr_core::keyboard::{CHAT, KeyDef, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
@@ -13,7 +15,8 @@ use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
-use dvr_ui::{MENU_SIZE, Menu, Strings, WRIST_SIZE, Wrist, WristInfo};
+use dvr_sys::{Media, MediaCommand, MediaInfo};
+use dvr_ui::{MENU_SIZE, Menu, Strings, WRIST_SIZE, Wrist, WristInfo, WristInput};
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -88,7 +91,13 @@ fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor], chat: Option<&str>) -
     Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true, dead: false })
 }
 
-fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<&(Toast, Instant)>) -> WristInfo {
+fn wrist_info(
+    vr: &OpenVr,
+    load: &dvr_sys::Load,
+    own_gpu_ms: f32,
+    toast: Option<&(Toast, Instant)>,
+    media: Option<&MediaInfo>,
+) -> WristInfo {
     let (hour, minute) = dvr_sys::local_time();
     let stats = vr.stats();
     WristInfo {
@@ -103,6 +112,7 @@ fn wrist_info(vr: &OpenVr, load: &dvr_sys::Load, own_gpu_ms: f32, toast: Option<
         own_gpu_ms,
         own_cpu_percent: load.own_cpu_percent,
         toast: toast.map(|(t, _)| (t.title.clone(), t.content.clone())),
+        media: media.map(|m| (m.title.clone(), m.artist.clone(), m.playing)),
     }
 }
 
@@ -125,6 +135,21 @@ pub fn run() -> Result<(), String> {
     let mut panels = state.panels.clone();
     let mut session = Session::new(state, &mut panels, head(&vr));
     session.imported = imported.is_some();
+
+    // SteamVR knows us as an app (dashboard overlay) so it can start us with itself; first run opts in.
+    let app = std::env::current_exe()
+        .map_err(err)
+        .and_then(|exe| crate::bindings::install_vrmanifest(&dir, &exe).map_err(err))
+        .and_then(|m| vr.register_app(&m, APP_KEY));
+    match app {
+        Ok(()) if !session.state.onboarded => {
+            if let Err(e) = vr.set_auto_launch(APP_KEY, true) {
+                tracing::warn!(%e, "auto-launch not set");
+            }
+        }
+        Ok(()) => {}
+        Err(e) => tracing::warn!(%e, "SteamVR app registration failed"),
+    }
     session.persist(&panels);
     session.state.save(&state_path).map_err(err)?;
 
@@ -140,6 +165,9 @@ pub fn run() -> Result<(), String> {
     }
 
     let strings = Strings::english()?;
+    // No tray (e.g. no shell) is not fatal: the menu in VR has everything.
+    let tray =
+        Tray::new(&strings, vr.auto_launch(APP_KEY)).inspect_err(|e| tracing::warn!(%e, "tray unavailable")).ok();
     let chatbox = Chatbox::new(VRCHAT_ADDR.parse().map_err(err)?).map_err(err)?;
     let mut layout = dvr_input_win::layout_id();
     let mut layout_checked = Instant::now();
@@ -150,6 +178,9 @@ pub fn run() -> Result<(), String> {
     let mut dirty: Option<Instant> = None;
     let mut resized: Vec<(u32, u32, u32)> = Vec::with_capacity(8);
     let mut wrist = Wrist::new()?;
+    let media = Media::start();
+    let mut now_playing: Option<MediaInfo> = None;
+    let mut wrist_hovered = false;
     let mut menu = Menu::new()?;
     let mut sampler = dvr_sys::Sampler::new();
     let mut load = dvr_sys::Load::default();
@@ -162,6 +193,22 @@ pub fn run() -> Result<(), String> {
     let start = Instant::now();
 
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
+        dvr_sys::pump_messages();
+        let mut tray_open_menu = false;
+        while let Some(cmd) = tray.as_ref().and_then(Tray::poll) {
+            match cmd {
+                TrayCommand::OpenMenu => tray_open_menu = !session.menu_open(&engine.panels),
+                TrayCommand::AutoLaunch(on) => {
+                    if let Err(e) = vr.set_auto_launch(APP_KEY, on) {
+                        tracing::warn!(%e, "auto-launch change failed");
+                    }
+                }
+                TrayCommand::Quit => break 'frames,
+            }
+        }
+        if tray_open_menu {
+            session.toggle_menu(&mut engine.panels, head(&vr));
+        }
         events.clear();
         engine.step(&input, &mut events);
         let poses = [input.hands[0].pose, input.hands[1].pose];
@@ -184,7 +231,34 @@ pub fn run() -> Result<(), String> {
         let mut pop = None;
         let selected = session.selected;
         session.pointer(&events, &menu);
-        let mut menu_dirty = session.selected != selected;
+        // The other hand's laser on the wrist drives its media buttons.
+        let on_wrist = |id: u32| engine.panels.iter().any(|p| p.id == id && p.source == Source::Wrist);
+        let mut over_wrist = false;
+        for e in &events {
+            match *e {
+                Event::Hover { panel, uv, .. } if on_wrist(panel) => {
+                    over_wrist = true;
+                    wrist.pointer_move(uv);
+                }
+                Event::Mouse { panel, uv, button: MouseButton::Left, down } if on_wrist(panel) => {
+                    over_wrist = true;
+                    wrist.pointer_button(uv, down);
+                }
+                _ => {}
+            }
+        }
+        if wrist_hovered && !over_wrist {
+            wrist.pointer_leave();
+        }
+        wrist_hovered = over_wrist;
+        for input in wrist.take_inputs() {
+            media.send(match input {
+                WristInput::Previous => MediaCommand::Previous,
+                WristInput::PlayPause => MediaCommand::PlayPause,
+                WristInput::Next => MediaCommand::Next,
+            });
+        }
+        let mut menu_dirty = tray_open_menu || session.selected != selected;
         for e in &events {
             let rect = |panel: u32| surfaces.get(&panel).and_then(|s: &Surface| s.rect);
             if let Event::Hover { hand, panel, uv, .. } = *e {
@@ -292,6 +366,18 @@ pub fn run() -> Result<(), String> {
             stats_at = Instant::now();
             load = sampler.sample();
             refresh_wrist = true;
+            let playing = media.info();
+            let track = |m: &MediaInfo| (m.title.clone(), m.artist.clone());
+            if session.state.media_to_chatbox
+                && let Some(m) = playing.as_ref().filter(|m| m.playing)
+                && now_playing.as_ref().map(track) != Some(track(m))
+            {
+                let name = if m.artist.is_empty() { m.title.clone() } else { format!("{} – {}", m.title, m.artist) };
+                if let Err(e) = chatbox.send_quiet(&strings.get("chat-now-playing", &[("track", name)])) {
+                    tracing::warn!(%e, "now-playing send failed");
+                }
+            }
+            now_playing = playing;
         }
         if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
             toast = Some((t, Instant::now()));
@@ -303,7 +389,7 @@ pub fn run() -> Result<(), String> {
             refresh_wrist = true;
         }
         if refresh_wrist {
-            wrist.set(&wrist_info(&vr, &load, timer.last_ms(), toast.as_ref()));
+            wrist.set(&wrist_info(&vr, &load, timer.last_ms(), toast.as_ref(), now_playing.as_ref()));
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {
