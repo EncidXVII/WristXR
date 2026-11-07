@@ -1,0 +1,47 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 0,
+    title: "Screen 1",
+    subtitle: "Click or grab a panel to select it.",
+    slots: [
+        Slot {
+            label: "Add screen 2",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Recenter",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Lock",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Curved",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Attach to hand",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Remove",
+            on: false,
+            enabled: true,
+        },
+    ],
+}

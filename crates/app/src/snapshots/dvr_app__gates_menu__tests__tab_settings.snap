@@ -1,0 +1,37 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 3,
+    title: "Settings",
+    subtitle: "This overlay: 0.05 ms GPU · 1.2% CPU",
+    slots: [
+        Slot {
+            label: "Point with left",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Point with right",
+            on: true,
+            enabled: true,
+        },
+        Slot {
+            label: "Opacity 100%",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Quit overlay",
+            on: false,
+            enabled: true,
+        },
+    ],
+}

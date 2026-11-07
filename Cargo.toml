@@ -25,6 +25,7 @@ tracing = "0.1"
 directories = "6"
 fluent = "0.17"
 tray-icon = "0.26"
+insta = "1"
 slint = { version = "1", default-features = false, features = ["std", "compat-1-2", "renderer-software", "software-renderer-systemfonts"] }
 windows = { version = "0.61", features = [
     "Foundation",

@@ -155,8 +155,38 @@ pub fn first_run_and_menu() -> GateResult {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn first_run_and_menu_gate() {
         assert_eq!(super::first_run_and_menu(), Ok(()));
+    }
+
+    /// Gate 7: every menu view's content (titles, labels, toggle states). Text-level snapshots stay portable
+    /// across machines, unlike pixels rendered with each system's fonts.
+    #[test]
+    fn menu_views_match_snapshots() {
+        let strings = Strings::english().expect("strings");
+        let screens = [
+            MonitorInfo { rect: PixelRect { x: 0, y: 0, w: 2560, h: 1440 }, primary: true },
+            MonitorInfo { rect: PixelRect { x: 2560, y: 0, w: 1920, h: 1080 }, primary: false },
+        ];
+        let mut panels = Vec::new();
+        let mut session = Session::new(State::default(), &mut panels, HEAD);
+        panels.push(dvr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
+        session.selected = Some(9);
+        let pages = [
+            ("first_hand", Page::FirstHand),
+            ("first_monitor", Page::FirstMonitor),
+            ("first_keyboard", Page::FirstKeyboard),
+            ("tab_panels", Page::Tab(0)),
+            ("tab_keyboard", Page::Tab(1)),
+            ("tab_wrist", Page::Tab(2)),
+            ("tab_settings", Page::Tab(3)),
+        ];
+        for (name, page) in pages {
+            session.page = page;
+            insta::assert_debug_snapshot!(name, session.model(&panels, &screens, &strings, (0.05, 1.2)));
+        }
     }
 }

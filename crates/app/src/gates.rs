@@ -24,6 +24,7 @@ pub const GATES: &[Gate] = &[
     ("5b grab + pop-out", grab),
     ("5c switch-over import", switch_over_import),
     ("6 notifications", notifications),
+    ("C update check", update_check),
 ];
 
 /// 60 characters, typed with alternating hands.
@@ -590,5 +591,15 @@ fn switch_over_import() -> GateResult {
     );
     ensure!(xsoverlay("{ not json").is_none(), "garbage must not import");
     ensure!(xsoverlay("{}") == Some(Imported::default()), "missing keys import nothing");
+    Ok(())
+}
+
+fn update_check() -> GateResult {
+    use crate::update::{newer, parse};
+    ensure!(newer("v1.2.10", "1.2.9") && !newer("1.2.9", "1.2.9") && !newer("v1.1.0", "1.2.0"), "version compare");
+    let json = r#"{"tag_name":"v9.0.0","html_url":"https://github.com/o/r/releases/tag/v9.0.0","assets":[]}"#;
+    let r = parse(json, "0.1.0").ok_or("newer release not offered")?;
+    ensure!(r.version == "9.0.0" && r.url.starts_with("https://github.com/"), "release {r:?}");
+    ensure!(parse(json, "9.0.0").is_none() && parse("not json", "0.1.0").is_none(), "no offer when current or bad");
     Ok(())
 }

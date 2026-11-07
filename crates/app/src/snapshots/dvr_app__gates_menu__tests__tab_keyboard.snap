@@ -1,0 +1,42 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 1,
+    title: "Keyboard",
+    subtitle: "Chat sends what you type to VRChat.",
+    slots: [
+        Slot {
+            label: "Show keyboard",
+            on: true,
+            enabled: true,
+        },
+        Slot {
+            label: "Send to VRChat",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Typing sounds",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Keyboard here",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Now playing to VRChat",
+            on: false,
+            enabled: true,
+        },
+    ],
+}

@@ -1,0 +1,32 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 2,
+    title: "Wrist",
+    subtitle: "Time, batteries, load and notifications.",
+    slots: [
+        Slot {
+            label: "Show wrist",
+            on: true,
+            enabled: true,
+        },
+        Slot {
+            label: "On left hand",
+            on: true,
+            enabled: true,
+        },
+        Slot {
+            label: "On right hand",
+            on: false,
+            enabled: true,
+        },
+    ],
+}

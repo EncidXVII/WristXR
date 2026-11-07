@@ -53,6 +53,7 @@ first-skip = Skip
 tray-tooltip = DesktopVR
 tray-open = Open menu in VR
 tray-autostart = Start with SteamVR
+tray-update = Download update { $version }
 tray-quit = Quit
 wrist-media = { $title } · { $artist }
 wrist-prev = Prev

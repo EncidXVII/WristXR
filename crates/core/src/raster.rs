@@ -75,11 +75,10 @@ pub fn keyboard(label: impl Fn(&KeyDef) -> String, lit: &[u16]) -> Image {
             let on = lit.contains(&key.sc);
             img.fill_rect(x + GAP, y + GAP, w - 2 * GAP, U - 2 * GAP, if on { ACCENT } else { RAISED });
             let text = label(key);
-            let len = text.chars().count().max(1) as i32;
-            let scale = ((w - 4 * GAP) / (len * 6)).clamp(2, 6);
+            let scale = label_scale(key.w, &text);
             let color = if on {
                 BG
-            } else if key.w > 1.0 || len > 1 {
+            } else if key.w > 1.0 || text.chars().count() > 1 {
                 INK2
             } else {
                 INK
@@ -89,6 +88,13 @@ pub fn keyboard(label: impl Fn(&KeyDef) -> String, lit: &[u16]) -> Image {
         }
     }
     img
+}
+
+/// Pixel scale of the 5x7 font for a key label: as large as fits, never above 6. At 100 px per key unit a scale of 3
+/// is a 21 px cap height (about a 30 px font), the minimum readable size in VR.
+pub fn label_scale(key_w: f32, text: &str) -> i32 {
+    let len = text.chars().count().max(1) as i32;
+    (((key_w * 100.0) as i32 - 24) / (len * 6)).clamp(2, 6)
 }
 
 /// Laser dot: accent disc with a dark rim, transparent outside.
@@ -154,6 +160,7 @@ fn glyph(c: char) -> Option<[u8; 7]> {
         '\'' => [0x0C, 0x04, 0x08, 0x00, 0x00, 0x00, 0x00], ',' => [0x00, 0x00, 0x00, 0x00, 0x0C, 0x04, 0x08],
         '.' => [0x00, 0x00, 0x00, 0x00, 0x00, 0x0C, 0x0C], '/' => [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x00],
         '`' => [0x08, 0x04, 0x02, 0x00, 0x00, 0x00, 0x00], '<' => [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+        '>' => [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08], '^' => [0x04, 0x0A, 0x11, 0x00, 0x00, 0x00, 0x00],
         ' ' => [0; 7],
         _ => return None,
     })
@@ -167,6 +174,13 @@ mod tests {
     fn every_us_label_is_drawable() {
         for key in ROWS.iter().flat_map(|r| r.iter()) {
             assert!(drawable(key.label), "{}", key.label);
+        }
+    }
+
+    #[test]
+    fn every_key_label_is_readable_in_vr() {
+        for key in ROWS.iter().flat_map(|r| r.iter()) {
+            assert!(label_scale(key.w, key.label) >= 3, "{} too small", key.label);
         }
     }
 

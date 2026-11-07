@@ -49,7 +49,7 @@ pub static ROWS: [&[KeyDef]; 5] = [
     &[kw(LSHIFT, 1.25, "Shift"), k(0x56, "<"), k(0x2C, "z"), k(0x2D, "x"), k(0x2E, "c"), k(0x2F, "v"), k(0x30, "b"),
       k(0x31, "n"), k(0x32, "m"), k(0x33, ","), k(0x34, "."), k(0x35, "/"), kw(RSHIFT, 2.75, "Shift")],
     &[k(ESC, "Esc"), kw(LCTRL, 1.5, "Ctrl"), kw(LALT, 1.5, "Alt"), k(CHAT, "Chat"), kw(SPACE, 6.0, " "),
-      k(LEFT, "Left"), k(UP, "Up"), k(DOWN, "Down"), k(RIGHT, "Right")],
+      k(LEFT, "<"), k(UP, "^"), k(DOWN, "v"), k(RIGHT, ">")],
 ];
 
 pub fn key_at(uv: [f32; 2]) -> Option<&'static KeyDef> {

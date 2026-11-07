@@ -7,12 +7,15 @@ use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
     OpenMenu,
+    Update,
     AutoLaunch(bool),
     Quit,
 }
 
 pub struct Tray {
     _icon: TrayIcon,
+    menu: Menu,
+    update: Option<MenuItem>,
     open: MenuItem,
     autostart: CheckMenuItem,
     quit: MenuItem,
@@ -34,18 +37,28 @@ impl Tray {
         let menu = Menu::new();
         menu.append_items(&[&open, &autostart, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
         let icon = TrayIconBuilder::new()
-            .with_menu(Box::new(menu))
+            .with_menu(Box::new(menu.clone()))
             .with_tooltip(s.get("tray-tooltip", &[]))
             .with_icon(icon()?)
             .build()
             .map_err(|e| e.to_string())?;
-        Ok(Self { _icon: icon, open, autostart, quit })
+        Ok(Self { _icon: icon, menu, update: None, open, autostart, quit })
+    }
+
+    /// Adds the one-click "Download update" entry at the top (no silent install).
+    pub fn offer_update(&mut self, s: &Strings, version: &str) {
+        let item = MenuItem::new(s.get("tray-update", &[("version", version.to_owned())]), true, None);
+        if self.menu.prepend(&item).is_ok() {
+            self.update = Some(item);
+        }
     }
 
     /// Next tray command, if any (non-blocking).
     pub fn poll(&self) -> Option<TrayCommand> {
         let event = MenuEvent::receiver().try_recv().ok()?;
-        if event.id == *self.open.id() {
+        if self.update.as_ref().is_some_and(|u| event.id == *u.id()) {
+            Some(TrayCommand::Update)
+        } else if event.id == *self.open.id() {
             Some(TrayCommand::OpenMenu)
         } else if event.id == *self.autostart.id() {
             Some(TrayCommand::AutoLaunch(self.autostart.is_checked()))

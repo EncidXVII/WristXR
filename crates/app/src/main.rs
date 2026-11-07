@@ -13,6 +13,7 @@ mod run;
 mod session;
 #[cfg(windows)]
 mod tray;
+mod update;
 
 use std::process::ExitCode;
 
@@ -61,6 +62,7 @@ fn selftest() -> ExitCode {
         "version": env!("CARGO_PKG_VERSION"),
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
+        "system": system_info(),
         "gates": results
             .iter()
             .map(|(n, r)| serde_json::json!({ "gate": n, "ok": r.is_ok(), "detail": r.as_ref().err() }))
@@ -69,14 +71,49 @@ fn selftest() -> ExitCode {
     let written = serde_json::to_vec_pretty(&report)
         .map_err(|e| e.to_string())
         .and_then(|b| std::fs::write(REPORT, b).map_err(|e| e.to_string()));
-    match written {
-        Ok(()) => println!("report: {REPORT}"),
+    match written.and_then(|()| zip_report()) {
+        Ok(path) => println!("report: {path}"),
         Err(e) => {
             eprintln!("could not write {REPORT}: {e}");
             return ExitCode::FAILURE;
         }
     }
     if results.iter().all(|(_, r)| r.is_ok()) { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+}
+
+/// Hardware facts that help triage a report (no user names, paths or identifiers).
+fn system_info() -> serde_json::Value {
+    #[cfg(windows)]
+    let (gpus, monitors) = (
+        dvr_gfx_d3d11::adapter_names(),
+        dvr_capture_win::monitors().iter().map(|m| format!("{}x{}", m.rect.w, m.rect.h)).collect::<Vec<_>>(),
+    );
+    #[cfg(not(windows))]
+    let (gpus, monitors): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+    serde_json::json!({ "gpus": gpus, "monitors": monitors, "cpus": std::thread::available_parallelism().map_or(0, |n| n.get()) })
+}
+
+/// Packs the report as `selftest-report.zip` for attaching to an issue. Falls back to the JSON if zipping fails.
+fn zip_report() -> Result<String, String> {
+    const ZIP: &str = "selftest-report.zip";
+    // Windows: System32's bsdtar writes real zips (`-a` by extension); a GNU tar earlier on PATH would not.
+    #[cfg(windows)]
+    let zipped = std::env::var_os("SystemRoot").is_some_and(|root| {
+        std::process::Command::new(
+            std::path::Path::new(&root).join(["System32", "tar.exe"].iter().collect::<std::path::PathBuf>()),
+        )
+        .args(["-a", "-c", "-f", ZIP, REPORT])
+        .status()
+        .is_ok_and(|s| s.success())
+    });
+    #[cfg(not(windows))]
+    let zipped = std::process::Command::new("zip").args(["-q", ZIP, REPORT]).status().is_ok_and(|s| s.success());
+    if zipped {
+        let _ = std::fs::remove_file(REPORT);
+        Ok(ZIP.to_owned())
+    } else {
+        Ok(REPORT.to_owned())
+    }
 }
 
 #[cfg(test)]

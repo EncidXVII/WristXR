@@ -1,0 +1,22 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [],
+    tab: 0,
+    title: "Welcome",
+    subtitle: "Which hand do you point with?",
+    slots: [
+        Slot {
+            label: "Left hand",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Right hand",
+            on: true,
+            enabled: true,
+        },
+    ],
+}

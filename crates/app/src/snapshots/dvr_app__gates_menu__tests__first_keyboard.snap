@@ -1,0 +1,22 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [],
+    tab: 0,
+    title: "Try the keyboard",
+    subtitle: "Type hi with the keyboard below. Typed: ",
+    slots: [
+        Slot {
+            label: "Done",
+            on: false,
+            enabled: true,
+        },
+        Slot {
+            label: "Skip",
+            on: false,
+            enabled: true,
+        },
+    ],
+}

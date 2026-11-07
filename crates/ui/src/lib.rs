@@ -319,3 +319,50 @@ mod tests {
         assert_eq!(wrist.take_inputs(), vec![WristInput::Next, WristInput::PlayPause, WristInput::Previous]);
     }
 }
+
+/// Gate 7: WCAG AA contrast for every text/background pair the views use, and no text under 24 px in VR.
+#[cfg(test)]
+mod a11y {
+    fn luminance(hex: u32) -> f64 {
+        let lin = |c: u32| {
+            let c = f64::from(c) / 255.0;
+            if c <= 0.039_28 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * lin(hex >> 16 & 0xFF) + 0.7152 * lin(hex >> 8 & 0xFF) + 0.0722 * lin(hex & 0xFF)
+    }
+
+    fn contrast(a: u32, b: u32) -> f64 {
+        let (x, y) = (luminance(a), luminance(b));
+        (x.max(y) + 0.05) / (x.min(y) + 0.05)
+    }
+
+    #[test]
+    fn text_colors_meet_wcag_aa() {
+        // (text, background, where)
+        let pairs = [
+            (0xF4F1EC, 0x0C0B0A, "ink on bg"),
+            (0xAAA49B, 0x0C0B0A, "secondary on bg"),
+            (0xC6FF1A, 0x0C0B0A, "accent on bg (cost, toast title)"),
+            (0xF4F1EC, 0x1F1C18, "ink on button"),
+            (0xF4F1EC, 0x2A2622, "ink on hovered button"),
+            (0xAAA49B, 0x1F1C18, "secondary on key / tab"),
+            (0xAAA49B, 0x15130F, "secondary on hovered tab"),
+            (0xC6FF1A, 0x1F1C18, "accent on active tab"),
+            (0x0C0B0A, 0xC6FF1A, "bg on lit button / key"),
+        ];
+        for (fg, bg, what) in pairs {
+            let c = contrast(fg, bg);
+            assert!(c >= 4.5, "{what}: contrast {c:.2} < 4.5");
+        }
+    }
+
+    #[test]
+    fn no_text_below_24px() {
+        for src in [include_str!("lib.rs"), include_str!("menu.rs")] {
+            let sizes: Vec<u32> =
+                src.split("font-size: ").skip(1).filter_map(|p| p.split("px").next()?.trim().parse().ok()).collect();
+            assert!(!sizes.is_empty(), "no font sizes found");
+            assert!(sizes.iter().all(|&px| px >= 24), "font sizes below 24px: {sizes:?}");
+        }
+    }
+}

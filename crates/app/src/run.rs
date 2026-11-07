@@ -166,7 +166,7 @@ pub fn run() -> Result<(), String> {
 
     let strings = Strings::english()?;
     // No tray (e.g. no shell) is not fatal: the menu in VR has everything.
-    let tray =
+    let mut tray =
         Tray::new(&strings, vr.auto_launch(APP_KEY)).inspect_err(|e| tracing::warn!(%e, "tray unavailable")).ok();
     let chatbox = Chatbox::new(VRCHAT_ADDR.parse().map_err(err)?).map_err(err)?;
     let mut layout = dvr_input_win::layout_id();
@@ -192,8 +192,16 @@ pub fn run() -> Result<(), String> {
     let mut stats_at = Instant::now() - STATS_PERIOD;
     let start = Instant::now();
 
+    let updates = crate::update::check_in_background();
+    let mut release = None;
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
         dvr_sys::pump_messages();
+        if let Ok(r) = updates.try_recv() {
+            if let Some(t) = tray.as_mut() {
+                t.offer_update(&strings, &r.version);
+            }
+            release = Some(r);
+        }
         let mut tray_open_menu = false;
         while let Some(cmd) = tray.as_ref().and_then(Tray::poll) {
             match cmd {
@@ -201,6 +209,11 @@ pub fn run() -> Result<(), String> {
                 TrayCommand::AutoLaunch(on) => {
                     if let Err(e) = vr.set_auto_launch(APP_KEY, on) {
                         tracing::warn!(%e, "auto-launch change failed");
+                    }
+                }
+                TrayCommand::Update => {
+                    if let Some(r) = &release {
+                        crate::update::open(&r.url);
                     }
                 }
                 TrayCommand::Quit => break 'frames,
