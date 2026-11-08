@@ -1,0 +1,29 @@
+"AppBuild"
+{
+	"AppID" "APP_ID"
+	"Desc" "DesktopVR release"
+	"ContentRoot" "content"
+	"BuildOutput" "output"
+	"SetLive" "beta"
+	"Depots"
+	{
+		"DEPOT_WINDOWS"
+		{
+			"FileMapping"
+			{
+				"LocalPath" "windows/*"
+				"DepotPath" "."
+				"recursive" "1"
+			}
+		}
+		"DEPOT_LINUX"
+		{
+			"FileMapping"
+			{
+				"LocalPath" "linux/*"
+				"DepotPath" "."
+				"recursive" "1"
+			}
+		}
+	}
+}
