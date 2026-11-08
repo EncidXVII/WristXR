@@ -907,6 +907,7 @@ dependencies = [
  "dvr-ui",
  "dvr-vr",
  "insta",
+ "png",
  "rosc",
  "serde",
  "serde_json",

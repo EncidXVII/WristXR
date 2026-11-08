@@ -2,9 +2,9 @@
 //! one-click download link. Network only to api.github.com, generic User-Agent, no identifiers.
 use serde::Deserialize;
 
-/// `owner/name` of the release repository; empty disables the check (set when the repo exists).
+/// `owner/name` of the release repository; empty disables the check.
 #[cfg(windows)]
-pub const REPO: &str = "";
+pub const REPO: &str = "EncidXVII/DesktopVR";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Release {
@@ -41,9 +41,13 @@ pub fn check_in_background() -> std::sync::mpsc::Receiver<Release> {
     if !REPO.is_empty() {
         std::thread::spawn(move || {
             let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
-            // curl.exe ships with Windows 10+; no HTTP client crate needed.
+            // curl.exe ships with Windows 10+; no HTTP client crate needed. CREATE_NO_WINDOW: the app has no
+            // console, so without it curl would flash a console window at startup.
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
             let out = std::process::Command::new("curl.exe")
                 .args(["-sfL", "--max-time", "10", "-H", "User-Agent: DesktopVR-update-check", &url])
+                .creation_flags(CREATE_NO_WINDOW)
                 .output();
             if let Some(r) =
                 out.ok().and_then(|o| parse(&String::from_utf8_lossy(&o.stdout), env!("CARGO_PKG_VERSION")))

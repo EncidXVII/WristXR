@@ -207,4 +207,70 @@ mod tests {
             insta::assert_debug_snapshot!(name, session.model(&panels, &screens, &strings, (0.05, 1.2)));
         }
     }
+
+    /// Writes the README screenshots from the real views:
+    /// `cargo test -p dvr-app --release screenshots -- --ignored`.
+    #[test]
+    #[ignore = "writes docs/img; run on demand"]
+    fn screenshots() {
+        use dvr_ui::{KeyFace, Keyboard, Wrist, WristInfo};
+        fn save(name: &str, size: (u32, u32), bgra: &[u8]) {
+            let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/img");
+            std::fs::create_dir_all(&dir).expect("img dir");
+            let rgba: Vec<u8> = bgra.as_chunks::<4>().0.iter().flat_map(|&[b, g, r, a]| [r, g, b, a]).collect();
+            let file = std::fs::File::create(dir.join(format!("{name}.png"))).expect("png file");
+            let mut enc = png::Encoder::new(std::io::BufWriter::new(file), size.0, size.1);
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().and_then(|mut w| w.write_image_data(&rgba)).expect("png write");
+        }
+        let strings = Strings::english().expect("strings");
+        let screens = [
+            MonitorInfo { rect: PixelRect { x: 0, y: 0, w: 2560, h: 1440 }, primary: true },
+            MonitorInfo { rect: PixelRect { x: 2560, y: 0, w: 1920, h: 1080 }, primary: false },
+        ];
+        let mut panels = Vec::new();
+        let mut session = Session::new(State::default(), &mut panels, HEAD);
+        panels.push(dvr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
+        session.selected = Some(9);
+        let mut menu = Menu::new().expect("menu");
+        for (name, page) in
+            [("menu-panels", Page::Tab(0)), ("menu-settings", Page::Tab(3)), ("first-run", Page::FirstHand)]
+        {
+            session.page = page;
+            menu.set(&session.model(&panels, &screens, &strings, (0.012, 1.4)));
+            let px = menu.render().expect("menu render").to_vec();
+            save(name, MENU_SIZE, &px);
+        }
+        let mut wrist = Wrist::new().expect("wrist");
+        wrist.set(&WristInfo {
+            hour: 21,
+            minute: 37,
+            game_fps: Some(90.0),
+            controllers: [Some(0.8), Some(0.65)],
+            lowest_tracker: Some(0.5),
+            cpu: Some(0.23),
+            ram: Some(0.41),
+            gpu: Some(0.67),
+            own_gpu_ms: 0.012,
+            own_cpu_percent: 1.4,
+            toast: None,
+            media: Some(("Night Drive".into(), "Synthwave Radio".into(), true)),
+        });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist", dvr_ui::WRIST_SIZE, &px);
+        let mut kb = Keyboard::new().expect("keyboard");
+        let faces: Vec<KeyFace> = dvr_core::keyboard::ROWS
+            .iter()
+            .flat_map(|r| r.iter())
+            .map(|k| KeyFace {
+                label: if k.label.chars().count() == 1 { k.label.to_uppercase() } else { k.label.to_owned() },
+                lit: k.label == "Shift",
+                hover: k.label == "h",
+            })
+            .collect();
+        kb.set(&faces);
+        let px = kb.render().expect("keyboard render").to_vec();
+        save("keyboard", dvr_ui::KEYBOARD_SIZE, &px);
+    }
 }

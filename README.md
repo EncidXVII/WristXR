@@ -1,51 +1,85 @@
-# DesktopVR (working name)
+# DesktopVR: free, open-source desktop overlay for SteamVR
 
-**Use your desktop in VR without taking the headset off. Free, lighter than anything else, Windows and Linux.**
+[![CI](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/EncidXVII/DesktopVR?include_prereleases&label=download)](https://github.com/EncidXVII/DesktopVR/releases/latest)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-Point at a screen and click, type on a two-hand VR keyboard, glance at your wrist, get back to the game.
+**Use your Windows desktop in VR without taking the headset off.** DesktopVR is a lightweight SteamVR overlay:
+point at your screens and click, type on a two-hand VR keyboard, send messages to the VRChat chatbox, glance at
+your wrist for time, batteries and load, then get back to the game.
 
-> Status: early. The Windows build works end to end with SteamVR; Linux capture/input and Steam Frame (on-device)
-> are in progress. Not yet tested on every headset; please send a self-test report (below).
+It costs about **0.01 ms of GPU time per frame** and shows its own cost live on your wrist. No account, no
+telemetry, no paid tier.
+
+[**Download for Windows**](https://github.com/EncidXVII/DesktopVR/releases/latest) ·
+[Report a bug](https://github.com/EncidXVII/DesktopVR/issues/new/choose)
+
+![DesktopVR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
+
+> **Status: early access (0.1).** The Windows build works end to end with SteamVR. Linux and Steam Frame
+> (on-device) are in progress. Not yet tested on every headset: please send a self-test report (below).
+
+## Features
+
+- **Your desktop in VR**: every monitor as its own panel, flat or curved, at any size and distance.
+  Mixed-DPI and multi-monitor setups map exactly.
+- **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
+  Hovering never clicks.
+- **Window pop-out**: grip a screen and yank it toward you; the window under the pointer becomes its own panel
+  (Discord, a browser, a guide) that you can place anywhere or attach to your hand.
+- **Two-hand VR keyboard** in your Windows layout, with sticky Shift / Ctrl / Alt and typing sounds.
+- **VRChat chatbox keyboard**: Chat mode sends what you type straight to the VRChat chatbox over OSC, plus
+  "share now playing".
+- **Wrist watch**: time, game fps, controller and tracker batteries, CPU / RAM / GPU load, media controls,
+  notifications, and this overlay's own GPU and CPU cost.
+- **Notifications**: works with apps that already send XSOverlay notifications (UDP 42069).
+- **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
+  other hand keeps playing.
+- **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
+  HTC Vive, Windows Mixed Reality and Steam Frame controllers.
+
+| Wrist | Two-hand keyboard |
+|---|---|
+| ![Wrist watch: time, fps, batteries, CPU/RAM/GPU load, media controls and the overlay's own cost](docs/img/wrist.png) | ![VR keyboard with Shift lit and the laser hovering H](docs/img/keyboard.png) |
 
 ## Install (3 steps)
 
-1. Have SteamVR installed.
-2. Download `DesktopVR.exe` (Releases) and run it. No installer.
-3. Put on your headset and follow the 4-step first run (hand, main screen, keyboard test, tips).
+1. Have [SteamVR](https://store.steampowered.com/app/250820/SteamVR/) installed.
+2. [Download the latest release](https://github.com/EncidXVII/DesktopVR/releases/latest), unzip it and run
+   `DesktopVR.exe`. There's no installer and nothing else to set up.
+3. Put on your headset and follow the 4-step first run (hand, main screen, keyboard test, tips). It takes
+   under a minute.
 
 It starts with SteamVR from then on; untick **Start with SteamVR** in the tray icon to stop that.
 
-## Switch in 2 minutes
+## Switching from XSOverlay, OVR Toolkit or Desktop+
 
-Coming from XSOverlay? On first run DesktopVR reads your XSOverlay settings file (your own
-`overlaySettings.json`, plain JSON) and keeps your pointing hand, typing sounds, curved screens and default
-opacity. Nothing in XSOverlay is changed. Then:
+On first run DesktopVR reads your XSOverlay settings file (your own `overlaySettings.json`) and keeps your
+pointing hand, typing sounds, curved screens and default opacity. Nothing in XSOverlay is changed.
 
-| You did this in XSOverlay | Do this here |
+| You did this before | Do this here |
 |---|---|
-| Open the menu | Double-tap the left menu button |
+| Open the overlay menu | Double-tap the left menu button |
 | Grab a window off the desktop | Grip a screen and yank it toward you |
-| Type into VRChat | Press **Chat** on the keyboard (Chat mode) |
-| Notifications from your apps | They just work: compatible with the XSOverlay notification API (UDP 42069) |
+| Type into VRChat | Press **Chat** on the keyboard |
+| Notifications from your apps | Apps using the XSOverlay notification API work unchanged |
 
-Run only one of the two overlays at a time (both want the notification port).
+Run one overlay at a time: two overlays fight over the same controller input and notification port.
 
 ## Controls
 
-- **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag. Hovering never clicks.
+- **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag.
 - **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
-- **Keyboard**: both hands at once. Shift / Ctrl / Alt light up and apply to the next key. Uses your Windows layout.
-- **Wrist** (other hand): time, game fps, batteries, CPU/RAM/GPU load, this overlay's cost, media controls, notifications.
-- While a hand points at or holds a panel, the game does not receive that hand's input; the other hand keeps playing.
+- **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key.
+- **Menu** (double-tap left menu button): Panels, Keyboard, Wrist, Settings. Remove and Quit ask for a second tap.
 
-Rebind anything in SteamVR's own controller binding UI (default bindings for Index, Quest Touch, Vive, WMR and
-Steam Frame controllers).
+![The DesktopVR menu: panel actions for the selected screen](docs/img/menu-panels.png)
 
 ## Performance
 
-Measured on the build machine (RTX 5070 Ti, Windows 11), SteamVR null driver, with a continuously changing
-desktop (worst case: 60 fps capture):
+Measured on the build machine (RTX 5070 Ti, Windows 11, SteamVR) with a constantly changing desktop, which is
+the worst case (60 fps capture):
 
 | Budget | Target | Measured |
 |---|---|---|
@@ -53,25 +87,46 @@ desktop (worst case: 60 fps capture):
 | CPU, one core | < 3 % | 0.6–2.8 % |
 | RAM | < 150 MB | 64–78 MB |
 
-The same numbers are shown live on the wrist and in Settings ("This overlay: … ms GPU · …% CPU").
-Comparison against other overlays and a 60-minute soak are in progress.
+The same numbers are shown live on the wrist and in Settings, so you can check them on your own machine.
 
-## Self-test
+## FAQ
 
-`DesktopVR.exe --selftest` runs the automatic checks on your machine and writes `selftest-report.zip`
-(results, GPU model, monitor resolutions; no names, paths or identifiers). Attach it to bug reports.
+**Is it free?** Yes. Free and open source under GPL-3.0, with no paid tier, account or ads.
+
+**Which headsets work?** Anything that runs SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link,
+Virtual Desktop or Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame.
+
+**Does it work with VRChat?** Yes. It runs alongside VRChat, types into the chatbox via OSC (enable OSC in
+VRChat's Action Menu), and takes only the hand you're pointing with away from the game.
+
+**Does it work on Linux?** Not yet. Linux (Wayland screen capture, input) and Steam Frame on-device builds are
+in progress; the Linux release builds and runs the self-test today.
+
+**Does it slow down my game?** It's designed not to: about 0.01 ms GPU per frame and a few percent of one CPU
+core. The wrist shows the real cost on your machine.
+
+**Is Windows SmartScreen warning me?** Early builds aren't code-signed yet (see
+[code signing policy](docs/code-signing-policy.md)). Every release ships a SHA-256 checksum.
+
+## Self-test and bug reports
+
+`DesktopVR.exe --selftest` runs the automatic checks on your machine and writes `selftest-report.zip` (results,
+GPU model, monitor resolutions; no names, paths or identifiers). Attach it to a
+[bug report](https://github.com/EncidXVII/DesktopVR/issues/new/choose).
 
 ## Privacy
 
-No telemetry. Network use: GitHub release check (no identifiers), VRChat OSC on localhost, the notification
+No telemetry. Network use: a GitHub release check (no identifiers), VRChat OSC on localhost, the notification
 API on localhost. Nothing else.
 
-## Building
+## Building from source
 
-Rust stable. `cargo test --workspace`, `cargo run -p dvr-app -- --selftest`. Live checks against SteamVR's
-null driver: `harness/null-driver.ps1 target/release/dvr-app.exe --selftest --vr` (backs up and restores your
-SteamVR settings).
+Rust stable (1.85+). `cargo test --workspace`, `cargo run -p dvr-app -- --selftest`. Live checks against
+SteamVR's null driver: `harness/null-driver.ps1 target/release/dvr-app.exe --selftest --vr` (backs up and
+restores your SteamVR settings). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-GPL-3.0-or-later (`LICENSE`). Third-party licenses: `THIRD_PARTY_NOTICES.md`.
+[GPL-3.0-or-later](LICENSE). Third-party licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+DesktopVR is not affiliated with Valve, VRChat, XSOverlay, OVR Toolkit or Desktop+; names are used only to
+describe compatibility.
