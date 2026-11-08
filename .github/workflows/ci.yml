@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config fonts-dejavu-core
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -22,7 +22,7 @@ jobs:
         if: always()
         with:
           name: selftest-${{ matrix.os }}
-          path: selftest-report.json
+          path: selftest-report.*
   deny:
     runs-on: ubuntu-24.04
     steps:

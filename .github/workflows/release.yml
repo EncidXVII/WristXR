@@ -29,7 +29,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+      - run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config fonts-dejavu-core
       - uses: dtolnay/rust-toolchain@stable
       - run: ./packaging/linux/tarball.sh ${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
