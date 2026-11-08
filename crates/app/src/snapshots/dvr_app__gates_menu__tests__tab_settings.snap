@@ -15,22 +15,34 @@ MenuModel {
     body: "",
     slots: [
         Slot {
-            label: "Point with left",
-            on: false,
-            enabled: true,
-            kind: Choice,
-        },
-        Slot {
             label: "Point with right",
-            on: true,
-            enabled: true,
-            kind: Choice,
-        },
-        Slot {
-            label: "Opacity 100%",
             on: false,
             enabled: true,
             kind: Action,
+        },
+        Slot {
+            label: "Start with SteamVR",
+            on: false,
+            enabled: true,
+            kind: Toggle,
+        },
+        Slot {
+            label: "Vibration",
+            on: true,
+            enabled: true,
+            kind: Toggle,
+        },
+        Slot {
+            label: "Curved screens",
+            on: false,
+            enabled: true,
+            kind: Toggle,
+        },
+        Slot {
+            label: "Check updates",
+            on: true,
+            enabled: true,
+            kind: Toggle,
         },
         Slot {
             label: "Quit overlay",

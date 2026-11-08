@@ -12,6 +12,8 @@ pub const DOUBLE_CLICK_UV: f32 = 0.02;
 pub const DOUBLE_CLICK_MS: u64 = 400;
 pub const LONG_PRESS_MS: u64 = 600;
 pub const MENU_DOUBLE_TAP_MS: u64 = 400;
+/// Holding the left menu button this long hides or shows every panel.
+pub const HIDE_HOLD_MS: u64 = 700;
 pub const KEY_REPEAT_DELAY_MS: u64 = 500;
 pub const KEY_REPEAT_INTERVAL_MS: u64 = 33;
 pub const STICK_DEADZONE: f32 = 0.2;
@@ -87,6 +89,10 @@ pub enum Event {
     },
     /// The keyboard's Chat key: toggle "send to VRChat chatbox".
     ChatToggle,
+    /// Left menu button held: hide or show all panels.
+    HideToggle,
+    /// The keyboard's language key: switch to the next input language.
+    NextLanguage,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -118,6 +124,8 @@ struct HandState {
     last_click: Option<(u32, [f32; 2], u64)>,
     scroll: f32,
     menu_tap: Option<u64>,
+    /// Left menu button went down at this time and has not fired a hold yet.
+    menu_down: Option<u64>,
     /// Laser hit a panel this frame.
     on_panel: bool,
 }
@@ -219,7 +227,7 @@ impl Engine {
         let ray = poses[hand.index()];
         let mut best: Option<(usize, f32, [f32; 2])> = None;
         for (i, p) in self.panels.iter().enumerate() {
-            if !p.visible || p.anchor == Anchor::Hand(hand) {
+            if !p.shown() || p.anchor == Anchor::Hand(hand) {
                 continue;
             }
             if let Some((t, uv)) = p.hit(p.world_pose(poses), ray)
@@ -350,12 +358,23 @@ impl Engine {
         let mut st = self.hands[i];
         let now = input.now_ms;
 
-        if hand == Hand::Left && cur.menu && !st.prev.menu {
-            if st.menu_tap.is_some_and(|t| now.saturating_sub(t) <= MENU_DOUBLE_TAP_MS) {
-                out.push(Event::MenuToggle);
+        if hand == Hand::Left {
+            if cur.menu && !st.prev.menu {
+                st.menu_down = Some(now);
+                if st.menu_tap.is_some_and(|t| now.saturating_sub(t) <= MENU_DOUBLE_TAP_MS) {
+                    out.push(Event::MenuToggle);
+                    st.menu_tap = None;
+                    st.menu_down = None;
+                } else {
+                    st.menu_tap = Some(now);
+                }
+            }
+            if !cur.menu {
+                st.menu_down = None;
+            } else if st.menu_down.is_some_and(|t| now.saturating_sub(t) >= HIDE_HOLD_MS) {
+                out.push(Event::HideToggle);
+                st.menu_down = None;
                 st.menu_tap = None;
-            } else {
-                st.menu_tap = Some(now);
             }
         }
 

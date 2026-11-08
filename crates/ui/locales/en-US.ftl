@@ -1,42 +1,55 @@
-wrist-game = { $fps } fps
-wrist-no-game = No game running
-wrist-battery = L { $left } · R { $right }
-wrist-battery-trackers = L { $left } · R { $right } · Trackers { $trackers }
-wrist-load = CPU { $cpu } · RAM { $ram } · GPU { $gpu }
-wrist-cost = This overlay: { $gpu } ms GPU · { $cpu }% CPU
+wrist-no-game = no game
+wrist-battery = L { $left }  R { $right }
+wrist-battery-trackers = L { $left }  R { $right }  T { $trackers }
+wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · overlay { $own } ms
+wrist-menu = Menu
+wrist-keyboard = Keyboard
+wrist-hide = Hide all
 menu-tab-panels = Panels
 menu-tab-keyboard = Keyboard
 menu-tab-wrist = Wrist
 menu-tab-settings = Settings
-panel-monitor = Screen { $n }
-panel-window = Window
-panel-keyboard = Keyboard
-panel-wrist = Wrist
-panel-none = No panel selected
-menu-panels-hint = Yank a screen toward you to pop out a window.
+hand-left = left
+hand-right = right
+menu-panels-title = Screens and windows
+menu-panels-hint = Point at a screen for its toolbar. Hold left menu to hide all.
 menu-add-monitor = Add screen { $n }
 menu-add-monitor-none = All screens shown
+menu-add-window = Add window
 menu-recenter = Recenter
-menu-lock = Lock
-menu-curved = Curved
-menu-attach = Attach to hand
-menu-remove = Remove
+menu-hide-all = Hide all
+menu-windows-title = Add a window
+menu-windows-hint = Open windows, front to back
+menu-windows-none = No windows to add
+menu-more = More
+menu-back = Back
+tool-lock = Lock
+tool-curve = Curve
+tool-attach = Hand
+tool-close = Close
 menu-keyboard-title = Keyboard
 menu-keyboard-hint = Chat mode sends what you type to VRChat.
-menu-show-keyboard = Show keyboard
+menu-show-keyboard = Keyboard
+menu-keyboard-here = Keyboard here
+menu-language = Language: { $lang }
 menu-chat = Chat mode
 menu-sounds = Typing sounds
-menu-keyboard-here = Keyboard here
+menu-now-playing = Share song
 menu-wrist-title = Wrist
-menu-wrist-hint = Time, batteries, load and notifications.
-menu-show-wrist = Show wrist
-menu-wrist-left = On left hand
-menu-wrist-right = On right hand
+menu-wrist-hint = Point at the watch for Menu, Keyboard and Hide all.
+menu-show-wrist = Watch
+menu-wrist-on = On { $hand } wrist
+menu-wrist-fade = Only when looking
+menu-wrist-battery = Batteries
+menu-wrist-load = FPS and load
+menu-wrist-media = Media
 menu-settings-title = Settings
 menu-cost = This overlay: { $gpu } ms GPU · { $cpu }% CPU
-menu-point-left = Point with left
-menu-point-right = Point with right
-menu-opacity = Opacity { $pct }%
+menu-point = Point with { $hand }
+menu-autostart = Start with SteamVR
+menu-haptics = Vibration
+menu-curved-default = Curved screens
+menu-update-check = Check updates
 menu-quit = Quit overlay
 first-hand-title = Which hand do you point with?
 first-hand-hint = Step 1 of 4
@@ -52,6 +65,7 @@ first-done = Done
 first-skip = Skip
 tray-tooltip = DesktopVR
 tray-open = Open menu in VR
+tray-hide = Hide / show overlays
 tray-autostart = Start with SteamVR
 tray-update = Download update { $version }
 tray-quit = Quit
@@ -60,19 +74,17 @@ wrist-prev = Prev
 wrist-play = Play
 wrist-pause = Pause
 wrist-next = Next
-menu-now-playing = Share now playing
 chat-now-playing = ♪ { $track }
 menu-on = On
 menu-off = Off
-menu-selected = Selected: { $name }
 menu-confirm = Tap again to confirm
 menu-notifications-blocked = Notifications off: another overlay uses port 42069.
 first-tips-title = Good to know
 first-tips-hint = Step 4 of 4
 first-tips-body =
-    Trigger: click · hold for right click · hold and move to drag
-    Thumbstick on a screen: scroll
-    Grip: move a panel · grip with both hands: resize and turn
-    Grip a screen and yank it toward you: pop out a window
-    Double-tap the left menu button: open this menu
+    Trigger: click · hold: right click · hold and move: drag
+    Point at a screen for its toolbar · thumbstick: scroll
+    Grip: move · both hands: resize · yank: pop out a window
+    Left menu: double-tap for this menu, hold to hide all
+    Look at your wrist for the time, point at it for more
 first-got-it = Got it

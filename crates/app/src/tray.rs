@@ -1,4 +1,4 @@
-//! Tray icon: open the menu in VR, start with SteamVR, quit. Events arrive through the main thread's message pump.
+//! Tray icon: open the menu in VR, hide or show everything, start with SteamVR, quit. Events arrive through the main thread's message pump.
 use dvr_core::raster::{ACCENT, BG, Image};
 use dvr_ui::Strings;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
@@ -7,6 +7,7 @@ use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
     OpenMenu,
+    HideAll,
     Update,
     AutoLaunch(bool),
     Quit,
@@ -17,6 +18,7 @@ pub struct Tray {
     menu: Menu,
     update: Option<MenuItem>,
     open: MenuItem,
+    hide: MenuItem,
     autostart: CheckMenuItem,
     quit: MenuItem,
 }
@@ -32,17 +34,19 @@ fn icon() -> Result<Icon, String> {
 impl Tray {
     pub fn new(s: &Strings, autostart: bool) -> Result<Self, String> {
         let open = MenuItem::new(s.get("tray-open", &[]), true, None);
+        let hide = MenuItem::new(s.get("tray-hide", &[]), true, None);
         let autostart = CheckMenuItem::new(s.get("tray-autostart", &[]), true, autostart, None);
         let quit = MenuItem::new(s.get("tray-quit", &[]), true, None);
         let menu = Menu::new();
-        menu.append_items(&[&open, &autostart, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
+        menu.append_items(&[&open, &hide, &autostart, &PredefinedMenuItem::separator(), &quit])
+            .map_err(|e| e.to_string())?;
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu.clone()))
             .with_tooltip(s.get("tray-tooltip", &[]))
             .with_icon(icon()?)
             .build()
             .map_err(|e| e.to_string())?;
-        Ok(Self { _icon: icon, menu, update: None, open, autostart, quit })
+        Ok(Self { _icon: icon, menu, update: None, open, hide, autostart, quit })
     }
 
     /// Adds the one-click "Download update" entry at the top (no silent install).
@@ -53,6 +57,11 @@ impl Tray {
         }
     }
 
+    /// Keeps the "Start with SteamVR" tick in step with the in-VR setting.
+    pub fn set_autostart(&self, on: bool) {
+        self.autostart.set_checked(on);
+    }
+
     /// Next tray command, if any (non-blocking).
     pub fn poll(&self) -> Option<TrayCommand> {
         let event = MenuEvent::receiver().try_recv().ok()?;
@@ -60,6 +69,8 @@ impl Tray {
             Some(TrayCommand::Update)
         } else if event.id == *self.open.id() {
             Some(TrayCommand::OpenMenu)
+        } else if event.id == *self.hide.id() {
+            Some(TrayCommand::HideAll)
         } else if event.id == *self.autostart.id() {
             Some(TrayCommand::AutoLaunch(self.autostart.is_checked()))
         } else if event.id == *self.quit.id() {

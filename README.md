@@ -8,8 +8,8 @@
 point at your screens and click, type on a two-hand VR keyboard, send messages to the VRChat chatbox, glance at
 your wrist for time, batteries and load, then get back to the game.
 
-It costs about **0.01 ms of GPU time per frame** and shows its own cost live on your wrist. No account, no
-telemetry, no paid tier.
+It costs about **0.01 ms of GPU time per frame** and shows its own cost live. Everything stays out of your
+way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
 
 [**Download for Windows**](https://github.com/EncidXVII/DesktopVR/releases/latest) ·
 [Report a bug](https://github.com/EncidXVII/DesktopVR/issues/new/choose)
@@ -23,24 +23,32 @@ telemetry, no paid tier.
 
 - **Your desktop in VR**: every monitor as its own panel, flat or curved, at any size and distance.
   Mixed-DPI and multi-monitor setups map exactly.
+- **Any window as its own panel**: pick it from the window list, or grip a screen and yank the window under
+  the pointer out of it.
+- **Panel toolbar**: point at a screen or window and a toolbar appears under it: lock, curve, smaller / bigger,
+  opacity, attach to hand, close.
+- **Hide everything with one button**: hold the left menu button to fade all panels out (and back in). Hidden
+  panels stop capturing, so they cost nothing.
 - **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
   Hovering never clicks.
-- **Window pop-out**: grip a screen and yank it toward you; the window under the pointer becomes its own panel
-  (Discord, a browser, a guide) that you can place anywhere or attach to your hand.
-- **Two-hand VR keyboard** in your Windows layout, with sticky Shift / Ctrl / Alt and typing sounds.
+- **Two-hand VR keyboard** in your Windows layout, with a language key (EN, UK, DE, ... cycles your installed
+  input languages), sticky Shift / Ctrl / Alt and typing sounds.
 - **VRChat chatbox keyboard**: Chat mode sends what you type straight to the VRChat chatbox over OSC, plus
   "share now playing".
-- **Wrist watch**: time, game fps, controller and tracker batteries, CPU / RAM / GPU load, media controls,
-  notifications, and this overlay's own GPU and CPU cost.
+- **Wrist watch that stays out of the way**: just the time and batteries, shown only while you look at your
+  wrist. Point at it for Menu, Keyboard, Hide all, media controls, fps / load and this overlay's own cost.
+  Notifications pop up on it.
 - **Notifications**: works with apps that already send XSOverlay notifications (UDP 42069).
 - **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
   other hand keeps playing.
 - **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
   HTC Vive, Windows Mixed Reality and Steam Frame controllers.
 
-| Wrist | Two-hand keyboard |
+| Wrist (point at it to expand) | Panel toolbar |
 |---|---|
-| ![Wrist watch: time, fps, batteries, CPU/RAM/GPU load, media controls and the overlay's own cost](docs/img/wrist.png) | ![VR keyboard with Shift lit and the laser hovering H](docs/img/keyboard.png) |
+| ![Expanded wrist watch: time, batteries, Menu / Keyboard / Hide all buttons, media controls, fps and load](docs/img/wrist-expanded.png) | ![Toolbar under a screen: Lock, Curve, smaller, bigger, opacity, attach to hand, Close](docs/img/toolbar.png) |
+
+![VR keyboard with Shift lit, the language key showing EN and the laser hovering H](docs/img/keyboard.png)
 
 ## Install (3 steps)
 
@@ -59,8 +67,10 @@ pointing hand, typing sounds, curved screens and default opacity. Nothing in XSO
 
 | You did this before | Do this here |
 |---|---|
-| Open the overlay menu | Double-tap the left menu button |
-| Grab a window off the desktop | Grip a screen and yank it toward you |
+| Open the overlay menu | Double-tap the left menu button, or point at your watch and press Menu |
+| Toggle all overlays | Hold the left menu button |
+| Add a window | Menu > Add window, or grip a screen and yank the window toward you |
+| Window toolbar (opacity, size, close...) | Point at the window: the toolbar appears under it |
 | Type into VRChat | Press **Chat** on the keyboard |
 | Notifications from your apps | Apps using the XSOverlay notification API work unchanged |
 
@@ -71,10 +81,15 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag.
 - **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
-- **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key.
-- **Menu** (double-tap left menu button): Panels, Keyboard, Wrist, Settings. Remove and Quit ask for a second tap.
+- **Point at a panel**: its toolbar appears underneath (lock, curve, size, opacity, attach, close).
+- **Left menu button**: double-tap for the menu, hold to hide or show everything.
+- **Watch**: look at your wrist to see it; point at it with the other hand for Menu, Keyboard and Hide all.
+- **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
+  key switches input language.
+- **Menu**: Panels (add screen or window, recenter, hide all), Keyboard, Wrist (what the watch shows, which
+  wrist), Settings (pointing hand, start with SteamVR, vibration, curved screens, updates, quit).
 
-![The DesktopVR menu: panel actions for the selected screen](docs/img/menu-panels.png)
+![The DesktopVR menu: add screens and windows, recenter, hide all](docs/img/menu-panels.png)
 
 ## Performance
 
@@ -87,7 +102,8 @@ the worst case (60 fps capture):
 | CPU, one core | < 3 % | 0.6–2.8 % |
 | RAM | < 150 MB | 64–78 MB |
 
-The same numbers are shown live on the wrist and in Settings, so you can check them on your own machine.
+The same numbers are shown live in Settings and on the expanded watch, so you can check them on your own
+machine.
 
 ## FAQ
 
@@ -103,7 +119,7 @@ VRChat's Action Menu), and takes only the hand you're pointing with away from th
 in progress; the Linux release builds and runs the self-test today.
 
 **Does it slow down my game?** It's designed not to: about 0.01 ms GPU per frame and a few percent of one CPU
-core. The wrist shows the real cost on your machine.
+core. Hidden panels stop capturing entirely. Settings shows the real cost on your machine.
 
 **Is Windows SmartScreen warning me?** Early builds aren't code-signed yet (see
 [code signing policy](docs/code-signing-policy.md)). Every release ships a SHA-256 checksum.

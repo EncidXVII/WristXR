@@ -7,7 +7,7 @@ MenuModel {
     tab: 0,
     title: "Good to know",
     subtitle: "Step 4 of 4",
-    body: "Trigger: click · hold for right click · hold and move to drag\nThumbstick on a screen: scroll\nGrip: move a panel · grip with both hands: resize and turn\nGrip a screen and yank it toward you: pop out a window\nDouble-tap the left menu button: open this menu",
+    body: "Trigger: click · hold: right click · hold and move: drag\nPoint at a screen for its toolbar · thumbstick: scroll\nGrip: move · both hands: resize · yank: pop out a window\nLeft menu: double-tap for this menu, hold to hide all\nLook at your wrist for the time, point at it for more",
     slots: [
         Slot {
             label: "",

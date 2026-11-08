@@ -476,7 +476,7 @@ impl VrBackend for OpenVr {
             Some(p) => p.handle,
             None => match self.overlay_handle(key, &format!("dvr.panel.{}", panel.id)) {
                 Ok(h) => {
-                    if panel.source == Source::Keyboard {
+                    if matches!(panel.source, Source::Keyboard | Source::Toolbar) {
                         call!(self.overlay, overlay::SET_OVERLAY_SORT_ORDER, fn(u64, u32) -> i32, h, KEYBOARD_SORT);
                     }
                     h
@@ -495,8 +495,10 @@ impl VrBackend for OpenVr {
         if changed(|p| p.curvature) {
             call!(self.overlay, overlay::SET_OVERLAY_CURVATURE, fn(u64, f32) -> i32, handle, panel.curvature);
         }
-        if changed(|p| p.opacity) {
-            call!(self.overlay, overlay::SET_OVERLAY_ALPHA, fn(u64, f32) -> i32, handle, panel.opacity);
+        // Faded panels (hide-all, the watch's look-to-show) dim through the overlay's alpha.
+        let alpha = |p: &Panel| p.opacity * (1.0 - p.dim);
+        if last.is_none_or(|(l, _)| alpha(&l) != alpha(panel)) {
+            call!(self.overlay, overlay::SET_OVERLAY_ALPHA, fn(u64, f32) -> i32, handle, alpha(panel));
         }
         if last.is_none_or(|(_, w)| w != world) {
             self.set_transform(handle, world);
@@ -504,7 +506,7 @@ impl VrBackend for OpenVr {
         if let Some(p) = self.overlays.get_mut(&key) {
             p.last = Some((*panel, world));
         }
-        self.set_visible(key, panel.visible);
+        self.set_visible(key, panel.shown());
     }
 
     fn remove_panel(&mut self, id: u32) {

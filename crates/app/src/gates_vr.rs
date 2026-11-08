@@ -8,7 +8,7 @@ use dvr_core::engine::FrameInput;
 use dvr_core::math::Vec3;
 use dvr_core::panel::{Anchor, Hand, Panel, Source};
 use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
-use dvr_ui::{WRIST_SIZE, Wrist, WristInfo};
+use dvr_ui::{WRIST_SIZE, Wrist, WristInfo, WristLoad};
 use dvr_vr::OpenVr;
 use std::time::{Duration, Instant};
 
@@ -92,11 +92,9 @@ fn run(manifest: &std::path::Path) -> GateResult {
             wrist.set(&WristInfo {
                 hour,
                 minute,
-                cpu: load.cpu,
-                ram: load.ram,
-                gpu: load.gpu,
-                own_gpu_ms: timer.last_ms(),
-                own_cpu_percent: load.own_cpu_percent,
+                // Worst case for the budget: expanded with the load line (redrawn every second).
+                expanded: true,
+                load: Some(WristLoad { game_fps: None, cpu: load.cpu, gpu: load.gpu, own_gpu_ms: timer.last_ms() }),
                 ..WristInfo::default()
             });
         }
@@ -223,11 +221,9 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
             wrist.set(&WristInfo {
                 hour,
                 minute,
-                cpu: load.cpu,
-                ram: load.ram,
-                gpu: load.gpu,
-                own_gpu_ms: timer.last_ms(),
-                own_cpu_percent: load.own_cpu_percent,
+                // Worst case for the budget: expanded with the load line (redrawn every second).
+                expanded: true,
+                load: Some(WristLoad { game_fps: None, cpu: load.cpu, gpu: load.gpu, own_gpu_ms: timer.last_ms() }),
                 ..WristInfo::default()
             });
             peak_ram = peak_ram.max(dvr_sys::working_set_bytes());

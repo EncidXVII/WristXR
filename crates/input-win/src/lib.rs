@@ -5,14 +5,18 @@
 use dvr_core::engine::{Event, MouseButton};
 use dvr_core::keyboard::EXT;
 use dvr_core::panel::PixelRect;
+use windows::Win32::Foundation::{LPARAM, WPARAM};
+use windows::Win32::Globalization::{LCIDToLocaleName, MAX_LOCALE_NAME};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetKeyboardLayout, INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBD_EVENT_FLAGS, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_SCANCODE, MAPVK_VSC_TO_VK_EX, MOUSE_EVENT_FLAGS,
     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
     MOUSEINPUT, MapVirtualKeyExW, SendInput, ToUnicodeEx, VIRTUAL_KEY,
 };
-use windows::Win32::UI::Input::KeyboardAndMouse::{VK_CAPITAL, VK_SHIFT};
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, SetCursorPos};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL, VK_CAPITAL, VK_SHIFT};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowThreadProcessId, PostMessageW, SetCursorPos, WM_INPUTLANGCHANGEREQUEST,
+};
 
 const WHEEL_DELTA: i32 = 120;
 
@@ -136,6 +140,39 @@ pub fn layout_id() -> isize {
     unsafe { GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None)).0 as isize }
 }
 
+fn foreground_layout() -> HKL {
+    // SAFETY: read-only queries.
+    unsafe { GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None)) }
+}
+
+/// Short name of the foreground window's input language, e.g. "EN", "UK", "DE".
+pub fn layout_name() -> String {
+    let lang = (foreground_layout().0 as usize & 0xFFFF) as u32;
+    let mut buf = [0u16; MAX_LOCALE_NAME as usize];
+    // SAFETY: the buffer length is passed with the buffer.
+    let n = unsafe { LCIDToLocaleName(lang, Some(&mut buf), 0) };
+    let name = String::from_utf16_lossy(&buf[..(n.max(1) as usize - 1).min(buf.len())]);
+    name.split('-').next().filter(|s| !s.is_empty()).unwrap_or("??").to_uppercase()
+}
+
+/// Asks the foreground window to switch to the next installed input language (what Win+Space does).
+/// Returns false when only one language is installed.
+pub fn next_layout() -> bool {
+    // SAFETY: the list buffer is sized from the first call; posting a message to a window is harmless.
+    unsafe {
+        let count = GetKeyboardLayoutList(None).max(0) as usize;
+        let mut list = vec![HKL::default(); count];
+        let n = GetKeyboardLayoutList(Some(&mut list)).max(0) as usize;
+        list.truncate(n);
+        if list.len() < 2 {
+            return false;
+        }
+        let now = foreground_layout();
+        let next = list.iter().position(|h| *h == now).map_or(list[0], |i| list[(i + 1) % list.len()]);
+        PostMessageW(Some(GetForegroundWindow()), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(next.0 as isize)).is_ok()
+    }
+}
+
 fn translate(scancode: u16, shift: bool, caps: bool) -> Option<String> {
     let code = u32::from(scancode & 0xFF) | if scancode & EXT != 0 { 0xE000 } else { 0 };
     // SAFETY: read-only layout queries; ToUnicodeEx flag 4 leaves the keyboard state untouched.
@@ -172,4 +209,14 @@ pub fn caps_lock() -> bool {
     use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
     // SAFETY: plain query; the low bit is the toggle state.
     unsafe { GetKeyState(i32::from(VK_CAPITAL.0)) & 1 != 0 }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn language_name_is_short_code() {
+        let name = super::layout_name();
+        assert!((2..=3).contains(&name.len()) && name.chars().all(|c| c.is_ascii_uppercase()), "{name}");
+        eprintln!("input language: {name}");
+    }
 }

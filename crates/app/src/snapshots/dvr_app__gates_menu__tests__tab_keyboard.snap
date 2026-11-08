@@ -15,10 +15,22 @@ MenuModel {
     body: "",
     slots: [
         Slot {
-            label: "Show keyboard",
+            label: "Keyboard",
             on: true,
             enabled: true,
             kind: Toggle,
+        },
+        Slot {
+            label: "Keyboard here",
+            on: false,
+            enabled: true,
+            kind: Action,
+        },
+        Slot {
+            label: "Language: EN",
+            on: false,
+            enabled: true,
+            kind: Action,
         },
         Slot {
             label: "Chat mode",
@@ -33,13 +45,7 @@ MenuModel {
             kind: Toggle,
         },
         Slot {
-            label: "Keyboard here",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-        Slot {
-            label: "Share now playing",
+            label: "Share song",
             on: false,
             enabled: true,
             kind: Toggle,

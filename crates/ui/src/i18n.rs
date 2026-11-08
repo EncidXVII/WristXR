@@ -39,7 +39,7 @@ mod tests {
     #[test]
     fn every_message_formats_without_errors() {
         let s = Strings::english().expect("bundle");
-        assert_eq!(s.get("wrist-game", &[("fps", "90".into())]), "90 fps");
+        assert_eq!(s.get("wrist-battery", &[("left", "80%".into()), ("right", "65%".into())]), "L 80%  R 65%");
         assert_eq!(s.get("missing-id", &[]), "missing-id");
     }
 }

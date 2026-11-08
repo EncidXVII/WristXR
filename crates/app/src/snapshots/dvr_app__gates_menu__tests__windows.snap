@@ -1,0 +1,54 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 0,
+    title: "Add a window",
+    subtitle: "Open windows, front to back",
+    body: "",
+    slots: [
+        Slot {
+            label: "Discord",
+            on: false,
+            enabled: true,
+            kind: Choice,
+        },
+        Slot {
+            label: "Firefox",
+            on: false,
+            enabled: true,
+            kind: Choice,
+        },
+        Slot {
+            label: "Notepad",
+            on: false,
+            enabled: true,
+            kind: Choice,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "More",
+            on: false,
+            enabled: false,
+            kind: Action,
+        },
+        Slot {
+            label: "Back",
+            on: false,
+            enabled: true,
+            kind: Action,
+        },
+    ],
+}

@@ -21,6 +21,14 @@ pub struct State {
     pub default_opacity: f32,
     /// Send the current track to the VRChat chatbox when it changes.
     pub media_to_chatbox: bool,
+    pub haptics: bool,
+    pub update_check: bool,
+    /// The watch shows only while you look at it.
+    pub wrist_fade: bool,
+    pub wrist_battery: bool,
+    /// Game fps and CPU / GPU load on the watch.
+    pub wrist_load: bool,
+    pub wrist_media: bool,
 }
 
 impl Default for State {
@@ -34,6 +42,12 @@ impl Default for State {
             default_curved: false,
             default_opacity: 1.0,
             media_to_chatbox: false,
+            haptics: true,
+            update_check: true,
+            wrist_fade: true,
+            wrist_battery: true,
+            wrist_load: false,
+            wrist_media: true,
         }
     }
 }

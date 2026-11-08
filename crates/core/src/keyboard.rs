@@ -20,6 +20,8 @@ pub const RIGHT: u16 = EXT | 0x4D;
 pub const DOWN: u16 = EXT | 0x50;
 /// Not a real key: toggles "send to VRChat chatbox" and is never sent to the OS.
 pub const CHAT: u16 = 0xF100;
+/// Not a real key: switches to the next installed input language; its face shows the current one.
+pub const LANG: u16 = 0xF101;
 
 pub struct KeyDef {
     pub sc: u16,
@@ -48,7 +50,7 @@ pub static ROWS: [&[KeyDef]; 5] = [
       k(0x24, "j"), k(0x25, "k"), k(0x26, "l"), k(0x27, ";"), k(0x28, "'"), kw(ENTER, 2.25, "Enter")],
     &[kw(LSHIFT, 1.25, "Shift"), k(0x56, "<"), k(0x2C, "z"), k(0x2D, "x"), k(0x2E, "c"), k(0x2F, "v"), k(0x30, "b"),
       k(0x31, "n"), k(0x32, "m"), k(0x33, ","), k(0x34, "."), k(0x35, "/"), kw(RSHIFT, 2.75, "Shift")],
-    &[k(ESC, "Esc"), kw(LCTRL, 1.5, "Ctrl"), kw(LALT, 1.5, "Alt"), k(CHAT, "Chat"), kw(SPACE, 6.0, " "),
+    &[k(ESC, "Esc"), kw(LCTRL, 1.5, "Ctrl"), kw(LALT, 1.5, "Alt"), k(CHAT, "Chat"), k(LANG, "Lang"), kw(SPACE, 5.0, " "),
       k(LEFT, "<"), k(UP, "^"), k(DOWN, "v"), k(RIGHT, ">")],
 ];
 
@@ -97,7 +99,7 @@ fn modifier_bit(sc: u16) -> Option<u8> {
 }
 
 pub fn repeats(sc: u16) -> bool {
-    modifier_bit(sc).is_none() && sc != CAPS && sc != CHAT
+    modifier_bit(sc).is_none() && sc != CAPS && sc != CHAT && sc != LANG
 }
 
 /// Shift/Ctrl/Alt are one-shot latches: tap to arm, the next key consumes them.
@@ -118,6 +120,10 @@ impl Keyboard {
             out.push(Event::ChatToggle);
             return 0;
         }
+        if sc == LANG {
+            out.push(Event::NextLanguage);
+            return 0;
+        }
         if let Some(bit) = modifier_bit(sc) {
             self.latched ^= bit;
             return 0;
@@ -133,7 +139,7 @@ impl Keyboard {
     }
 
     pub fn release(&mut self, sc: u16, mods: u8, out: &mut Vec<Event>) {
-        if sc == CHAT || modifier_bit(sc).is_some() {
+        if sc == CHAT || sc == LANG || modifier_bit(sc).is_some() {
             return;
         }
         out.push(Event::Key { scancode: sc, down: false });
