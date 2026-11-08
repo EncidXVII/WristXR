@@ -58,7 +58,14 @@ pub const DIM_HIDDEN: f32 = 0.99;
 pub enum Anchor {
     World,
     Hand(Hand),
+    /// Follows the headset (a HUD).
+    Head,
 }
+
+/// Poses panels can be anchored to: left hand, right hand, head.
+pub type Anchors = [Pose; 3];
+/// Index of the head in `Anchors`.
+pub const HEAD: usize = 2;
 
 /// A flat quad. `pose` is relative to `anchor`; local +Z faces the viewer, +X right, +Y up.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -158,7 +165,7 @@ impl Panel {
     pub fn anchor_hand(&self) -> Hand {
         match self.anchor {
             Anchor::Hand(h) => h,
-            Anchor::World => Hand::Left,
+            Anchor::World | Anchor::Head => Hand::Left,
         }
     }
 
@@ -171,17 +178,19 @@ impl Panel {
         self.width_m * self.aspect
     }
 
-    pub fn world_pose(&self, hands: &[Pose; 2]) -> Pose {
+    pub fn world_pose(&self, anchors: &Anchors) -> Pose {
         match self.anchor {
             Anchor::World => self.pose,
-            Anchor::Hand(h) => hands[h.index()] * self.pose,
+            Anchor::Hand(h) => anchors[h.index()] * self.pose,
+            Anchor::Head => anchors[HEAD] * self.pose,
         }
     }
 
-    pub fn set_world_pose(&mut self, world: Pose, hands: &[Pose; 2]) {
+    pub fn set_world_pose(&mut self, world: Pose, anchors: &Anchors) {
         self.pose = match self.anchor {
             Anchor::World => world,
-            Anchor::Hand(h) => hands[h.index()].inverse() * world,
+            Anchor::Hand(h) => anchors[h.index()].inverse() * world,
+            Anchor::Head => anchors[HEAD].inverse() * world,
         };
     }
 

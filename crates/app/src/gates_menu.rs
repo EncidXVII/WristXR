@@ -35,7 +35,7 @@ impl Ctx {
                 _ => {}
             }
         }
-        let poses = [self.rig.hands[0].pose, self.rig.hands[1].pose];
+        let poses = [self.rig.hands[0].pose, self.rig.hands[1].pose, HEAD];
         for click in self.menu.take_inputs() {
             let fx = self.session.input(click, &mut self.rig.engine.panels, HEAD, &poses, &self.screens);
             self.effects.extend(fx);
@@ -202,6 +202,21 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("Back must return to the Panels tab".into());
     }
 
+    // Notification history: newest first, Clear empties it.
+    c.session.notified("Discord", "hey");
+    c.session.notified("Steam", "Download finished");
+    c.pump();
+    c.click(slot_center(5))?;
+    let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
+    if c.session.page != Page::Notifications || !model.slots[0].label.starts_with("Steam") {
+        return Err(format!("history must list newest first, page {:?}", c.session.page));
+    }
+    c.click(slot_center(4))?;
+    c.click(slot_center(5))?;
+    if !c.session.history.is_empty() || c.session.page != Page::Tab(0) {
+        return Err("Clear must empty the history and Back return".into());
+    }
+
     c.click(tab_center(3))?;
     c.click(slot_center(0))?;
     if c.session.state.dominant != Hand::Left
@@ -274,6 +289,7 @@ mod tests {
         panels.push(dvr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
         session.language = "EN".into();
         session.windows = vec![(1, "Discord".into()), (2, "Firefox".into()), (3, "Notepad".into())];
+        session.notified("Discord", "Alex: are you on?");
         (session, panels, screens)
     }
 
@@ -293,6 +309,7 @@ mod tests {
             ("tab_wrist", Page::Tab(2)),
             ("tab_settings", Page::Tab(3)),
             ("windows", Page::Windows(0)),
+            ("notifications", Page::Notifications),
         ];
         for (name, page) in pages {
             session.page = page;

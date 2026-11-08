@@ -26,18 +26,18 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Any window as its own panel**: pick it from the window list, or grip a screen and yank the window under
   the pointer out of it.
 - **Panel toolbar**: point at a screen or window and a toolbar appears under it: lock, curve, smaller / bigger,
-  opacity, attach to hand, close.
+  opacity, anchor (world, hand, or head-locked HUD that follows your view), close.
 - **Hide everything with one button**: hold the left menu button to fade all panels out (and back in). Hidden
   panels stop capturing, so they cost nothing.
 - **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
-  Hovering never clicks.
+  Hovering never clicks, and hand tremor is smoothed out without making fast aiming lag.
 - **Two-hand VR keyboard** in your Windows layout, with a language key (EN, UK, DE, ... cycles your installed
   input languages), sticky Shift / Ctrl / Alt and typing sounds.
 - **VRChat chatbox keyboard**: Chat mode sends what you type straight to the VRChat chatbox over OSC, plus
   "share now playing".
 - **Wrist watch that stays out of the way**: just the time and batteries, shown only while you look at your
   wrist. Point at it for Menu, Keyboard, Hide all, media controls, fps / load and this overlay's own cost.
-  Notifications pop up on it.
+  Notifications pop up on it; the last few stay in Menu > Notifications.
 - **Notifications**: works with apps that already send XSOverlay notifications (UDP 42069).
 - **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
   other hand keeps playing.
@@ -81,12 +81,12 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag.
 - **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
-- **Point at a panel**: its toolbar appears underneath (lock, curve, size, opacity, attach, close).
+- **Point at a panel**: its toolbar appears underneath (lock, curve, size, opacity, World / Hand / Head, close).
 - **Left menu button**: double-tap for the menu, hold to hide or show everything.
 - **Watch**: look at your wrist to see it; point at it with the other hand for Menu, Keyboard and Hide all.
 - **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
   key switches input language.
-- **Menu**: Panels (add screen or window, recenter, hide all), Keyboard, Wrist (what the watch shows, which
+- **Menu**: Panels (add screen or window, recenter, hide all, notifications), Keyboard, Wrist (what the watch shows, which
   wrist), Settings (pointing hand, start with SteamVR, vibration, curved screens, updates, quit).
 
 ![The DesktopVR menu: add screens and windows, recenter, hide all](docs/img/menu-panels.png)

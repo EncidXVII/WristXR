@@ -7,7 +7,7 @@ mod ffi;
 use dvr_core::backend::VrBackend;
 use dvr_core::engine::FrameInput;
 use dvr_core::math::Pose;
-use dvr_core::panel::{Hand, Panel, Source};
+use dvr_core::panel::{Anchor, Hand, Panel, Source};
 use ffi::{
     ActiveActionSet, AnalogData, ClientCore, DigitalData, FrameTiming, Mat34, PoseData, Table, TrackedPose, VrEvent,
     applications, compositor, input, overlay, system,
@@ -438,6 +438,9 @@ impl VrBackend for OpenVr {
             h.menu = self.digital(self.actions.menu, dev);
             h.stick = if stick.active != 0 { [stick.xyz[0], stick.xyz[1]] } else { [0.0; 2] };
         }
+        if let Some(head) = self.head_pose() {
+            input.head = head;
+        }
         true
     }
 
@@ -500,7 +503,21 @@ impl VrBackend for OpenVr {
         if last.is_none_or(|(l, _)| alpha(&l) != alpha(panel)) {
             call!(self.overlay, overlay::SET_OVERLAY_ALPHA, fn(u64, f32) -> i32, handle, alpha(panel));
         }
-        if last.is_none_or(|(_, w)| w != world) {
+        // Head-locked panels ride on the headset in the compositor (no lag); everything else is placed in the
+        // room each frame.
+        if panel.anchor == Anchor::Head {
+            if last.is_none_or(|(l, _)| l.anchor != Anchor::Head || l.pose != panel.pose) {
+                let m = Mat34(panel.pose.to_mat34());
+                call!(
+                    self.overlay,
+                    overlay::SET_OVERLAY_TRANSFORM_TRACKED_DEVICE_RELATIVE,
+                    fn(u64, u32, *const Mat34) -> i32,
+                    handle,
+                    ffi::HMD_INDEX as u32,
+                    &m
+                );
+            }
+        } else if last.is_none_or(|(l, w)| w != world || l.anchor == Anchor::Head) {
             self.set_transform(handle, world);
         }
         if let Some(p) = self.overlays.get_mut(&key) {

@@ -38,6 +38,7 @@ pub mod overlay {
     pub const SET_OVERLAY_WIDTH_IN_METERS: usize = 22;
     pub const SET_OVERLAY_CURVATURE: usize = 24;
     pub const SET_OVERLAY_TRANSFORM_ABSOLUTE: usize = 33;
+    pub const SET_OVERLAY_TRANSFORM_TRACKED_DEVICE_RELATIVE: usize = 35;
     pub const SHOW_OVERLAY: usize = 43;
     pub const HIDE_OVERLAY: usize = 44;
     pub const WAIT_FRAME_SYNC: usize = 47;
@@ -281,6 +282,11 @@ mod tests {
             ("IVROverlay", "SetOverlayWidthInMeters", overlay::SET_OVERLAY_WIDTH_IN_METERS),
             ("IVROverlay", "SetOverlayCurvature", overlay::SET_OVERLAY_CURVATURE),
             ("IVROverlay", "SetOverlayTransformAbsolute", overlay::SET_OVERLAY_TRANSFORM_ABSOLUTE),
+            (
+                "IVROverlay",
+                "SetOverlayTransformTrackedDeviceRelative",
+                overlay::SET_OVERLAY_TRANSFORM_TRACKED_DEVICE_RELATIVE,
+            ),
             ("IVROverlay", "ShowOverlay", overlay::SHOW_OVERLAY),
             ("IVROverlay", "HideOverlay", overlay::HIDE_OVERLAY),
             ("IVROverlay", "WaitFrameSync", overlay::WAIT_FRAME_SYNC),

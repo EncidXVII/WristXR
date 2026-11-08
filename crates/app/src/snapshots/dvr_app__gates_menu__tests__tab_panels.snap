@@ -45,10 +45,10 @@ MenuModel {
             kind: Toggle,
         },
         Slot {
-            label: "",
+            label: "Notifications (1)",
             on: false,
-            enabled: false,
-            kind: Hidden,
+            enabled: true,
+            kind: Action,
         },
     ],
 }

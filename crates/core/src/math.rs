@@ -95,6 +95,17 @@ impl Quat {
         let c = from.cross(to);
         Self { x: c.x, y: c.y, z: c.z, w: 1.0 + d }.normalized()
     }
+    /// Normalized linear blend toward `o` (shortest way round); fine for the small steps smoothing takes.
+    pub fn nlerp(self, o: Self, t: f32) -> Self {
+        let o = if self.x * o.x + self.y * o.y + self.z * o.z + self.w * o.w < 0.0 {
+            Self { x: -o.x, y: -o.y, z: -o.z, w: -o.w }
+        } else {
+            o
+        };
+        let l = |a: f32, b: f32| a + (b - a) * t;
+        Self { x: l(self.x, o.x), y: l(self.y, o.y), z: l(self.z, o.z), w: l(self.w, o.w) }.normalized()
+    }
+
     pub fn conjugate(self) -> Self {
         Self { x: -self.x, y: -self.y, z: -self.z, w: self.w }
     }

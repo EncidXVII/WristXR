@@ -3,7 +3,7 @@
 //! `step` does not allocate as long as `out` has spare capacity (reserve ~64).
 use crate::keyboard::{self, Keyboard};
 use crate::math::{Pose, Quat, Vec3};
-use crate::panel::{Anchor, Hand, MAX_WIDTH_M, MIN_WIDTH_M, Panel, Source};
+use crate::panel::{Anchor, Anchors, Hand, MAX_WIDTH_M, MIN_WIDTH_M, Panel, Source};
 
 /// Ray movement (uv) that turns a press into a drag.
 pub const DRAG_UV: f32 = 0.01;
@@ -20,6 +20,11 @@ pub const STICK_DEADZONE: f32 = 0.2;
 pub const SCROLL_NOTCHES_PER_S: f32 = 12.0;
 pub const PUSH_PULL_M_PER_S: f32 = 1.5;
 const MIN_GRAB_DISTANCE_M: f32 = 0.1;
+/// Laser smoothing: hand turns slower than this per frame are smoothed (tremor, tracking noise); faster ones
+/// pass straight through, so aiming never lags.
+pub const SMOOTH_FULL_RAD: f32 = 0.02;
+/// Smoothing weight for the steadiest hand (share of the new ray taken each frame).
+pub const SMOOTH_MIN: f32 = 0.25;
 /// Window pop-out: grip a monitor panel and yank toward yourself this far, this straight, this fast.
 pub const POP_OUT_PULL_M: f32 = 0.2;
 pub const POP_OUT_LATERAL_M: f32 = 0.1;
@@ -41,6 +46,15 @@ pub struct FrameInput {
     pub now_ms: u64,
     /// Indexed by `Hand::index()`.
     pub hands: [HandInput; 2],
+    /// Headset pose (for head-locked panels).
+    pub head: Pose,
+}
+
+impl FrameInput {
+    /// Left hand, right hand, head.
+    pub fn anchors(&self) -> Anchors {
+        [self.hands[0].pose, self.hands[1].pose, self.head]
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,6 +142,8 @@ struct HandState {
     menu_down: Option<u64>,
     /// Laser hit a panel this frame.
     on_panel: bool,
+    /// Smoothed laser ray.
+    ray: Option<Pose>,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -199,7 +215,7 @@ impl Engine {
     }
 
     /// Puts `panel` in `hand` as if just gripped (used after a pop-out creates a window panel).
-    pub fn start_grab(&mut self, hand: Hand, panel: u32, poses: &[Pose; 2]) {
+    pub fn start_grab(&mut self, hand: Hand, panel: u32, poses: &Anchors) {
         if let Some(i) = self.index_of(panel) {
             let rel = poses[hand.index()].inverse() * self.panels[i].world_pose(poses);
             self.grab = Grab::One { hand, panel, rel, popout: None };
@@ -209,7 +225,12 @@ impl Engine {
     pub fn step(&mut self, input: &FrameInput, out: &mut Vec<Event>) {
         let dt = self.last_ms.map_or(0.0, |t| input.now_ms.saturating_sub(t) as f32 / 1000.0);
         self.last_ms = Some(input.now_ms);
-        let poses = [input.hands[0].pose, input.hands[1].pose];
+        let poses = input.anchors();
+        for hand in Hand::BOTH {
+            let raw = input.hands[hand.index()].pose;
+            let st = &mut self.hands[hand.index()];
+            st.ray = Some(st.ray.map_or(raw, |prev| smooth(prev, raw)));
+        }
         for hand in Hand::BOTH {
             self.step_grip(hand, input, &poses, out);
         }
@@ -222,9 +243,9 @@ impl Engine {
         }
     }
 
-    /// Nearest visible panel under this hand's laser. A hand never points at panels attached to itself.
-    fn hit(&self, hand: Hand, poses: &[Pose; 2]) -> Option<(usize, [f32; 2])> {
-        let ray = poses[hand.index()];
+    /// Nearest visible panel under this hand's (smoothed) laser. A hand never points at panels attached to itself.
+    fn hit(&self, hand: Hand, poses: &Anchors) -> Option<(usize, [f32; 2])> {
+        let ray = self.hands[hand.index()].ray.unwrap_or(poses[hand.index()]);
         let mut best: Option<(usize, f32, [f32; 2])> = None;
         for (i, p) in self.panels.iter().enumerate() {
             if !p.shown() || p.anchor == Anchor::Hand(hand) {
@@ -243,7 +264,7 @@ impl Engine {
         self.panels.iter().position(|p| p.id == id)
     }
 
-    fn step_grip(&mut self, hand: Hand, input: &FrameInput, poses: &[Pose; 2], out: &mut Vec<Event>) {
+    fn step_grip(&mut self, hand: Hand, input: &FrameInput, poses: &Anchors, out: &mut Vec<Event>) {
         let cur = input.hands[hand.index()];
         let prev = self.hands[hand.index()].prev;
         if cur.grip && !prev.grip && cur.tracked {
@@ -300,7 +321,7 @@ impl Engine {
         }
     }
 
-    fn update_grab(&mut self, input: &FrameInput, poses: &[Pose; 2], dt: f32, out: &mut Vec<Event>) {
+    fn update_grab(&mut self, input: &FrameInput, poses: &Anchors, dt: f32, out: &mut Vec<Event>) {
         let mut pop = None;
         let (panel, world, width) = match &mut self.grab {
             Grab::Idle => return,
@@ -352,7 +373,7 @@ impl Engine {
         out.push(Event::Moved { panel });
     }
 
-    fn step_pointer(&mut self, hand: Hand, input: &FrameInput, poses: &[Pose; 2], dt: f32, out: &mut Vec<Event>) {
+    fn step_pointer(&mut self, hand: Hand, input: &FrameInput, poses: &Anchors, dt: f32, out: &mut Vec<Event>) {
         let i = hand.index();
         let cur = input.hands[i];
         let mut st = self.hands[i];
@@ -481,6 +502,14 @@ impl Engine {
     }
 }
 
+/// One smoothing step from the last ray toward the raw one: the faster the hand turns, the less smoothing.
+fn smooth(prev: Pose, raw: Pose) -> Pose {
+    let turn = prev.forward().dot(raw.forward()).clamp(-1.0, 1.0).acos();
+    let moved = (raw.pos - prev.pos).length();
+    let t = (turn / SMOOTH_FULL_RAD).max(moved / 0.02).clamp(SMOOTH_MIN, 1.0);
+    Pose::new(prev.pos + (raw.pos - prev.pos) * t, prev.rot.nlerp(raw.rot, t))
+}
+
 fn click(panel: u32, uv: [f32; 2], button: MouseButton, out: &mut Vec<Event>) {
     out.push(Event::Mouse { panel, uv, button, down: true });
     out.push(Event::Mouse { panel, uv, button, down: false });
@@ -500,4 +529,29 @@ fn scroll(acc: f32, y: f32, dt: f32, panel: u32, uv: [f32; 2], out: &mut Vec<Eve
 
 fn dist(a: [f32; 2], b: [f32; 2]) -> f32 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::{Quat, Vec3};
+
+    #[test]
+    fn smoothing_calms_tremor_but_never_lags_real_moves() {
+        let base = Pose::aim(Vec3::new(0.0, 1.2, 0.0), Vec3::new(0.0, 1.2, -1.0));
+        let wobble = |a: f32| Pose::new(base.pos, base.rot * Quat::from_axis_angle(Vec3::Y, a));
+        // Tremor of +-0.3 degrees: the smoothed ray moves much less than the raw one.
+        let mut ray = base;
+        let mut worst = 0.0f32;
+        for i in 0..90 {
+            let raw = wobble(if i % 2 == 0 { 0.005 } else { -0.005 });
+            ray = smooth(ray, raw);
+            worst = worst.max(ray.forward().dot(base.forward()).clamp(-1.0, 1.0).acos());
+        }
+        assert!(worst < 0.004, "tremor not smoothed: {worst} rad");
+        // A real flick (10 degrees in one frame) arrives at once.
+        let flick = wobble(0.17);
+        let after = smooth(base, flick);
+        assert!(after.forward().dot(flick.forward()) > 0.9999, "flick lagged");
+    }
 }

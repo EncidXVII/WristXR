@@ -5,7 +5,7 @@ use dvr_core::chat::ChatLine;
 use dvr_core::engine::{Event, MouseButton};
 use dvr_core::math::Pose;
 use dvr_core::panel::{
-    Anchor, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
+    Anchor, Anchors, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
 };
 use dvr_core::state::State;
 use dvr_ui::{
@@ -23,6 +23,8 @@ const TOOLBAR_LINGER_MS: u64 = 1500;
 const FADE_S: f32 = 0.15;
 /// Windows listed per page of "Add window".
 const WINDOWS_PER_PAGE: usize = 4;
+/// Notifications kept for the history page (newest first).
+pub const HISTORY_LEN: usize = 4;
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
 
@@ -43,6 +45,8 @@ pub enum Page {
     Tab(usize),
     /// "Add window" list, page n.
     Windows(usize),
+    /// Recent notifications.
+    Notifications,
 }
 
 /// What the platform layer must do after a menu, toolbar or wrist action.
@@ -103,6 +107,8 @@ pub struct Session {
     pub language: String,
     /// SteamVR starts the overlay with itself (kept by the app).
     pub auto_launch: bool,
+    /// Recent notifications (title, body), newest first.
+    pub history: std::collections::VecDeque<(String, String)>,
     /// Panel whose toolbar is shown, and when the laser was last on it or its toolbar.
     toolbar: Option<u32>,
     toolbar_seen: u64,
@@ -169,6 +175,7 @@ impl Session {
             windows: Vec::new(),
             language: String::new(),
             auto_launch: false,
+            history: std::collections::VecDeque::new(),
             toolbar: None,
             toolbar_seen: 0,
             toolbar_hovered: false,
@@ -185,7 +192,7 @@ impl Session {
         if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
             if !open {
                 m.pose = Panel::menu_in_front(head, m.aspect).pose;
-                if matches!(self.page, Page::Windows(_)) {
+                if matches!(self.page, Page::Windows(_) | Page::Notifications) {
                     self.page = Page::Tab(0);
                 }
             }
@@ -277,13 +284,19 @@ impl Session {
         over_menu
     }
 
+    /// Remembers a notification for the history page.
+    pub fn notified(&mut self, title: &str, body: &str) {
+        self.history.push_front((title.to_owned(), body.to_owned()));
+        self.history.truncate(HISTORY_LEN);
+    }
+
     /// Panel the toolbar belongs to, if it is showing.
     pub fn toolbar_target(&self) -> Option<u32> {
         self.toolbar
     }
 
     /// Puts the toolbar under its panel (or hides it). Call every frame before stepping the engine.
-    pub fn place_toolbar(&mut self, panels: &mut [Panel], hands: &[Pose; 2]) {
+    pub fn place_toolbar(&mut self, panels: &mut [Panel], hands: &Anchors) {
         let target = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id && p.shown()).copied());
         if target.is_none() {
             self.toolbar = None;
@@ -309,7 +322,11 @@ impl Session {
                     Tool::Smaller => ("−".to_owned(), false),
                     Tool::Bigger => ("+".to_owned(), false),
                     Tool::Opacity => (format!("{:.0}%", p.opacity * 100.0), false),
-                    Tool::Attach => (t("tool-attach"), p.anchor != Anchor::World),
+                    Tool::Attach => match p.anchor {
+                        Anchor::World => (t("tool-world"), false),
+                        Anchor::Hand(_) => (t("tool-hand"), true),
+                        Anchor::Head => (t("tool-head"), true),
+                    },
                     Tool::Close => (t("tool-close"), false),
                 };
                 ToolButton { label, on, danger: *tool == Tool::Close }
@@ -318,7 +335,7 @@ impl Session {
     }
 
     /// Applies a toolbar click (button index).
-    pub fn toolbar_input(&mut self, button: usize, panels: &mut Vec<Panel>, hands: &[Pose; 2]) -> Vec<Effect> {
+    pub fn toolbar_input(&mut self, button: usize, panels: &mut Vec<Panel>, hands: &Anchors) -> Vec<Effect> {
         let mut fx = Vec::new();
         let Some(i) = self.toolbar.and_then(|id| panels.iter().position(|p| p.id == id)) else { return fx };
         let Some(&tool) = tools(panels[i].source).get(button) else { return fx };
@@ -332,11 +349,13 @@ impl Session {
                 let now = OPACITY_STEPS.iter().position(|o| (*o - p.opacity).abs() < 0.01).unwrap_or(0);
                 p.opacity = OPACITY_STEPS[(now + 1) % OPACITY_STEPS.len()];
             }
+            // World -> hand -> head (HUD) -> world; the panel stays where it is when it changes anchor.
             Tool::Attach => {
                 let world = p.world_pose(hands);
                 p.anchor = match p.anchor {
                     Anchor::World => Anchor::Hand(self.state.dominant.other()),
-                    Anchor::Hand(_) => Anchor::World,
+                    Anchor::Hand(_) => Anchor::Head,
+                    Anchor::Head => Anchor::World,
                 };
                 p.set_world_pose(world, hands);
             }
@@ -441,9 +460,23 @@ impl Session {
                         action(t("menu-recenter"), true),
                         action(t("menu-hide-all"), true),
                         toggle(t("menu-show-keyboard"), visible(Source::Keyboard)),
-                        hidden(),
+                        action(s.get("menu-notifications", &[("n", self.history.len().to_string())]), true),
                     ],
                 )
+            }
+            Page::Notifications => {
+                let mut slots: Vec<Slot> = (0..HISTORY_LEN)
+                    .map(|i| match self.history.get(i) {
+                        Some((title, body)) if body.is_empty() => action(title.clone(), true),
+                        Some((title, body)) => action(format!("{title}: {body}"), true),
+                        None => hidden(),
+                    })
+                    .collect();
+                slots.push(action(t("menu-clear"), !self.history.is_empty()));
+                slots.push(action(t("menu-back"), true));
+                let hint =
+                    if self.history.is_empty() { t("menu-notifications-none") } else { t("menu-notifications-hint") };
+                (0, t("menu-notifications-title"), hint, slots)
             }
             Page::Windows(page) => {
                 let start = page * WINDOWS_PER_PAGE;
@@ -565,7 +598,7 @@ impl Session {
         input: MenuInput,
         panels: &mut Vec<Panel>,
         head: Pose,
-        hands: &[Pose; 2],
+        hands: &Anchors,
         monitors: &[MonitorInfo],
     ) -> Vec<Effect> {
         let _ = hands;
@@ -573,7 +606,7 @@ impl Session {
         let slot = match input {
             MenuInput::Tab(i) => {
                 self.armed = None;
-                if matches!(self.page, Page::Tab(_) | Page::Windows(_)) && i < TABS {
+                if matches!(self.page, Page::Tab(_) | Page::Windows(_) | Page::Notifications) && i < TABS {
                     self.page = Page::Tab(i);
                 }
                 return fx;
@@ -639,6 +672,9 @@ impl Session {
                 }
             }
             (Page::Windows(_), _) => self.page = Page::Tab(0),
+            (Page::Tab(0), 5) => self.page = Page::Notifications,
+            (Page::Notifications, 4) => self.history.clear(),
+            (Page::Notifications, 5) => self.page = Page::Tab(0),
             (Page::Tab(1), 1) => {
                 if let Some(k) = find(panels, Source::Keyboard) {
                     *k = Panel { id: k.id, ..Panel::keyboard_below(k.id, head) };

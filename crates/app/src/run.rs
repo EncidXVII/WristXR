@@ -284,7 +284,7 @@ pub fn run() -> Result<(), String> {
         if tray_open_menu {
             session.toggle_menu(&mut engine.panels, head(&vr));
         }
-        let poses = [input.hands[0].pose, input.hands[1].pose];
+        let poses = input.anchors();
         let now = input.now_ms;
         let dt = now.saturating_sub(last_ms) as f32 / 1000.0;
         last_ms = now;
@@ -545,6 +545,8 @@ pub fn run() -> Result<(), String> {
             now_playing = playing;
         }
         if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
+            session.notified(&t.title, &t.content);
+            menu_dirty = true;
             toast = Some((t, Instant::now()));
             if session.state.haptics {
                 vr.haptic(session.state.dominant.other());

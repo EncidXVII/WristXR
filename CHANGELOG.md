@@ -10,7 +10,11 @@ First public early-access release (Windows).
 ### Added
 - Desktop panels for every monitor, flat or curved, exact mapping on mixed-DPI multi-monitor setups.
 - Add any open window as its own panel from a window list.
-- Toolbar under the pointed-at panel: lock, curve, smaller / bigger, opacity, attach to hand, close.
+- Toolbar under the pointed-at panel: lock, curve, smaller / bigger, opacity, anchor, close.
+- Head-locked panels (HUD): the anchor button cycles world, hand and head; head-locked panels ride on the
+  headset in the compositor, so they never lag.
+- Laser smoothing: tremor and tracking noise are filtered, fast aiming passes straight through.
+- Notification history (Menu > Notifications).
 - Hold the left menu button to hide or show all panels; hidden panels stop capturing.
 - Laser pointer: click, hold for right click, drag, thumbstick scroll; hovering never clicks.
 - Grab-and-yank window pop-out into its own panel; panels can be locked or attached to a hand.

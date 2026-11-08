@@ -1,0 +1,54 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+---
+MenuModel {
+    tabs: [
+        "Panels",
+        "Keyboard",
+        "Wrist",
+        "Settings",
+    ],
+    tab: 0,
+    title: "Notifications",
+    subtitle: "Newest first",
+    body: "",
+    slots: [
+        Slot {
+            label: "Discord: Alex: are you on?",
+            on: false,
+            enabled: true,
+            kind: Action,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "Clear",
+            on: false,
+            enabled: true,
+            kind: Action,
+        },
+        Slot {
+            label: "Back",
+            on: false,
+            enabled: true,
+            kind: Action,
+        },
+    ],
+}

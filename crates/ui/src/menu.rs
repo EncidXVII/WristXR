@@ -50,7 +50,11 @@ slint::slint! {
                 : slot.kind == 3 && slot.on ? #FF5A3C
                 : touch.has-hover && slot.enabled ? #2A2622 : #1F1C18;
             if slot.kind != 1 : Text {
+                x: 24px;
+                width: parent.width - 48px;
                 text: slot.label;
+                horizontal-alignment: center;
+                overflow: elide;
                 font-size: 30px;
                 color: slot.on && (slot.kind == 2 || slot.kind == 3) ? #0C0B0A : slot.kind == 3 ? #FF5A3C : #F4F1EC;
             }

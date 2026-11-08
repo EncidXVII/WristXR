@@ -44,7 +44,8 @@ fn hot_loop_is_allocation_free() {
                 stick: [0.0, if f % 50 < 25 { 1.0 } else { 0.0 }],
             };
             out.clear();
-            let input = FrameInput { now_ms: f * 11, hands: [hand(-0.2, -0.6), hand(0.2, 0.0)] };
+            let input =
+                FrameInput { now_ms: f * 11, hands: [hand(-0.2, -0.6), hand(0.2, 0.0)], ..FrameInput::default() };
             engine.step(&input, &mut out);
         }
     };

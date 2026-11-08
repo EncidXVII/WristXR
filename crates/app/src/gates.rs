@@ -74,7 +74,7 @@ impl Rig {
     }
     /// Point the hand's laser at a uv on a panel, keeping the hand's position.
     pub(crate) fn aim(&mut self, h: Hand, panel: u32, uv: [f32; 2]) -> GateResult {
-        let poses = [self.hands[0].pose, self.hands[1].pose];
+        let poses = [self.hands[0].pose, self.hands[1].pose, HEAD];
         let p = self.panel(panel)?;
         let target = p.world_pose(&poses).transform_point(p.local_point(uv));
         let from = self.hands[h.index()].pose.pos;
@@ -85,7 +85,7 @@ impl Rig {
         for _ in 0..n {
             self.now += FRAME_MS;
             self.buf.clear();
-            self.engine.step(&FrameInput { now_ms: self.now, hands: self.hands }, &mut self.buf);
+            self.engine.step(&FrameInput { now_ms: self.now, hands: self.hands, head: HEAD }, &mut self.buf);
             self.log.extend_from_slice(&self.buf);
         }
     }
@@ -147,14 +147,23 @@ fn panels() -> GateResult {
     ensure!(kb.pose.pos.y < p.pose.pos.y - p.height_m() / 2.0, "keyboard must sit below the panel");
 
     let hand = Pose::new(Vec3::new(0.3, 1.0, -0.3), Quat::from_axis_angle(Vec3::Y, 0.5));
-    let poses = [hand, Pose::IDENTITY];
+    let poses = [hand, Pose::IDENTITY, HEAD];
     let mut w = p;
     w.anchor = Anchor::Hand(Hand::Left);
     let world = Pose::new(Vec3::new(0.0, 1.2, -0.5), Quat::IDENTITY);
     w.set_world_pose(world, &poses);
     ensure!((w.world_pose(&poses).pos - world.pos).length() < 1e-4, "hand anchor roundtrip");
-    let moved = [Pose::new(hand.pos + Vec3::X, hand.rot), Pose::IDENTITY];
+    let moved = [Pose::new(hand.pos + Vec3::X, hand.rot), Pose::IDENTITY, HEAD];
     ensure!((w.world_pose(&moved).pos - (world.pos + Vec3::X)).length() < 1e-4, "attached panel must follow the hand");
+    // Head-locked (HUD): keeps its place in view when the head turns.
+    w.anchor = Anchor::Head;
+    w.set_world_pose(world, &poses);
+    let turned = Pose::new(HEAD.pos, Quat::from_axis_angle(Vec3::Y, 1.0));
+    let in_view = |a: &[Pose; 3]| a[2].inverse().transform_point(w.world_pose(a).pos);
+    ensure!(
+        (in_view(&[hand, Pose::IDENTITY, turned]) - in_view(&poses)).length() < 1e-4,
+        "head-locked panel must stay put in view"
+    );
 
     let dir = std::env::temp_dir().join(format!("dvr-selftest-{}", std::process::id()));
     let path = dir.join("state.json");
