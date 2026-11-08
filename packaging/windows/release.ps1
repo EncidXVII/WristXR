@@ -1,8 +1,9 @@
 # Builds the Windows release zip and its SHA-256 into dist/release/. Run from the repository root.
-$ErrorActionPreference = 'Stop'
 $version = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
+# Before 'Stop': Windows PowerShell 5.1 turns cargo's progress lines on stderr into terminating errors.
 cargo build --release -p dvr-app
 if ($LASTEXITCODE -ne 0) { throw 'build failed' }
+$ErrorActionPreference = 'Stop'
 
 $out = 'dist\release'
 $stage = Join-Path $out "DesktopVR-$version-windows-x64"
