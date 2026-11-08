@@ -31,17 +31,28 @@ fn main() -> ExitCode {
         dvr_sys::attach_parent_console();
         return selftest();
     }
+    // A second copy would fight the first over the controllers and the notification port.
+    #[cfg(windows)]
+    let Some(_instance) = dvr_sys::single_instance() else {
+        fatal("DesktopVR is already running. Use its tray icon to open the menu or quit.");
+        return ExitCode::FAILURE;
+    };
     #[cfg(windows)]
     let result = run::run();
     #[cfg(not(windows))]
     let result: Result<(), String> = Err("Linux capture and input backends are not built yet.".into());
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
+    let code = match result {
+        Ok(()) => 0,
         Err(e) => {
             fatal(&e);
-            ExitCode::FAILURE
+            1
         }
-    }
+    };
+    // Settings are saved; skip library teardown, which can hang with background WinRT threads still running.
+    #[cfg(windows)]
+    dvr_sys::terminate(code);
+    #[cfg(not(windows))]
+    ExitCode::from(code as u8)
 }
 
 /// A startup failure the user must see (e.g. SteamVR missing): a dialog on Windows, stderr elsewhere.

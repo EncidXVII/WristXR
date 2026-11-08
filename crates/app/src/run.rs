@@ -31,6 +31,8 @@ const CURSOR_LIFT_M: f32 = 0.003;
 const STANDING_HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
 const LAYOUT_POLL: Duration = Duration::from_millis(500);
 const STATS_PERIOD: Duration = Duration::from_secs(1);
+/// Cleanup after quitting gets this long before the process is ended anyway.
+const EXIT_GRACE: Duration = Duration::from_secs(3);
 /// A popped-out window appears this far in front of the hand that pulled it.
 const POP_OUT_DISTANCE_M: f32 = 0.3;
 /// Characters of the chat line that fit on the space bar.
@@ -259,6 +261,12 @@ pub fn run() -> Result<(), String> {
     let updates =
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
     let mut release = None;
+    // SteamVR normally says goodbye with a quit event; if its server dies instead, we notice here and leave too.
+    let steamvr = dvr_sys::ProcessWatch::by_name("vrserver.exe");
+    // Backstop: even if a SteamVR call never returns once SteamVR is gone, the process still ends.
+    if let Some(w) = dvr_sys::ProcessWatch::by_name("vrserver.exe") {
+        w.exit_when_gone(Duration::from_secs(5));
+    }
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
         dvr_sys::pump_messages();
         if let Ok(r) = updates.try_recv() {
@@ -539,6 +547,10 @@ pub fn run() -> Result<(), String> {
             stats_at = Instant::now();
             load = sampler.sample();
             refresh_wrist = true;
+            if steamvr.as_ref().is_some_and(|w| !w.alive()) {
+                tracing::info!("SteamVR server is gone; quitting");
+                break 'frames;
+            }
             let stats = vr.stats();
             for hand in Hand::BOTH {
                 let low = stats.controllers[hand.index()].is_some_and(|b| b < LOW_BATTERY);
@@ -723,6 +735,7 @@ pub fn run() -> Result<(), String> {
         }
         vr.wait_frame(20);
     }
+    dvr_sys::exit_watchdog(EXIT_GRACE);
     session.persist(&engine.panels);
     session.state.save(&state_path).map_err(err)
 }

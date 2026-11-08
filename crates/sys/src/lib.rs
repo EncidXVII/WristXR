@@ -3,9 +3,11 @@
 #![allow(unsafe_code)]
 
 mod media;
+mod process;
 mod toasts;
 
 pub use media::{Media, MediaCommand, MediaInfo};
+pub use process::{Instance, ProcessWatch, exit_watchdog, single_instance, terminate};
 pub use toasts::{Access as ToastAccess, AppToast, AppToasts};
 
 use std::time::{Duration, Instant};
