@@ -10,12 +10,13 @@ use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, ROWS, RSHIFT, SP
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{DEFAULT_WIDTH_M, Hand, MIN_WIDTH_M, Panel, PixelRect, Source, gaze_visibility};
 use dvr_core::raster;
+use dvr_core::state::NotifyFrom;
 use dvr_core::state::State;
 use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
-use dvr_sys::{Media, MediaCommand, MediaInfo};
+use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
 use dvr_ui::{
     KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, WRIST_SIZE, Wrist,
     WristInfo, WristInput, WristLoad,
@@ -36,6 +37,8 @@ const POP_OUT_DISTANCE_M: f32 = 0.3;
 const SPACE_BAR_CHARS: usize = 24;
 /// The watch stays expanded this long after the laser leaves it.
 const WRIST_LINGER_MS: u64 = 1500;
+/// How long a notification from another app (Discord, ...) stays on the watch.
+const APP_TOAST_S: f32 = 6.0;
 /// An added window sits this much closer than the screens so it is never behind one.
 const WINDOW_NEARER: f32 = 0.85;
 
@@ -242,6 +245,8 @@ pub fn run() -> Result<(), String> {
         Listener::bind(dvr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
     session.notifications_ok = notifications.is_some();
     let mut toast: Option<(Toast, Instant)> = None;
+    // Windows notifications from other apps; started only when wanted (Windows may ask for access once).
+    let mut app_toasts = (session.state.notify_from != NotifyFrom::Off).then(AppToasts::start);
     let mut keyboard = Keyboard::new()?;
     let mut faces: Vec<KeyFace> = Vec::with_capacity(80);
     let mut held: Vec<u16> = Vec::with_capacity(8);
@@ -303,19 +308,22 @@ pub fn run() -> Result<(), String> {
         vr.set_exclusive(Hand::BOTH.map(|h| engine.engaged(h)));
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut key_hover: [Option<u16>; 2] = [None; 2];
-        // Popped-out windows can move on the desktop; input maps through their current rectangle.
+        // Popped-out windows can move on the desktop; input maps through their current rectangle. A window that
+        // was closed takes its panel with it.
+        let mut closed = Vec::new();
         for p in &engine.panels {
-            if let (Source::Window(h), Some(s)) = (p.source, surfaces.get_mut(&p.id))
-                && !s.dead
-            {
+            if let (Source::Window(h), Some(s)) = (p.source, surfaces.get_mut(&p.id)) {
                 s.rect = dvr_capture_win::window_rect(h as isize);
                 if s.rect.is_none() {
-                    s.dead = true;
-                    s.capture = None;
-                    s.tex = gpu.image(&raster::placeholder(1280, 720, WINDOW_CLOSED)).map_err(err)?;
-                    s.needs_submit = true;
+                    closed.push(p.id);
                 }
             }
+        }
+        for id in closed {
+            engine.panels.retain(|p| p.id != id);
+            surfaces.remove(&id);
+            vr.remove_panel(id);
+            dirty = Some(Instant::now());
         }
         let mut pop = None;
         session.pointer(&events, &engine.panels, &menu, &toolbar, now);
@@ -419,6 +427,9 @@ pub fn run() -> Result<(), String> {
                 Event::Haptic { .. } => {}
                 Event::HideToggle => {
                     session.toggle_hidden(&mut engine.panels);
+                    if session.state.haptics {
+                        vr.haptic(Hand::Left);
+                    }
                     menu_dirty = true;
                 }
                 Event::NextLanguage => {
@@ -493,6 +504,11 @@ pub fn run() -> Result<(), String> {
                 Effect::NextLanguage => {
                     dvr_input_win::next_layout();
                 }
+                Effect::NotifyFrom(from) => {
+                    if from != NotifyFrom::Off && app_toasts.is_none() {
+                        app_toasts = Some(AppToasts::start());
+                    }
+                }
                 Effect::AutoLaunch(on) => {
                     if let Err(e) = vr.set_auto_launch(APP_KEY, on) {
                         tracing::warn!(%e, "auto-launch change failed");
@@ -552,6 +568,27 @@ pub fn run() -> Result<(), String> {
                 vr.haptic(session.state.dominant.other());
             }
             refresh_wrist = true;
+        }
+        while let Some(t) = app_toasts.as_ref().and_then(AppToasts::poll) {
+            if !session.state.notify_from.accepts(&t.app) {
+                continue;
+            }
+            // Discord's first line already names the sender; other apps get their name in front.
+            let title =
+                if t.app.to_lowercase().contains("discord") { t.title } else { format!("{}: {}", t.app, t.title) };
+            session.notified(&title, &t.body);
+            menu_dirty = true;
+            if session.state.haptics {
+                vr.haptic(session.state.dominant.other());
+            }
+            toast = Some((Toast { title, content: t.body, source_app: t.app, timeout_s: APP_TOAST_S }, Instant::now()));
+            refresh_wrist = true;
+        }
+        let blocked =
+            app_toasts.as_ref().is_some_and(|a| matches!(a.access(), ToastAccess::Denied | ToastAccess::Unavailable));
+        if blocked != session.notify_blocked {
+            session.notify_blocked = blocked;
+            menu_dirty = true;
         }
         if toast.as_ref().is_some_and(|(t, at)| at.elapsed().as_secs_f32() >= t.timeout_s) {
             toast = None;

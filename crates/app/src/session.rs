@@ -7,7 +7,7 @@ use dvr_core::math::Pose;
 use dvr_core::panel::{
     Anchor, Anchors, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
 };
-use dvr_core::state::State;
+use dvr_core::state::{NotifyFrom, State};
 use dvr_ui::{
     MENU_SIZE, Menu, MenuInput, MenuModel, Slot, SlotKind, Strings, TOOLBAR_SIZE, ToolButton, Toolbar, WRIST_SIZE,
 };
@@ -24,7 +24,7 @@ const FADE_S: f32 = 0.15;
 /// Windows listed per page of "Add window".
 const WINDOWS_PER_PAGE: usize = 4;
 /// Notifications kept for the history page (newest first).
-pub const HISTORY_LEN: usize = 4;
+pub const HISTORY_LEN: usize = 3;
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
 
@@ -62,6 +62,8 @@ pub enum Effect {
     AddWindow(u64),
     NextLanguage,
     AutoLaunch(bool),
+    /// Where app notifications come from changed (start or stop listening).
+    NotifyFrom(NotifyFrom),
 }
 
 /// Toolbar buttons, in the order shown.
@@ -107,6 +109,8 @@ pub struct Session {
     pub language: String,
     /// SteamVR starts the overlay with itself (kept by the app).
     pub auto_launch: bool,
+    /// Windows refuses to share app notifications (kept by the app).
+    pub notify_blocked: bool,
     /// Recent notifications (title, body), newest first.
     pub history: std::collections::VecDeque<(String, String)>,
     /// Panel whose toolbar is shown, and when the laser was last on it or its toolbar.
@@ -175,6 +179,7 @@ impl Session {
             windows: Vec::new(),
             language: String::new(),
             auto_launch: false,
+            notify_blocked: false,
             history: std::collections::VecDeque::new(),
             toolbar: None,
             toolbar_seen: 0,
@@ -472,10 +477,21 @@ impl Session {
                         None => hidden(),
                     })
                     .collect();
+                let from = match self.state.notify_from {
+                    NotifyFrom::Discord => t("notify-discord"),
+                    NotifyFrom::AllApps => t("notify-all"),
+                    NotifyFrom::Off => t("notify-off"),
+                };
+                slots.push(action(s.get("menu-notify-from", &[("from", from)]), true));
                 slots.push(action(t("menu-clear"), !self.history.is_empty()));
                 slots.push(action(t("menu-back"), true));
-                let hint =
-                    if self.history.is_empty() { t("menu-notifications-none") } else { t("menu-notifications-hint") };
+                let hint = if self.notify_blocked && self.state.notify_from != NotifyFrom::Off {
+                    t("menu-notify-blocked")
+                } else if self.history.is_empty() {
+                    t("menu-notifications-none")
+                } else {
+                    t("menu-notifications-hint")
+                };
                 (0, t("menu-notifications-title"), hint, slots)
             }
             Page::Windows(page) => {
@@ -561,6 +577,12 @@ impl Session {
         }
     }
 
+    fn close(panels: &mut [Panel]) {
+        if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
+            m.visible = false;
+        }
+    }
+
     fn toggle_keyboard(panels: &mut [Panel], head: Pose) {
         if let Some(k) = find(panels, Source::Keyboard) {
             k.visible = !k.visible;
@@ -612,6 +634,13 @@ impl Session {
                 return fx;
             }
             MenuInput::Slot(i) => i,
+            MenuInput::Close => {
+                self.armed = None;
+                if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
+                    m.visible = false;
+                }
+                return fx;
+            }
         };
         // Destructive buttons need a second tap on the same button; any other click disarms.
         let destructive = matches!((self.page, slot), (Page::Tab(3), 5));
@@ -645,11 +674,13 @@ impl Session {
                     p.visible = false;
                 }
             }
+            // Adding a screen or window closes the menu so the new panel is not hidden behind it.
             (Page::Tab(0), 0) => {
                 if let Some(i) = Self::unshown_monitor(panels, monitors) {
                     let id = next_id(panels);
                     panels.push(self.new_screen(id, i, head, &monitors[i as usize]));
                     fx.push(Effect::Added(id));
+                    Self::close(panels);
                 }
             }
             (Page::Tab(0), 1) => {
@@ -664,6 +695,8 @@ impl Session {
                     && !panels.iter().any(|p| p.source == Source::Window(h))
                 {
                     fx.push(Effect::AddWindow(h));
+                    self.page = Page::Tab(0);
+                    Self::close(panels);
                 }
             }
             (Page::Windows(page), 4) => {
@@ -673,6 +706,10 @@ impl Session {
             }
             (Page::Windows(_), _) => self.page = Page::Tab(0),
             (Page::Tab(0), 5) => self.page = Page::Notifications,
+            (Page::Notifications, 3) => {
+                self.state.notify_from = self.state.notify_from.next();
+                fx.push(Effect::NotifyFrom(self.state.notify_from));
+            }
             (Page::Notifications, 4) => self.history.clear(),
             (Page::Notifications, 5) => self.page = Page::Tab(0),
             (Page::Tab(1), 1) => {

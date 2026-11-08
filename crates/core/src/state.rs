@@ -6,6 +6,34 @@ use std::path::{Path, PathBuf};
 
 pub const APP_DIR_NAME: &str = "DesktopVR";
 
+/// Which other apps' Windows notifications show on the watch.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NotifyFrom {
+    #[default]
+    Discord,
+    AllApps,
+    Off,
+}
+
+impl NotifyFrom {
+    pub fn next(self) -> Self {
+        match self {
+            Self::Discord => Self::AllApps,
+            Self::AllApps => Self::Off,
+            Self::Off => Self::Discord,
+        }
+    }
+
+    /// Whether a notification from the app with this display name should show.
+    pub fn accepts(self, app: &str) -> bool {
+        match self {
+            Self::Discord => app.to_lowercase().contains("discord"),
+            Self::AllApps => true,
+            Self::Off => false,
+        }
+    }
+}
+
 /// The single auto-restored layout.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -29,6 +57,7 @@ pub struct State {
     /// Game fps and CPU / GPU load on the watch.
     pub wrist_load: bool,
     pub wrist_media: bool,
+    pub notify_from: NotifyFrom,
 }
 
 impl Default for State {
@@ -48,6 +77,7 @@ impl Default for State {
             wrist_battery: true,
             wrist_load: false,
             wrist_media: true,
+            notify_from: NotifyFrom::Discord,
         }
     }
 }

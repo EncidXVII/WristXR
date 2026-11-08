@@ -38,7 +38,9 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Wrist watch that stays out of the way**: just the time and batteries, shown only while you look at your
   wrist. Point at it for Menu, Keyboard, Hide all, media controls, fps / load and this overlay's own cost.
   Notifications pop up on it; the last few stay in Menu > Notifications.
-- **Notifications**: works with apps that already send XSOverlay notifications (UDP 42069).
+- **Discord notifications on your wrist**: Discord messages (or, if you choose, any app's Windows notifications)
+  pop up on the watch with a buzz, no Discord login or bot needed. Apps that send XSOverlay notifications
+  (UDP 42069) work too.
 - **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
   other hand keeps playing.
 - **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
@@ -133,7 +135,8 @@ GPU model, monitor resolutions; no names, paths or identifiers). Attach it to a
 ## Privacy
 
 No telemetry. Network use: a GitHub release check (no identifiers), VRChat OSC on localhost, the notification
-API on localhost. Nothing else.
+API on localhost. Nothing else. Windows notifications (Discord by default) are read on your PC only to show them
+on the watch; they are never stored on disk or sent anywhere. Switch it off in Menu > Notifications.
 
 ## Building from source
 

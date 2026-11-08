@@ -30,6 +30,7 @@ tray-icon = "0.26"
 insta = "1"
 slint = { version = "1", default-features = false, features = ["std", "compat-1-2", "renderer-software", "software-renderer-systemfonts"] }
 windows = { version = "0.61", features = [
+    "ApplicationModel",
     "Foundation",
     "Graphics",
     "Graphics_Capture",
@@ -37,6 +38,8 @@ windows = { version = "0.61", features = [
     "Graphics_DirectX_Direct3D11",
     "Media",
     "Media_Control",
+    "UI_Notifications",
+    "UI_Notifications_Management",
     "Win32_Media_Audio",
     "Win32_Foundation",
     "Win32_Globalization",

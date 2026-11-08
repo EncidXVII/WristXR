@@ -156,9 +156,11 @@ impl Panel {
 
     /// World pose for a toolbar of `aspect` centred under this panel (whose world pose is `world`), a little in
     /// front so it never hides behind the panel.
+    /// The keyboard's toolbar sits above it instead: below would be in your lap.
     pub fn toolbar_pose(&self, world: Pose, aspect: f32) -> Pose {
-        let drop = self.height_m() * 0.5 + TOOLBAR_GAP_M + TOOLBAR_WIDTH_M * aspect * 0.5;
-        Pose::new(world.transform_point(Vec3::new(0.0, -drop, 0.005)), world.rot)
+        let offset = self.height_m() * 0.5 + TOOLBAR_GAP_M + TOOLBAR_WIDTH_M * aspect * 0.5;
+        let y = if self.source == Source::Keyboard { offset } else { -offset };
+        Pose::new(world.transform_point(Vec3::new(0.0, y, 0.005)), world.rot)
     }
 
     /// Hand the panel is attached to (left when it is in the world).

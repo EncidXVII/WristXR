@@ -3,8 +3,10 @@
 #![allow(unsafe_code)]
 
 mod media;
+mod toasts;
 
 pub use media::{Media, MediaCommand, MediaInfo};
+pub use toasts::{Access as ToastAccess, AppToast, AppToasts};
 
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::FILETIME;

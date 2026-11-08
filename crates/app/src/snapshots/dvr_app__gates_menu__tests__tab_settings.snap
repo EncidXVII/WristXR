@@ -21,7 +21,7 @@ MenuModel {
             kind: Action,
         },
         Slot {
-            label: "Start with SteamVR",
+            label: "Auto-start",
             on: false,
             enabled: true,
             kind: Toggle,

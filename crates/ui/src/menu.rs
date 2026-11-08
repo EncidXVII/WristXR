@@ -18,7 +18,9 @@ slint::slint! {
         in property <string> body;
         in property <string> on-text;
         in property <string> off-text;
+        in property <string> close-text;
         callback tab-clicked(int);
+        callback close-clicked;
         callback slot-clicked(int);
         width: 800px;
         height: 600px;
@@ -33,7 +35,13 @@ slint::slint! {
             Text { text: name; font-size: 28px; font-weight: i == root.tab ? 700 : 400; color: i == root.tab ? #C6FF1A : #AAA49B; }
             tab-touch := TouchArea { clicked => { root.tab-clicked(i); } }
         }
-        Text { x: 32px; y: 104px; text: root.heading; font-size: 40px; font-weight: 700; color: #F4F1EC; }
+        Text { x: 32px; y: 104px; width: 600px; text: root.heading; font-size: 40px; font-weight: 700; color: #F4F1EC; overflow: elide; }
+        if root.tabs.length > 0 : Rectangle {
+            x: 648px; y: 100px; width: 120px; height: 56px;
+            background: close-touch.has-hover ? #2A2622 : #1F1C18;
+            Text { text: root.close-text; font-size: 26px; color: #F4F1EC; }
+            close-touch := TouchArea { clicked => { root.close-clicked(); } }
+        }
         Text { x: 32px; y: 160px; width: 736px; text: root.subtitle; font-size: 28px; color: #AAA49B; overflow: elide; }
         if root.body != "" : Text {
             x: 32px; y: 216px; width: 736px; height: 240px;
@@ -81,6 +89,11 @@ pub fn tab_center(i: usize) -> (f32, f32) {
     (i as f32 * 200.0 + 100.0, 44.0)
 }
 
+/// Center of the Close button (shown with the tabs, not during first run).
+pub fn close_center() -> (f32, f32) {
+    (708.0, 128.0)
+}
+
 /// Center of button slot `i` (row-major, 2 columns).
 pub fn slot_center(i: usize) -> (f32, f32) {
     (32.0 + (i % 2) as f32 * 376.0 + 180.0, 216.0 + (i / 2) as f32 * 128.0 + 56.0)
@@ -126,6 +139,7 @@ pub struct MenuModel {
 pub enum MenuInput {
     Tab(usize),
     Slot(usize),
+    Close,
 }
 
 pub struct Menu {
@@ -146,9 +160,12 @@ impl Menu {
         view.on_tab_clicked(move |i| q.borrow_mut().push(MenuInput::Tab(i.max(0) as usize)));
         let q = inputs.clone();
         view.on_slot_clicked(move |i| q.borrow_mut().push(MenuInput::Slot(i.max(0) as usize)));
+        let q = inputs.clone();
+        view.on_close_clicked(move || q.borrow_mut().push(MenuInput::Close));
         let strings = crate::Strings::english()?;
         view.set_on_text(strings.get("menu-on", &[]).into());
         view.set_off_text(strings.get("menu-off", &[]).into());
+        view.set_close_text(strings.get("menu-close", &[]).into());
         Ok(Self { view, canvas, inputs, shown: MenuModel::default() })
     }
 

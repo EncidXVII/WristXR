@@ -8,7 +8,7 @@ mod toolbar;
 
 pub use i18n::Strings;
 pub use keyboard::{KEYBOARD_SIZE, KeyFace, Keyboard};
-pub use menu::{MENU_SIZE, Menu, MenuInput, MenuModel, SLOTS, Slot, SlotKind, slot_center, tab_center};
+pub use menu::{MENU_SIZE, Menu, MenuInput, MenuModel, SLOTS, Slot, SlotKind, close_center, slot_center, tab_center};
 pub use toolbar::{TOOLBAR_SIZE, ToolButton, Toolbar, toolbar_button_center};
 
 use slint::platform::software_renderer::{MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType};

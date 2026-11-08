@@ -5,7 +5,9 @@ use crate::session::{Effect, MonitorInfo, Page, Session, TEST_WORD};
 use dvr_core::engine::{Event, HIDE_HOLD_MS};
 use dvr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
 use dvr_core::state::State;
-use dvr_ui::{MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, slot_center, tab_center, toolbar_button_center};
+use dvr_ui::{
+    MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, close_center, slot_center, tab_center, toolbar_button_center,
+};
 
 const FIRST_RUN_BUDGET_MS: u64 = 60_000;
 
@@ -194,9 +196,12 @@ pub fn first_run_and_menu() -> GateResult {
     c.session.windows = vec![(77, "Notes".into()), (78, "Browser".into())];
     c.pump();
     c.click(slot_center(1))?;
-    if !c.effects.contains(&Effect::AddWindow(78)) {
-        return Err("picking a window must add it".into());
+    if !c.effects.contains(&Effect::AddWindow(78)) || c.session.menu_open(&c.rig.engine.panels) {
+        return Err("picking a window must add it and close the menu so it is visible".into());
     }
+    c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
+    c.pump();
+    c.click(slot_center(1))?;
     c.click(slot_center(5))?;
     if c.session.page != Page::Tab(0) {
         return Err("Back must return to the Panels tab".into());
@@ -210,6 +215,10 @@ pub fn first_run_and_menu() -> GateResult {
     let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
     if c.session.page != Page::Notifications || !model.slots[0].label.starts_with("Steam") {
         return Err(format!("history must list newest first, page {:?}", c.session.page));
+    }
+    c.click(slot_center(3))?;
+    if !c.effects.contains(&Effect::NotifyFrom(dvr_core::state::NotifyFrom::AllApps)) {
+        return Err("From: must cycle Discord -> All apps".into());
     }
     c.click(slot_center(4))?;
     c.click(slot_center(5))?;
@@ -254,8 +263,11 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("second tap on Quit must quit".into());
     }
 
-    // Toolbar close removes the screen (the menu is closed so it can't block the laser).
-    c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
+    // The menu's Close button; then toolbar close removes the screen.
+    c.click(close_center())?;
+    if c.session.menu_open(&c.rig.engine.panels) {
+        return Err("Close must close the menu".into());
+    }
     c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
     c.rig.frames(2);
     c.pump();
