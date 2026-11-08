@@ -18,6 +18,10 @@ pub const UP: u16 = EXT | 0x48;
 pub const LEFT: u16 = EXT | 0x4B;
 pub const RIGHT: u16 = EXT | 0x4D;
 pub const DOWN: u16 = EXT | 0x50;
+pub const DEL: u16 = EXT | 0x53;
+/// Windows key: a latch like Ctrl (Win + next key); tapped again while lit it presses Win alone (Start menu).
+pub const LWIN: u16 = EXT | 0x5B;
+pub const F1: u16 = 0x3B;
 /// Not a real key: toggles "send to VRChat chatbox" and is never sent to the OS.
 pub const CHAT: u16 = 0xF100;
 /// Not a real key: switches to the next installed input language; its face shows the current one.
@@ -41,7 +45,9 @@ const fn kw(sc: u16, w: f32, label: &'static str) -> KeyDef {
 pub const ROW_UNITS: f32 = 15.0;
 
 #[rustfmt::skip]
-pub static ROWS: [&[KeyDef]; 5] = [
+pub static ROWS: [&[KeyDef]; 6] = [
+    &[kw(ESC, 1.5, "Esc"), k(F1, "F1"), k(0x3C, "F2"), k(0x3D, "F3"), k(0x3E, "F4"), k(0x3F, "F5"), k(0x40, "F6"),
+      k(0x41, "F7"), k(0x42, "F8"), k(0x43, "F9"), k(0x44, "F10"), k(0x57, "F11"), k(0x58, "F12"), kw(DEL, 1.5, "Del")],
     &[k(0x29, "`"), k(0x02, "1"), k(0x03, "2"), k(0x04, "3"), k(0x05, "4"), k(0x06, "5"), k(0x07, "6"),
       k(0x08, "7"), k(0x09, "8"), k(0x0A, "9"), k(0x0B, "0"), k(0x0C, "-"), k(0x0D, "="), kw(BACKSPACE, 2.0, "Bksp")],
     &[kw(TAB, 1.5, "Tab"), k(0x10, "q"), k(0x11, "w"), k(0x12, "e"), k(0x13, "r"), k(0x14, "t"), k(0x15, "y"),
@@ -50,8 +56,8 @@ pub static ROWS: [&[KeyDef]; 5] = [
       k(0x24, "j"), k(0x25, "k"), k(0x26, "l"), k(0x27, ";"), k(0x28, "'"), kw(ENTER, 2.25, "Enter")],
     &[kw(LSHIFT, 1.25, "Shift"), k(0x56, "<"), k(0x2C, "z"), k(0x2D, "x"), k(0x2E, "c"), k(0x2F, "v"), k(0x30, "b"),
       k(0x31, "n"), k(0x32, "m"), k(0x33, ","), k(0x34, "."), k(0x35, "/"), kw(RSHIFT, 2.75, "Shift")],
-    &[k(ESC, "Esc"), kw(LCTRL, 1.5, "Ctrl"), kw(LALT, 1.5, "Alt"), k(CHAT, "Chat"), k(LANG, "Lang"), kw(SPACE, 5.0, " "),
-      k(LEFT, "<"), k(UP, "^"), k(DOWN, "v"), k(RIGHT, ">")],
+    &[kw(LCTRL, 1.25, "Ctrl"), kw(LWIN, 1.25, "Win"), kw(LALT, 1.25, "Alt"), kw(SPACE, 5.25, " "), k(CHAT, "Chat"),
+      k(LANG, "Lang"), k(LEFT, "←"), k(UP, "↑"), k(DOWN, "↓"), k(RIGHT, "→")],
 ];
 
 pub fn key_at(uv: [f32; 2]) -> Option<&'static KeyDef> {
@@ -87,13 +93,16 @@ pub fn key_for_label(label: &str) -> Option<&'static KeyDef> {
     ROWS.iter().flat_map(|r| r.iter()).find(|k| k.label == label)
 }
 
-const MODS: [u16; 3] = [LSHIFT, LCTRL, LALT];
+const MODS: [u16; 4] = [LSHIFT, LCTRL, LALT, LWIN];
+/// Win tapped while lit: a plain Win press (not a latch toggle).
+const PLAIN: u8 = 0x80;
 
 fn modifier_bit(sc: u16) -> Option<u8> {
     match sc {
         LSHIFT | RSHIFT => Some(1),
         LCTRL => Some(2),
         LALT => Some(4),
+        LWIN => Some(8),
         _ => None,
     }
 }
@@ -109,7 +118,7 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
-    /// Bit 1 = Shift, 2 = Ctrl, 4 = Alt.
+    /// Bit 1 = Shift, 2 = Ctrl, 4 = Alt, 8 = Win.
     pub fn latched(&self) -> u8 {
         self.latched
     }
@@ -125,8 +134,20 @@ impl Keyboard {
             return 0;
         }
         if let Some(bit) = modifier_bit(sc) {
-            self.latched ^= bit;
-            return 0;
+            if !(sc == LWIN && self.latched & bit != 0) {
+                self.latched ^= bit;
+                return 0;
+            }
+            // Win, Win: open Start (Win pressed on its own, with whatever else is latched).
+            self.latched &= !bit;
+            let mods = std::mem::take(&mut self.latched);
+            for (i, m) in MODS.iter().enumerate() {
+                if mods & (1 << i) != 0 {
+                    out.push(Event::Key { scancode: *m, down: true });
+                }
+            }
+            out.push(Event::Key { scancode: sc, down: true });
+            return mods | PLAIN;
         }
         let mods = std::mem::take(&mut self.latched);
         for (i, m) in MODS.iter().enumerate() {
@@ -139,7 +160,7 @@ impl Keyboard {
     }
 
     pub fn release(&mut self, sc: u16, mods: u8, out: &mut Vec<Event>) {
-        if sc == CHAT || sc == LANG || modifier_bit(sc).is_some() {
+        if sc == CHAT || sc == LANG || (modifier_bit(sc).is_some() && mods & PLAIN == 0) {
             return;
         }
         out.push(Event::Key { scancode: sc, down: false });
@@ -161,6 +182,27 @@ mod tests {
             let units: f32 = row.iter().map(|k| k.w).sum();
             assert!((units - ROW_UNITS).abs() < 1e-4);
         }
+    }
+
+    #[test]
+    fn win_latches_and_win_win_opens_start() {
+        let mut kb = Keyboard::default();
+        let mut out = Vec::new();
+        assert_eq!(kb.press(LWIN, &mut out), 0);
+        assert_eq!(kb.latched(), 8);
+        let mods = kb.press(0x20, &mut out); // Win + D
+        kb.release(0x20, mods, &mut out);
+        let keys: Vec<(u16, bool)> = out
+            .iter()
+            .filter_map(|e| if let Event::Key { scancode, down } = *e { Some((scancode, down)) } else { None })
+            .collect();
+        assert_eq!(keys, vec![(LWIN, true), (0x20, true), (0x20, false), (LWIN, false)]);
+        out.clear();
+        kb.press(LWIN, &mut out);
+        let mods = kb.press(LWIN, &mut out);
+        kb.release(LWIN, mods, &mut out);
+        assert_eq!(kb.latched(), 0);
+        assert_eq!(out, vec![Event::Key { scancode: LWIN, down: true }, Event::Key { scancode: LWIN, down: false }]);
     }
 
     #[test]

@@ -6,7 +6,7 @@ use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
-use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, ROWS, RSHIFT, SPACE};
+use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{DEFAULT_WIDTH_M, Hand, MIN_WIDTH_M, Panel, PixelRect, Source, gaze_visibility};
 use dvr_core::raster;
@@ -672,6 +672,7 @@ pub fn run() -> Result<(), String> {
                     || (matches!(sc, LSHIFT | RSHIFT) && latched & 1 != 0)
                     || (sc == LCTRL && latched & 2 != 0)
                     || (sc == LALT && latched & 4 != 0)
+                    || (sc == LWIN && latched & 8 != 0)
             };
             let chat_line = session.state.chatbox.then_some(chat.text());
             key_faces(&mut faces, &labels, chat_line, lit, &key_hover);

@@ -10,7 +10,7 @@ slint::slint! {
     export component KeyboardView inherits Window {
         in property <[KeyView]> keys;
         width: 1500px;
-        height: 500px;
+        height: 600px;
         background: #0C0B0A;
         for key in root.keys : Rectangle {
             x: key.x + 6px;
@@ -31,7 +31,7 @@ slint::slint! {
 }
 
 /// 100 px per key unit.
-pub const KEYBOARD_SIZE: (u32, u32) = (1500, 500);
+pub const KEYBOARD_SIZE: (u32, u32) = (1500, 600);
 const UNIT: f32 = 100.0;
 
 /// What one key shows, in `dvr_core::keyboard::ROWS` order.

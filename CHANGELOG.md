@@ -28,7 +28,8 @@ First public early-access release (Windows).
 - VRChat chatbox Chat mode over OSC and "share now playing".
 - Minimal wrist watch (time, batteries) that shows only while you look at it; pointing at it opens Menu,
   Keyboard, Hide all, media controls and fps / load / own cost. Each part can be switched off.
-- Keyboard language key cycling the installed Windows input languages.
+- Keyboard language key cycling the installed Windows input languages; function row (Esc, F1–F12, Del), Win key
+  (Win + key, or Win twice for Start) and arrow keys.
 - Settings: pointing hand, start with SteamVR, vibration, curved screens by default, update check.
 - XSOverlay notification API compatibility (UDP 42069) and XSOverlay settings import on first run.
 - Four-step first run, menu (Panels, Keyboard, Wrist, Settings), tray icon, start with SteamVR.
