@@ -45,6 +45,30 @@ MenuModel {
             kind: Toggle,
         },
         Slot {
+            label: "Laser smoothing",
+            on: true,
+            enabled: true,
+            kind: Toggle,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
             label: "Quit overlay",
             on: false,
             enabled: true,

@@ -27,7 +27,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   the pointer out of it.
 - **Panel toolbar**: point at a screen or window and a toolbar appears under it: lock, curve, smaller / bigger,
   opacity, anchor (world, hand, or head-locked HUD that follows your view), close.
-- **Hide everything with one button**: hold the left menu button to fade all panels out (and back in). Hidden
+- **Hide everything with one button**: double-tap the left menu button, like XSOverlay, to fade screens, windows
+  and keyboard out (and back in). Hidden
   panels stop capturing, so they cost nothing.
 - **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
   Hovering never clicks, and hand tremor is smoothed out without making fast aiming lag.
@@ -69,8 +70,8 @@ pointing hand, typing sounds, curved screens and default opacity. Nothing in XSO
 
 | You did this before | Do this here |
 |---|---|
-| Open the overlay menu | Double-tap the left menu button, or point at your watch and press Menu |
-| Toggle all overlays | Hold the left menu button |
+| Open the overlay menu | Point at your watch and press Menu (or the tray icon) |
+| Toggle all overlays | Double-tap the left menu button, same as XSOverlay |
 | Add a window | Menu > Add window, or grip a screen and yank the window toward you |
 | Window toolbar (opacity, size, close...) | Point at the window: the toolbar appears under it |
 | Type into VRChat | Press **Chat** on the keyboard |
@@ -84,7 +85,9 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
 - **Point at a panel**: its toolbar appears underneath (lock, curve, size, opacity, World / Hand / Head, close).
-- **Left menu button**: double-tap for the menu, hold to hide or show everything.
+- **Left menu button**: double-tap to hide or show screens, windows and keyboard.
+- **Toolbar Reset** puts a panel back in front of you; **Menu > Reset layout** arranges all screens and windows
+  in an arc in front of you.
 - **Watch**: look at your wrist to see it; point at it with the other hand for Menu, Keyboard and Hide all.
 - **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
   key switches input language.

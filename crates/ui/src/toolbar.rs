@@ -11,18 +11,18 @@ slint::slint! {
     export component ToolbarView inherits Window {
         in property <[ToolView]> buttons;
         callback clicked(int);
-        width: 720px;
-        height: 96px;
+        width: 760px;
+        height: 88px;
         background: transparent;
         for b[i] in root.buttons : Rectangle {
-            x: (root.width - root.buttons.length * 104px + 8px) / 2 + i * 104px;
+            x: (root.width - root.buttons.length * 94px + 6px) / 2 + i * 94px;
             y: 0px;
-            width: 96px;
-            height: 96px;
+            width: 88px;
+            height: 88px;
             background: b.on ? #C6FF1A : touch.has-hover ? #2A2622 : #1F1C18;
             Text {
                 text: b.label;
-                font-size: 26px;
+                font-size: 24px;
                 font-weight: b.on ? 700 : 400;
                 color: b.on ? #0C0B0A : b.danger ? #FF5A3C : #F4F1EC;
             }
@@ -31,12 +31,12 @@ slint::slint! {
     }
 }
 
-pub const TOOLBAR_SIZE: (u32, u32) = (720, 96);
+pub const TOOLBAR_SIZE: (u32, u32) = (760, 88);
 
 /// Center of button `i` of `n`, in toolbar pixels (matches the layout above).
 pub fn toolbar_button_center(i: usize, n: usize) -> (f32, f32) {
-    let left = (TOOLBAR_SIZE.0 as f32 - n as f32 * 104.0 + 8.0) / 2.0;
-    (left + i as f32 * 104.0 + 48.0, 48.0)
+    let left = (TOOLBAR_SIZE.0 as f32 - n as f32 * 94.0 + 6.0) / 2.0;
+    (left + i as f32 * 94.0 + 44.0, 44.0)
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

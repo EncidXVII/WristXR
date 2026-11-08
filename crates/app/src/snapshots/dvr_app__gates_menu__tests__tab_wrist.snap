@@ -11,7 +11,7 @@ MenuModel {
     ],
     tab: 2,
     title: "Wrist",
-    subtitle: "Point at the watch for Menu, Keyboard and Hide all.",
+    subtitle: "Look at it for the time; point at it for Menu, Keyboard, Hide all.",
     body: "",
     slots: [
         Slot {

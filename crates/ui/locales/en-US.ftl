@@ -5,6 +5,7 @@ wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · overlay { $own } ms
 wrist-menu = Menu
 wrist-keyboard = Keyboard
 wrist-hide = Hide all
+wrist-show = Show all
 menu-tab-panels = Panels
 menu-tab-keyboard = Keyboard
 menu-tab-wrist = Wrist
@@ -12,12 +13,16 @@ menu-tab-settings = Settings
 hand-left = left
 hand-right = right
 menu-panels-title = Screens and windows
-menu-panels-hint = Point at a screen for its toolbar. Hold left menu to hide all.
+menu-panels-hint = Point at a screen for its toolbar. Double-tap left menu: hide / show.
 menu-add-monitor = Add screen { $n }
 menu-add-monitor-none = All screens shown
 menu-add-window = Add window
 menu-recenter = Recenter
 menu-hide-all = Hide all
+menu-show-all = Show all
+menu-reset-layout = Reset layout
+menu-smoothing = Laser smoothing
+tool-reset = Reset
 menu-windows-title = Add a window
 menu-windows-hint = Open windows, front to back
 menu-windows-none = No windows to add
@@ -49,7 +54,7 @@ menu-chat = Chat mode
 menu-sounds = Typing sounds
 menu-now-playing = Share song
 menu-wrist-title = Wrist
-menu-wrist-hint = Point at the watch for Menu, Keyboard and Hide all.
+menu-wrist-hint = Look at it for the time; point at it for Menu, Keyboard, Hide all.
 menu-show-wrist = Watch
 menu-wrist-on = On { $hand } wrist
 menu-wrist-fade = Only when looking
@@ -96,8 +101,8 @@ first-tips-title = Good to know
 first-tips-hint = Step 4 of 4
 first-tips-body =
     Trigger: click · hold: right click · hold and move: drag
-    Point at a screen for its toolbar · thumbstick: scroll
+    Point at a screen: its toolbar (size, opacity, reset, close)
     Grip: move · both hands: resize · yank: pop out a window
-    Left menu: double-tap for this menu, hold to hide all
-    Look at your wrist for the time, point at it for more
+    Double-tap the left menu button: hide / show everything
+    Look at your wrist for the time; point at it for the menu
 first-got-it = Got it

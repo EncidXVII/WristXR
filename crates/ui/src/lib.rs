@@ -23,11 +23,12 @@ slint::slint! {
     // design-tokens.json "Night Lime (warm)": 2 weights, 1 accent, warm grays. Fixed geometry (tests press buttons).
     component WristButton inherits Rectangle {
         in property <string> label;
+        in property <bool> on;
         callback clicked;
         width: 176px;
         height: 72px;
-        background: touch.has-hover ? #2A2622 : #1F1C18;
-        Text { text: root.label; font-size: 28px; color: #F4F1EC; }
+        background: root.on ? #C6FF1A : touch.has-hover ? #2A2622 : #1F1C18;
+        Text { text: root.label; font-size: 28px; color: root.on ? #0C0B0A : #F4F1EC; }
         touch := TouchArea { clicked => { root.clicked(); } }
     }
 
@@ -45,6 +46,8 @@ slint::slint! {
         in property <string> menu-label;
         in property <string> keyboard-label;
         in property <string> hide-label;
+        in property <bool> keyboard-on;
+        in property <bool> hidden;
         in property <string> prev-label;
         in property <string> play-label;
         in property <string> next-label;
@@ -62,8 +65,8 @@ slint::slint! {
             }
         }
         if root.expanded : WristButton { x: 0px; y: 144px; label: root.menu-label; clicked => { root.action(0); } }
-        if root.expanded : WristButton { x: 192px; y: 144px; label: root.keyboard-label; clicked => { root.action(1); } }
-        if root.expanded : WristButton { x: 384px; y: 144px; label: root.hide-label; clicked => { root.action(2); } }
+        if root.expanded : WristButton { x: 192px; y: 144px; label: root.keyboard-label; on: root.keyboard-on; clicked => { root.action(1); } }
+        if root.expanded : WristButton { x: 384px; y: 144px; label: root.hide-label; on: root.hidden; clicked => { root.action(2); } }
         if root.expanded && root.media != "" : Rectangle {
             x: 0px; y: 224px; width: 560px; height: 40px; background: #0C0B0A;
             Text { x: 16px; width: 528px; text: root.media; font-size: 26px; color: #F4F1EC; overflow: elide; }
@@ -204,6 +207,10 @@ pub struct WristInfo {
     pub lowest_tracker: Option<f32>,
     /// Quick actions, media and load are shown (the other hand's laser is on the watch).
     pub expanded: bool,
+    /// Screens and windows are hidden (the Hide all button reads Show all, lit).
+    pub hidden: bool,
+    /// The keyboard is out (its button is lit).
+    pub keyboard: bool,
     /// fps / load / overlay cost line; `None` when switched off.
     pub load: Option<WristLoad>,
     pub toast: Option<(String, String)>,
@@ -253,7 +260,6 @@ impl Wrist {
         let t = |id: &str| strings.get(id, &[]).into();
         view.set_menu_label(t("wrist-menu"));
         view.set_keyboard_label(t("wrist-keyboard"));
-        view.set_hide_label(t("wrist-hide"));
         view.set_prev_label(t("wrist-prev"));
         view.set_next_label(t("wrist-next"));
         Ok(Self { view, canvas, strings, inputs })
@@ -274,6 +280,9 @@ impl Wrist {
         };
         self.view.set_status(status.into());
         self.view.set_expanded(w.expanded);
+        self.view.set_hidden(w.hidden);
+        self.view.set_keyboard_on(w.keyboard);
+        self.view.set_hide_label(s.get(if w.hidden { "wrist-show" } else { "wrist-hide" }, &[]).into());
         let detail = w.load.as_ref().map_or_else(String::new, |l| {
             let fps = l.game_fps.map_or_else(|| s.get("wrist-no-game", &[]), |f| format!("{f:.0}"));
             let args = [

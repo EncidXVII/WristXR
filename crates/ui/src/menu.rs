@@ -1,4 +1,4 @@
-//! In-VR menu: tabs, a title, and a fixed 2x3 grid of large buttons. Content and wording come from the app;
+//! In-VR menu: tabs, a title, and a fixed 2x5 grid of compact buttons. Content and wording come from the app;
 //! this view only draws and reports which tab/slot was clicked. Geometry is fixed so tests can click it.
 use crate::{Canvas, ensure_platform};
 use slint::{ComponentHandle, ModelRc, SharedString, VecModel};
@@ -30,28 +30,28 @@ slint::slint! {
             x: i * 200px;
             y: 0px;
             width: 200px;
-            height: 88px;
+            height: 72px;
             background: i == root.tab ? #1F1C18 : tab-touch.has-hover ? #15130F : transparent;
-            Text { text: name; font-size: 28px; font-weight: i == root.tab ? 700 : 400; color: i == root.tab ? #C6FF1A : #AAA49B; }
+            Text { text: name; font-size: 26px; font-weight: i == root.tab ? 700 : 400; color: i == root.tab ? #C6FF1A : #AAA49B; }
             tab-touch := TouchArea { clicked => { root.tab-clicked(i); } }
         }
-        Text { x: 32px; y: 104px; width: 600px; text: root.heading; font-size: 40px; font-weight: 700; color: #F4F1EC; overflow: elide; }
+        Text { x: 32px; y: 82px; width: 600px; text: root.heading; font-size: 32px; font-weight: 700; color: #F4F1EC; overflow: elide; }
         if root.tabs.length > 0 : Rectangle {
-            x: 648px; y: 100px; width: 120px; height: 56px;
+            x: 648px; y: 80px; width: 120px; height: 48px;
             background: close-touch.has-hover ? #2A2622 : #1F1C18;
-            Text { text: root.close-text; font-size: 26px; color: #F4F1EC; }
+            Text { text: root.close-text; font-size: 24px; color: #F4F1EC; }
             close-touch := TouchArea { clicked => { root.close-clicked(); } }
         }
-        Text { x: 32px; y: 160px; width: 736px; text: root.subtitle; font-size: 28px; color: #AAA49B; overflow: elide; }
+        Text { x: 32px; y: 128px; width: 736px; text: root.subtitle; font-size: 24px; color: #AAA49B; overflow: elide; }
         if root.body != "" : Text {
-            x: 32px; y: 216px; width: 736px; height: 240px;
-            text: root.body; font-size: 28px; color: #F4F1EC; wrap: word-wrap;
+            x: 32px; y: 172px; width: 736px; height: 300px;
+            text: root.body; font-size: 26px; color: #F4F1EC; wrap: word-wrap;
         }
         for slot[i] in root.slots : Rectangle {
             x: 32px + mod(i, 2) * 376px;
-            y: 216px + floor(i / 2) * 128px;
+            y: 172px + floor(i / 2) * 84px;
             width: 360px;
-            height: 112px;
+            height: 76px;
             visible: slot.kind != 4;
             opacity: slot.enabled ? 1.0 : 0.4;
             background: slot.kind == 2 && slot.on ? #C6FF1A
@@ -63,16 +63,16 @@ slint::slint! {
                 text: slot.label;
                 horizontal-alignment: center;
                 overflow: elide;
-                font-size: 30px;
+                font-size: 26px;
                 color: slot.on && (slot.kind == 2 || slot.kind == 3) ? #0C0B0A : slot.kind == 3 ? #FF5A3C : #F4F1EC;
             }
             if slot.kind == 1 : Text {
-                x: 24px; width: parent.width - 120px; text: slot.label; font-size: 30px; color: #F4F1EC; overflow: elide;
+                x: 24px; width: parent.width - 120px; text: slot.label; font-size: 26px; color: #F4F1EC; overflow: elide;
             }
             if slot.kind == 1 : Text {
                 x: parent.width - self.width - 24px;
                 text: slot.on ? root.on-text : root.off-text;
-                font-size: 28px;
+                font-size: 24px;
                 font-weight: slot.on ? 700 : 400;
                 color: slot.on ? #C6FF1A : #AAA49B;
             }
@@ -82,21 +82,21 @@ slint::slint! {
 }
 
 pub const MENU_SIZE: (u32, u32) = (800, 600);
-pub const SLOTS: usize = 6;
+pub const SLOTS: usize = 10;
 
 /// Center of tab `i` in menu pixels (matches the Slint layout above).
 pub fn tab_center(i: usize) -> (f32, f32) {
-    (i as f32 * 200.0 + 100.0, 44.0)
+    (i as f32 * 200.0 + 100.0, 36.0)
 }
 
 /// Center of the Close button (shown with the tabs, not during first run).
 pub fn close_center() -> (f32, f32) {
-    (708.0, 128.0)
+    (708.0, 104.0)
 }
 
-/// Center of button slot `i` (row-major, 2 columns).
+/// Center of button slot `i` (row-major, 2 columns, 5 rows).
 pub fn slot_center(i: usize) -> (f32, f32) {
-    (32.0 + (i % 2) as f32 * 376.0 + 180.0, 216.0 + (i / 2) as f32 * 128.0 + 56.0)
+    (32.0 + (i % 2) as f32 * 376.0 + 180.0, 172.0 + (i / 2) as f32 * 84.0 + 38.0)
 }
 
 /// How a button looks and what `on` means for it.

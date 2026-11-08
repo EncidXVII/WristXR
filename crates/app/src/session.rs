@@ -5,7 +5,8 @@ use dvr_core::chat::ChatLine;
 use dvr_core::engine::{Event, MouseButton};
 use dvr_core::math::Pose;
 use dvr_core::panel::{
-    Anchor, Anchors, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
+    Anchor, Anchors, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect,
+    Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
 };
 use dvr_core::state::{NotifyFrom, State};
 use dvr_ui::{
@@ -19,12 +20,19 @@ const TABS: usize = 4;
 const SIZE_STEP: f32 = 1.25;
 /// The toolbar stays this long after the laser leaves its panel (time to move down onto it).
 const TOOLBAR_LINGER_MS: u64 = 1500;
-/// Fades (hide-all, the watch) take about this long.
+/// Hide / show fades take about this long; the watch reacts faster to a glance.
 const FADE_S: f32 = 0.15;
+const WATCH_FADE_S: f32 = 0.06;
 /// Windows listed per page of "Add window".
-const WINDOWS_PER_PAGE: usize = 4;
+const WINDOWS_PER_PAGE: usize = 8;
 /// Notifications kept for the history page (newest first).
-pub const HISTORY_LEN: usize = 3;
+pub const HISTORY_LEN: usize = 6;
+/// An added window sits this much closer than the screens so it is never behind one.
+pub const WINDOW_NEARER: f32 = 0.85;
+/// Gap between screens when the layout is reset (radians of the arc around you).
+const LAYOUT_GAP_RAD: f32 = 0.04;
+/// Menu slots that act; the rest of the 2x5 grid stays empty.
+const QUIT_SLOT: usize = 9;
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
 
@@ -75,12 +83,14 @@ pub enum Tool {
     Bigger,
     Opacity,
     Attach,
+    /// Back in front of you at its default place (and size, for screens and the keyboard).
+    Reset,
     Close,
 }
 
 const SCREEN_TOOLS: &[Tool] =
-    &[Tool::Lock, Tool::Curve, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Attach, Tool::Close];
-const KEYBOARD_TOOLS: &[Tool] = &[Tool::Lock, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Close];
+    &[Tool::Lock, Tool::Curve, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Attach, Tool::Reset, Tool::Close];
+const KEYBOARD_TOOLS: &[Tool] = &[Tool::Lock, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Reset, Tool::Close];
 
 fn tools(source: Source) -> &'static [Tool] {
     match source {
@@ -203,26 +213,71 @@ impl Session {
             }
             m.visible = !open;
         }
-        if !open {
-            self.hidden = false;
-        }
     }
 
-    /// Hold left menu / Hide all: fade screens, windows and keyboard out or back in. Hiding closes the menu.
-    pub fn toggle_hidden(&mut self, panels: &mut [Panel]) {
+    /// Double-tap left menu / Hide all (as in XSOverlay): fade screens, windows and keyboard out, or bring them all
+    /// back, the keyboard included. The menu and watch stay.
+    pub fn toggle_hidden(&mut self, panels: &mut [Panel], head: Pose) {
         self.hidden = !self.hidden;
         if self.hidden {
             self.toolbar = None;
-            if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
-                m.visible = false;
+        } else if let Some(k) = find(panels, Source::Keyboard)
+            && !k.visible
+        {
+            k.visible = true;
+            k.pose = Panel::keyboard_below(k.id, head).pose;
+            k.anchor = Anchor::World;
+        }
+    }
+
+    /// Reset layout: screens and windows in an arc in front of you (main screen in the middle, the others
+    /// alternating right and left), screens at their default size, keyboard below.
+    fn reset_layout(panels: &mut [Panel], head: Pose, monitors: &[MonitorInfo]) {
+        let main = monitors.iter().position(|m| m.primary).unwrap_or(0) as u32;
+        let mut order: Vec<usize> =
+            (0..panels.len()).filter(|&i| matches!(panels[i].source, Source::Monitor(_) | Source::Window(_))).collect();
+        order.sort_by_key(|&i| match panels[i].source {
+            Source::Monitor(m) if m == main => (0, 0),
+            Source::Monitor(m) => (1, m as u64),
+            Source::Window(h) => (2, h),
+            _ => (3, 0),
+        });
+        let (mut right, mut left) = (0.0f32, 0.0f32);
+        for (n, &i) in order.iter().enumerate() {
+            let p = &mut panels[i];
+            let distance = if matches!(p.source, Source::Window(_)) {
+                DEFAULT_DISTANCE_M * WINDOW_NEARER
+            } else {
+                DEFAULT_DISTANCE_M
+            };
+            if matches!(p.source, Source::Monitor(_)) {
+                p.width_m = DEFAULT_WIDTH_M;
             }
+            let half = (p.width_m * 0.5 / distance).atan();
+            let yaw = if n == 0 {
+                right = half;
+                left = half;
+                0.0
+            } else if n % 2 == 1 {
+                let y = right + LAYOUT_GAP_RAD + half;
+                right = y + half;
+                y
+            } else {
+                let y = left + LAYOUT_GAP_RAD + half;
+                left = y + half;
+                -y
+            };
+            p.place_at(head, yaw, distance);
+        }
+        if let Some(k) = find(panels, Source::Keyboard) {
+            *k = Panel { id: k.id, visible: k.visible, opacity: k.opacity, ..Panel::keyboard_below(k.id, head) };
         }
     }
 
     /// Steps the fades. `watch` is how visible the watch should be (0..1); `dt` seconds since the last call.
     pub fn update_dims(&self, panels: &mut [Panel], watch: f32, dt: f32) {
-        let k = (dt / FADE_S).min(1.0);
         for p in panels.iter_mut() {
+            let k = (dt / if p.source == Source::Wrist { WATCH_FADE_S } else { FADE_S }).min(1.0);
             let target = match p.source {
                 Source::Monitor(_) | Source::Window(_) | Source::Keyboard => f32::from(u8::from(self.hidden)),
                 Source::Wrist => 1.0 - watch,
@@ -332,6 +387,7 @@ impl Session {
                         Anchor::Hand(_) => (t("tool-hand"), true),
                         Anchor::Head => (t("tool-head"), true),
                     },
+                    Tool::Reset => (t("tool-reset"), false),
                     Tool::Close => (t("tool-close"), false),
                 };
                 ToolButton { label, on, danger: *tool == Tool::Close }
@@ -340,7 +396,13 @@ impl Session {
     }
 
     /// Applies a toolbar click (button index).
-    pub fn toolbar_input(&mut self, button: usize, panels: &mut Vec<Panel>, hands: &Anchors) -> Vec<Effect> {
+    pub fn toolbar_input(
+        &mut self,
+        button: usize,
+        panels: &mut Vec<Panel>,
+        hands: &Anchors,
+        head: Pose,
+    ) -> Vec<Effect> {
         let mut fx = Vec::new();
         let Some(i) = self.toolbar.and_then(|id| panels.iter().position(|p| p.id == id)) else { return fx };
         let Some(&tool) = tools(panels[i].source).get(button) else { return fx };
@@ -363,6 +425,16 @@ impl Session {
                     Anchor::Head => Anchor::World,
                 };
                 p.set_world_pose(world, hands);
+            }
+            Tool::Reset if p.source == Source::Keyboard => {
+                *p = Panel { id: p.id, visible: p.visible, opacity: p.opacity, ..Panel::keyboard_below(p.id, head) };
+            }
+            Tool::Reset => {
+                let window = matches!(p.source, Source::Window(_));
+                if !window {
+                    p.width_m = DEFAULT_WIDTH_M;
+                }
+                p.place_at(head, 0.0, DEFAULT_DISTANCE_M * if window { WINDOW_NEARER } else { 1.0 });
             }
             Tool::Close if p.source == Source::Keyboard => {
                 p.visible = false;
@@ -442,12 +514,11 @@ impl Session {
             }
             Page::FirstTips => {
                 body = t("first-tips-body");
-                (
-                    0,
-                    t("first-tips-title"),
-                    t("first-tips-hint"),
-                    vec![hidden(), hidden(), hidden(), hidden(), choice(t("first-got-it"), true)],
-                )
+                (0, t("first-tips-title"), t("first-tips-hint"), {
+                    let mut v = vec![hidden(); 9];
+                    v.push(choice(t("first-got-it"), true));
+                    v
+                })
             }
             Page::Tab(0) => {
                 let next = Self::unshown_monitor(panels, monitors);
@@ -463,7 +534,13 @@ impl Session {
                         action(add, next.is_some()),
                         action(t("menu-add-window"), true),
                         action(t("menu-recenter"), true),
-                        action(t("menu-hide-all"), true),
+                        action(t("menu-reset-layout"), true),
+                        mk(
+                            t(if self.hidden { "menu-show-all" } else { "menu-hide-all" }),
+                            SlotKind::Choice,
+                            self.hidden,
+                            true,
+                        ),
                         toggle(t("menu-show-keyboard"), visible(Source::Keyboard)),
                         action(s.get("menu-notifications", &[("n", self.history.len().to_string())]), true),
                     ],
@@ -483,6 +560,7 @@ impl Session {
                     NotifyFrom::Off => t("notify-off"),
                 };
                 slots.push(action(s.get("menu-notify-from", &[("from", from)]), true));
+                slots.push(hidden());
                 slots.push(action(t("menu-clear"), !self.history.is_empty()));
                 slots.push(action(t("menu-back"), true));
                 let hint = if self.notify_blocked && self.state.notify_from != NotifyFrom::Off {
@@ -548,7 +626,11 @@ impl Session {
                         toggle(t("menu-haptics"), self.state.haptics),
                         toggle(t("menu-curved-default"), self.state.default_curved),
                         toggle(t("menu-update-check"), self.state.update_check),
-                        danger("menu-quit", 5),
+                        toggle(t("menu-smoothing"), self.state.smoothing),
+                        hidden(),
+                        hidden(),
+                        hidden(),
+                        danger("menu-quit", QUIT_SLOT),
                     ],
                 )
             }
@@ -596,7 +678,12 @@ impl Session {
 
     /// Wrist "Keyboard" button.
     pub fn wrist_keyboard(&mut self, panels: &mut [Panel], head: Pose) {
-        self.hidden = false;
+        if self.hidden {
+            self.hidden = false;
+            if panels.iter().any(|p| p.source == Source::Keyboard && p.visible) {
+                return;
+            }
+        }
         Self::toggle_keyboard(panels, head);
     }
 
@@ -643,7 +730,7 @@ impl Session {
             }
         };
         // Destructive buttons need a second tap on the same button; any other click disarms.
-        let destructive = matches!((self.page, slot), (Page::Tab(3), 5));
+        let destructive = (self.page, slot) == (Page::Tab(3), QUIT_SLOT);
         if destructive && self.armed != Some((self.page, slot)) {
             self.armed = Some((self.page, slot));
             return fx;
@@ -667,7 +754,7 @@ impl Session {
                 }
             }
             (Page::FirstKeyboard, 0 | 1) => self.page = Page::FirstTips,
-            (Page::FirstTips, 4) => {
+            (Page::FirstTips, 9) => {
                 self.state.onboarded = true;
                 self.page = Page::Tab(0);
                 for p in panels.iter_mut().filter(|p| p.id == MENU_ID || p.source == Source::Keyboard) {
@@ -688,8 +775,9 @@ impl Session {
                 fx.push(Effect::ListWindows);
             }
             (Page::Tab(0), 2) => Self::recenter(panels, head),
-            (Page::Tab(0), 3) => self.toggle_hidden(panels),
-            (Page::Tab(0), 4) | (Page::Tab(1), 0) => Self::toggle_keyboard(panels, head),
+            (Page::Tab(0), 3) => Self::reset_layout(panels, head, monitors),
+            (Page::Tab(0), 4) => self.toggle_hidden(panels, head),
+            (Page::Tab(0), 5) | (Page::Tab(1), 0) => Self::toggle_keyboard(panels, head),
             (Page::Windows(page), i) if i < WINDOWS_PER_PAGE => {
                 if let Some(&(h, _)) = self.windows.get(page * WINDOWS_PER_PAGE + i)
                     && !panels.iter().any(|p| p.source == Source::Window(h))
@@ -699,19 +787,19 @@ impl Session {
                     Self::close(panels);
                 }
             }
-            (Page::Windows(page), 4) => {
+            (Page::Windows(page), 8) => {
                 if self.windows.len() > (page + 1) * WINDOWS_PER_PAGE {
                     self.page = Page::Windows(page + 1);
                 }
             }
             (Page::Windows(_), _) => self.page = Page::Tab(0),
-            (Page::Tab(0), 5) => self.page = Page::Notifications,
-            (Page::Notifications, 3) => {
+            (Page::Tab(0), 6) => self.page = Page::Notifications,
+            (Page::Notifications, 6) => {
                 self.state.notify_from = self.state.notify_from.next();
                 fx.push(Effect::NotifyFrom(self.state.notify_from));
             }
-            (Page::Notifications, 4) => self.history.clear(),
-            (Page::Notifications, 5) => self.page = Page::Tab(0),
+            (Page::Notifications, 8) => self.history.clear(),
+            (Page::Notifications, 9) => self.page = Page::Tab(0),
             (Page::Tab(1), 1) => {
                 if let Some(k) = find(panels, Source::Keyboard) {
                     *k = Panel { id: k.id, ..Panel::keyboard_below(k.id, head) };
@@ -745,7 +833,8 @@ impl Session {
             (Page::Tab(3), 2) => self.state.haptics = !self.state.haptics,
             (Page::Tab(3), 3) => self.state.default_curved = !self.state.default_curved,
             (Page::Tab(3), 4) => self.state.update_check = !self.state.update_check,
-            (Page::Tab(3), 5) => fx.push(Effect::Quit),
+            (Page::Tab(3), 5) => self.state.smoothing = !self.state.smoothing,
+            (Page::Tab(3), QUIT_SLOT) => fx.push(Effect::Quit),
             _ => {}
         }
         fx

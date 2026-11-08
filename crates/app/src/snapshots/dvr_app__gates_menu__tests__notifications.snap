@@ -33,10 +33,34 @@ MenuModel {
             kind: Hidden,
         },
         Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
             label: "From: Discord",
             on: false,
             enabled: true,
             kind: Action,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
         },
         Slot {
             label: "Clear",

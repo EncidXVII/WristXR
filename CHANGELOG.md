@@ -18,7 +18,10 @@ First public early-access release (Windows).
 - Discord notifications on the watch, read from Windows notifications (no login); source Discord / all apps / off.
 - Menu Close button; adding a screen or window closes the menu so the new panel is in view.
 - Windows that close remove their panel; the keyboard's toolbar sits above it; a buzz confirms hide / show.
-- Hold the left menu button to hide or show all panels; hidden panels stop capturing.
+- Double-tap the left menu button (as in XSOverlay) to hide or show screens, windows and keyboard; hidden panels
+  stop capturing. Hide all / Show all buttons on the watch and in the menu show the current state.
+- Toolbar Reset and Menu > Reset layout (screens and windows in an arc in front of you).
+- Compact menu: 10 buttons per page; laser smoothing can be switched off in Settings.
 - Laser pointer: click, hold for right click, drag, thumbstick scroll; hovering never clicks.
 - Grab-and-yank window pop-out into its own panel; panels can be locked or attached to a hand.
 - Two-hand VR keyboard in the Windows layout with sticky modifiers and typing sounds.

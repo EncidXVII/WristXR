@@ -11,7 +11,7 @@ MenuModel {
     ],
     tab: 0,
     title: "Screens and windows",
-    subtitle: "Point at a screen for its toolbar. Hold left menu to hide all.",
+    subtitle: "Point at a screen for its toolbar. Double-tap left menu: hide / show.",
     body: "",
     slots: [
         Slot {
@@ -33,10 +33,16 @@ MenuModel {
             kind: Action,
         },
         Slot {
-            label: "Hide all",
+            label: "Reset layout",
             on: false,
             enabled: true,
             kind: Action,
+        },
+        Slot {
+            label: "Hide all",
+            on: false,
+            enabled: true,
+            kind: Choice,
         },
         Slot {
             label: "Keyboard",

@@ -3,7 +3,7 @@ use crate::math::{Pose, Quat, Vec3};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_WIDTH_M: f32 = 1.2;
-pub const DEFAULT_DISTANCE_M: f32 = 1.0;
+pub const DEFAULT_DISTANCE_M: f32 = 1.2;
 /// Panels spawn slightly below eye line.
 pub const DEFAULT_DROP_M: f32 = 0.15;
 pub const KEYBOARD_WIDTH_M: f32 = 0.6;
@@ -48,7 +48,7 @@ pub const MENU_ID: u32 = u32::MAX - 1;
 pub const MENU_WIDTH_M: f32 = 0.5;
 /// Fixed id of the toolbar panel.
 pub const TOOLBAR_ID: u32 = u32::MAX - 2;
-pub const TOOLBAR_WIDTH_M: f32 = 0.36;
+pub const TOOLBAR_WIDTH_M: f32 = 0.38;
 /// Gap between a panel's bottom edge and its toolbar.
 const TOOLBAR_GAP_M: f32 = 0.02;
 /// A panel dimmed this far is hidden and ignores the laser.
@@ -126,10 +126,18 @@ impl Panel {
         Self::new(id, source, Pose::new(pos, facing(f)), DEFAULT_WIDTH_M, aspect)
     }
 
+    /// Puts the panel in the room `yaw` radians to the right of where the head looks, `distance` away, slightly
+    /// below eye line, facing the user upright (layout reset arranges screens in an arc this way).
+    pub fn place_at(&mut self, head: Pose, yaw: f32, distance: f32) {
+        let f = Quat::from_axis_angle(Vec3::Y, -yaw).rotate(flat_forward(head));
+        self.anchor = Anchor::World;
+        self.pose = Pose::new(head.pos + f * distance + Vec3::new(0.0, -DEFAULT_DROP_M, 0.0), facing(f));
+    }
+
     /// Default keyboard: below the main panel, tilted up toward the user.
     pub fn keyboard_below(id: u32, head: Pose) -> Self {
         let f = flat_forward(head);
-        let pos = head.pos + f * 0.55 + Vec3::new(0.0, -0.5, 0.0);
+        let pos = head.pos + f * 0.66 + Vec3::new(0.0, -0.5, 0.0);
         let rot = facing(f) * Quat::from_axis_angle(Vec3::X, -0.6);
         let aspect = keyboard::ROWS.len() as f32 / keyboard::ROW_UNITS;
         Self::new(id, Source::Keyboard, Pose::new(pos, rot), KEYBOARD_WIDTH_M, aspect)
@@ -138,7 +146,7 @@ impl Panel {
     /// Menu: closer and smaller than a monitor panel, slightly below eye line, facing the user.
     pub fn menu_in_front(head: Pose, aspect: f32) -> Self {
         let f = flat_forward(head);
-        let pos = head.pos + f * 0.6 + Vec3::new(0.0, -0.1, 0.0);
+        let pos = head.pos + f * 0.72 + Vec3::new(0.0, -0.1, 0.0);
         Self::new(MENU_ID, Source::Menu, Pose::new(pos, facing(f)), MENU_WIDTH_M, aspect)
     }
 
@@ -230,7 +238,7 @@ pub fn gaze_visibility(head: Pose, watch: Pose) -> f32 {
     let to_eye = to_eye * (1.0 / d);
     let facing = watch.rot.rotate(Vec3::Z).dot(to_eye);
     let looking = head.forward().dot(to_eye * -1.0);
-    smoothstep(0.35, 0.7, facing) * smoothstep(0.7, 0.88, looking)
+    smoothstep(0.55, 0.7, facing) * smoothstep(0.8, 0.9, looking)
 }
 
 fn smoothstep(a: f32, b: f32, x: f32) -> f32 {

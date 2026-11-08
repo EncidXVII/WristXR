@@ -6,6 +6,15 @@ use std::path::{Path, PathBuf};
 
 pub const APP_DIR_NAME: &str = "DesktopVR";
 
+/// Discord and the popular Discord clients (Vesktop / Vencord, Equibop, Legcord, WebCord, Dorion), by app name.
+const DISCORD_APPS: [&str; 7] = ["discord", "vesktop", "vencord", "equibop", "legcord", "webcord", "dorion"];
+
+/// True for Discord or a Discord client; their first notification line already names the sender.
+pub fn is_discord_app(app: &str) -> bool {
+    let app = app.to_lowercase();
+    DISCORD_APPS.iter().any(|d| app.contains(d))
+}
+
 /// Which other apps' Windows notifications show on the watch.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NotifyFrom {
@@ -27,7 +36,7 @@ impl NotifyFrom {
     /// Whether a notification from the app with this display name should show.
     pub fn accepts(self, app: &str) -> bool {
         match self {
-            Self::Discord => app.to_lowercase().contains("discord"),
+            Self::Discord => is_discord_app(app),
             Self::AllApps => true,
             Self::Off => false,
         }
@@ -58,6 +67,8 @@ pub struct State {
     pub wrist_load: bool,
     pub wrist_media: bool,
     pub notify_from: NotifyFrom,
+    /// Laser smoothing (tremor filter).
+    pub smoothing: bool,
 }
 
 impl Default for State {
@@ -78,6 +89,7 @@ impl Default for State {
             wrist_load: false,
             wrist_media: true,
             notify_from: NotifyFrom::Discord,
+            smoothing: true,
         }
     }
 }
@@ -110,5 +122,19 @@ impl State {
         let tmp = path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_vec_pretty(self).map_err(io::Error::other)?)?;
         fs::rename(tmp, path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn discord_clients_count_as_discord() {
+        for app in ["Discord", "Discord PTB", "Vesktop", "Equibop", "Legcord", "WebCord"] {
+            assert!(NotifyFrom::Discord.accepts(app), "{app}");
+        }
+        assert!(!NotifyFrom::Discord.accepts("Steam"));
+        assert!(NotifyFrom::AllApps.accepts("Steam") && !NotifyFrom::Off.accepts("Vesktop"));
     }
 }

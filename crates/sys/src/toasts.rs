@@ -135,3 +135,19 @@ mod tests {
         eprintln!("access: {:?}", t.access());
     }
 }
+
+#[cfg(test)]
+mod probe {
+    /// Lists what is in the notification center now: `cargo test -p dvr-sys dump -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "reads this PC's notification center"]
+    fn dump_notification_center() {
+        let l = super::UserNotificationListener::Current().expect("listener");
+        eprintln!("access: {:?}", l.RequestAccessAsync().and_then(|o| o.get()).map(|a| a.0));
+        for (id, n) in super::current(&l).expect("list") {
+            let app = n.AppInfo().and_then(|a| a.DisplayInfo()).and_then(|d| d.DisplayName());
+            let aumid = n.AppInfo().and_then(|a| a.AppUserModelId());
+            eprintln!("{id}: app {app:?} aumid {aumid:?} read {:?}", super::read(&n).map(|t| (t.app, t.title.len())));
+        }
+    }
+}

@@ -2,7 +2,7 @@
 //! pointers.
 use crate::gates::{GateResult, HEAD, Rig, key_sc, press_key, us_char};
 use crate::session::{Effect, MonitorInfo, Page, Session, TEST_WORD};
-use dvr_core::engine::{Event, HIDE_HOLD_MS};
+use dvr_core::engine::Event;
 use dvr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
 use dvr_core::state::State;
 use dvr_ui::{
@@ -32,8 +32,7 @@ impl Ctx {
                 Event::Key { scancode, down } => {
                     self.session.key(scancode, down, us_char);
                 }
-                Event::MenuToggle => self.session.toggle_menu(&mut self.rig.engine.panels, HEAD),
-                Event::HideToggle => self.session.toggle_hidden(&mut self.rig.engine.panels),
+                Event::HideToggle => self.session.toggle_hidden(&mut self.rig.engine.panels, HEAD),
                 _ => {}
             }
         }
@@ -43,7 +42,7 @@ impl Ctx {
             self.effects.extend(fx);
         }
         for click in self.toolbar.take_inputs() {
-            let fx = self.session.toolbar_input(click, &mut self.rig.engine.panels, &poses);
+            let fx = self.session.toolbar_input(click, &mut self.rig.engine.panels, &poses, HEAD);
             self.effects.extend(fx);
         }
         let model = self.session.model(&self.rig.engine.panels, &self.screens, &self.strings, (0.0, 0.0));
@@ -74,12 +73,14 @@ impl Ctx {
         Ok(())
     }
 
-    /// Holds the left menu button long enough to hide or show everything.
-    fn hold_menu(&mut self) {
-        self.rig.hand(Hand::Left).menu = true;
-        self.rig.hold_ms(HIDE_HOLD_MS + 50);
-        self.rig.hand(Hand::Left).menu = false;
-        self.rig.frames(1);
+    /// Double-taps the left menu button (hide / show everything, as in XSOverlay).
+    fn double_tap_menu(&mut self) {
+        for _ in 0..2 {
+            self.rig.hand(Hand::Left).menu = true;
+            self.rig.frames(1);
+            self.rig.hand(Hand::Left).menu = false;
+            self.rig.frames(2);
+        }
         self.pump();
     }
 
@@ -136,7 +137,7 @@ pub fn first_run_and_menu() -> GateResult {
     if c.session.page != Page::FirstTips {
         return Err(format!("Done must show the gesture tips, page {:?}", c.session.page));
     }
-    c.click(slot_center(4))?;
+    c.click(slot_center(9))?;
     if !c.session.state.onboarded || c.session.menu_open(&c.rig.engine.panels) {
         return Err("Got it must finish onboarding and close the menu".into());
     }
@@ -156,36 +157,53 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("pointing at a screen must show its toolbar".into());
     }
     let width = c.panel(Source::Monitor(0)).ok_or("screen missing")?.width_m;
-    c.tool(0, 7)?;
-    c.tool(3, 7)?;
+    let home = c.panel(Source::Monitor(0)).ok_or("screen missing")?.pose;
+    c.tool(0, 8)?;
+    c.tool(3, 8)?;
     let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
     if !p.locked || p.width_m <= width {
         return Err(format!("toolbar Lock / + failed: locked {}, width {} -> {}", p.locked, width, p.width_m));
     }
+    // Reset puts it back at its default place and size.
+    if let Some(m) = c.rig.engine.panels.iter_mut().find(|p| p.source == Source::Monitor(0)) {
+        m.pose.pos = m.pose.pos + dvr_core::math::Vec3::new(0.4, 0.3, 0.0);
+    }
+    c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
+    c.rig.frames(2);
+    c.pump();
+    c.tool(6, 8)?;
+    let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
+    if (p.pose.pos - home.pos).length() > 1e-3 || (p.width_m - width).abs() > 1e-4 {
+        return Err(format!("toolbar Reset must restore place and size: {:?} vs {:?}", p.pose.pos, home.pos));
+    }
 
-    // Hold the left menu button: everything fades out and ignores the laser; hold again: back.
-    c.hold_menu();
+    // Double-tap the left menu button: screens and keyboard fade out and ignore the laser; again: all back,
+    // keyboard included (as in XSOverlay).
+    c.double_tap_menu();
     if !c.panel(Source::Monitor(0)).is_some_and(|p| p.dim >= DIM_HIDDEN && !p.shown()) {
-        return Err("holding left menu must hide the screens".into());
+        return Err("double-tapping left menu must hide the screens".into());
     }
     if c.panel(Source::Wrist).is_some_and(|w| w.dim > 0.0) {
         return Err("hide all must keep the watch".into());
     }
-    c.hold_menu();
-    if !c.panel(Source::Monitor(0)).is_some_and(|p| p.shown()) {
-        return Err("holding left menu again must show the screens".into());
+    c.double_tap_menu();
+    if !c.panel(Source::Monitor(0)).is_some_and(|p| p.shown()) || !c.panel(Source::Keyboard).is_some_and(|k| k.shown())
+    {
+        return Err("double-tapping again must show the screens and the keyboard".into());
     }
 
-    // Reopen with a double-tap on the left menu button.
-    for _ in 0..2 {
-        c.rig.hand(Hand::Left).menu = true;
-        c.rig.frames(1);
-        c.rig.hand(Hand::Left).menu = false;
-        c.rig.frames(2);
-    }
+    // The menu opens from the watch (or the tray); here directly.
+    c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
     c.pump();
-    if !c.session.menu_open(&c.rig.engine.panels) {
-        return Err("double-tap must open the menu".into());
+    // Hide all from the menu: the menu stays and the button now reads Show all, lit.
+    c.click(slot_center(4))?;
+    let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
+    if !c.session.hidden || !c.session.menu_open(&c.rig.engine.panels) || !model.slots[4].on {
+        return Err("menu Hide all must hide, keep the menu and show its state".into());
+    }
+    c.click(slot_center(4))?;
+    if c.session.hidden {
+        return Err("menu Show all must show again".into());
     }
 
     // Add window: the list opens, picking a window asks the app to show it.
@@ -202,7 +220,7 @@ pub fn first_run_and_menu() -> GateResult {
     c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
     c.pump();
     c.click(slot_center(1))?;
-    c.click(slot_center(5))?;
+    c.click(slot_center(9))?;
     if c.session.page != Page::Tab(0) {
         return Err("Back must return to the Panels tab".into());
     }
@@ -211,17 +229,17 @@ pub fn first_run_and_menu() -> GateResult {
     c.session.notified("Discord", "hey");
     c.session.notified("Steam", "Download finished");
     c.pump();
-    c.click(slot_center(5))?;
+    c.click(slot_center(6))?;
     let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
     if c.session.page != Page::Notifications || !model.slots[0].label.starts_with("Steam") {
         return Err(format!("history must list newest first, page {:?}", c.session.page));
     }
-    c.click(slot_center(3))?;
+    c.click(slot_center(6))?;
     if !c.effects.contains(&Effect::NotifyFrom(dvr_core::state::NotifyFrom::AllApps)) {
         return Err("From: must cycle Discord -> All apps".into());
     }
-    c.click(slot_center(4))?;
-    c.click(slot_center(5))?;
+    c.click(slot_center(8))?;
+    c.click(slot_center(9))?;
     if !c.session.history.is_empty() || c.session.page != Page::Tab(0) {
         return Err("Clear must empty the history and Back return".into());
     }
@@ -254,11 +272,11 @@ pub fn first_run_and_menu() -> GateResult {
     }
     // Quit is destructive: the first tap only arms it.
     c.click(tab_center(3))?;
-    c.click(slot_center(5))?;
+    c.click(slot_center(9))?;
     if c.effects.contains(&Effect::Quit) {
         return Err("Quit must ask for a second tap".into());
     }
-    c.click(slot_center(5))?;
+    c.click(slot_center(9))?;
     if !c.effects.contains(&Effect::Quit) {
         return Err("second tap on Quit must quit".into());
     }
@@ -268,10 +286,19 @@ pub fn first_run_and_menu() -> GateResult {
     if c.session.menu_open(&c.rig.engine.panels) {
         return Err("Close must close the menu".into());
     }
+    // The keyboard's own toolbar (above it) closes it.
+    let kb = c.panel(Source::Keyboard).ok_or("keyboard missing")?.id;
+    c.rig.aim(Hand::Right, kb, [0.5, 0.5])?;
+    c.rig.frames(2);
+    c.pump();
+    c.tool(5, 6)?;
+    if c.panel(Source::Keyboard).is_some_and(|k| k.visible) {
+        return Err("keyboard toolbar Close must put the keyboard away".into());
+    }
     c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
     c.rig.frames(2);
     c.pump();
-    c.tool(6, 7)?;
+    c.tool(7, 8)?;
     if c.panel(Source::Monitor(0)).is_some() || !c.effects.contains(&Effect::Removed(screen_id)) {
         return Err("toolbar close must remove the screen".into());
     }
@@ -372,6 +399,7 @@ mod tests {
             load: Some(WristLoad { game_fps: Some(90.0), cpu: Some(0.23), gpu: Some(0.67), own_gpu_ms: 0.012 }),
             toast: None,
             media: Some(("Night Drive".into(), "Synthwave Radio".into(), true)),
+            ..WristInfo::default()
         };
         wrist.set(&info);
         let px = wrist.render().expect("wrist render").to_vec();

@@ -1,6 +1,6 @@
 //! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
 use crate::bindings::APP_KEY;
-use crate::session::{Effect, MonitorInfo, Session};
+use crate::session::{Effect, MonitorInfo, Session, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
@@ -41,8 +41,6 @@ const SPACE_BAR_CHARS: usize = 24;
 const WRIST_LINGER_MS: u64 = 1500;
 /// How long a notification from another app (Discord, ...) stays on the watch.
 const APP_TOAST_S: f32 = 6.0;
-/// An added window sits this much closer than the screens so it is never behind one.
-const WINDOW_NEARER: f32 = 0.85;
 
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
 struct Surface {
@@ -153,6 +151,7 @@ fn wrist_info(
         }),
         toast: toast.map(|(t, _)| (t.title.clone(), t.content.clone())),
         media: media.filter(|_| state.wrist_media).map(|m| (m.title.clone(), m.artist.clone(), m.playing)),
+        ..WristInfo::default()
     }
 }
 
@@ -238,6 +237,7 @@ pub fn run() -> Result<(), String> {
     let mut toolbar_for: Option<u32> = None;
     let mut wrist_seen: Option<u64> = None;
     let mut wrist_expanded = false;
+    let mut wrist_flags = (false, false);
     let mut last_ms = 0u64;
     let mut sampler = dvr_sys::Sampler::new();
     let mut load = dvr_sys::Load::default();
@@ -279,7 +279,7 @@ pub fn run() -> Result<(), String> {
         while let Some(cmd) = tray.as_ref().and_then(Tray::poll) {
             match cmd {
                 TrayCommand::OpenMenu => tray_open_menu = !session.menu_open(&engine.panels),
-                TrayCommand::HideAll => session.toggle_hidden(&mut engine.panels),
+                TrayCommand::HideAll => session.toggle_hidden(&mut engine.panels, head(&vr)),
                 TrayCommand::AutoLaunch(on) => {
                     session.auto_launch = on;
                     if let Err(e) = vr.set_auto_launch(APP_KEY, on) {
@@ -310,6 +310,7 @@ pub fn run() -> Result<(), String> {
             _ => 1.0,
         };
         session.update_dims(&mut engine.panels, watch, dt);
+        engine.raw_laser = !session.state.smoothing;
         session.place_toolbar(&mut engine.panels, &poses);
         events.clear();
         engine.step(&input, &mut events);
@@ -374,7 +375,7 @@ pub fn run() -> Result<(), String> {
                     redraw_keyboard = true;
                     dirty = Some(Instant::now());
                 }
-                WristInput::HideAll => session.toggle_hidden(&mut engine.panels),
+                WristInput::HideAll => session.toggle_hidden(&mut engine.panels, head_now),
                 WristInput::Previous => media.send(MediaCommand::Previous),
                 WristInput::PlayPause => media.send(MediaCommand::PlayPause),
                 WristInput::Next => media.send(MediaCommand::Next),
@@ -434,7 +435,7 @@ pub fn run() -> Result<(), String> {
                 Event::Haptic { hand } if session.state.haptics => vr.haptic(hand),
                 Event::Haptic { .. } => {}
                 Event::HideToggle => {
-                    session.toggle_hidden(&mut engine.panels);
+                    session.toggle_hidden(&mut engine.panels, head_now);
                     if session.state.haptics {
                         vr.haptic(Hand::Left);
                     }
@@ -444,10 +445,6 @@ pub fn run() -> Result<(), String> {
                     dvr_input_win::next_layout();
                 }
                 Event::Moved { .. } => dirty = Some(Instant::now()),
-                Event::MenuToggle => {
-                    session.toggle_menu(&mut engine.panels, head(&vr));
-                    menu_dirty = true;
-                }
             }
             if session.state.typing_sounds && matches!(*e, Event::Key { down: true, .. }) {
                 dvr_sys::play_click();
@@ -481,7 +478,7 @@ pub fn run() -> Result<(), String> {
         }
         let mut toolbar_dirty = session.toolbar_target() != toolbar_for;
         for click in toolbar.take_inputs() {
-            effects.extend(session.toolbar_input(click, &mut engine.panels, &poses));
+            effects.extend(session.toolbar_input(click, &mut engine.panels, &poses, head_now));
             dirty = Some(Instant::now());
             toolbar_dirty = true;
         }
@@ -543,6 +540,13 @@ pub fn run() -> Result<(), String> {
             layout = id;
         }
 
+        // Watch buttons show hide / keyboard state as soon as it changes.
+        let keyboard_out = engine.panels.iter().any(|p| p.source == Source::Keyboard && p.visible);
+        if (session.hidden, keyboard_out) != wrist_flags {
+            wrist_flags = (session.hidden, keyboard_out);
+            refresh_wrist = true;
+            menu_dirty = true;
+        }
         if stats_at.elapsed() >= STATS_PERIOD {
             stats_at = Instant::now();
             load = sampler.sample();
@@ -616,7 +620,7 @@ pub fn run() -> Result<(), String> {
                 toast.as_ref(),
                 now_playing.as_ref(),
             );
-            wrist.set(&info);
+            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, ..info });
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {

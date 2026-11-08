@@ -7,8 +7,38 @@ MenuModel {
     tab: 0,
     title: "Good to know",
     subtitle: "Step 4 of 4",
-    body: "Trigger: click · hold: right click · hold and move: drag\nPoint at a screen for its toolbar · thumbstick: scroll\nGrip: move · both hands: resize · yank: pop out a window\nLeft menu: double-tap for this menu, hold to hide all\nLook at your wrist for the time, point at it for more",
+    body: "Trigger: click · hold: right click · hold and move: drag\nPoint at a screen: its toolbar (size, opacity, reset, close)\nGrip: move · both hands: resize · yank: pop out a window\nDouble-tap the left menu button: hide / show everything\nLook at your wrist for the time; point at it for the menu",
     slots: [
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
+        Slot {
+            label: "",
+            on: false,
+            enabled: false,
+            kind: Hidden,
+        },
         Slot {
             label: "",
             on: false,

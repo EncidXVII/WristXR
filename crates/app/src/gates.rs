@@ -136,12 +136,13 @@ pub(crate) fn err(e: impl std::fmt::Display) -> String {
 fn panels() -> GateResult {
     let p = Panel::in_front_of(1, Source::Monitor(0), HEAD, 9.0 / 16.0);
     ensure!((p.width_m - 1.2).abs() < 1e-6, "default width {}", p.width_m);
-    ensure!((p.pose.pos - Vec3::new(0.0, 1.45, -1.0)).length() < 1e-4, "default position {:?}", p.pose.pos);
+    let ahead = dvr_core::panel::DEFAULT_DISTANCE_M;
+    ensure!((p.pose.pos - Vec3::new(0.0, 1.45, -ahead)).length() < 1e-4, "default position {:?}", p.pose.pos);
     ensure!((p.pose.rot.rotate(Vec3::Z) - Vec3::Z).length() < 1e-4, "panel must face the user");
 
     let turned = Pose::new(HEAD.pos, Quat::from_axis_angle(Vec3::Y, FRAC_PI_2));
     let q = Panel::in_front_of(2, Source::Monitor(1), turned, 9.0 / 16.0);
-    ensure!((q.pose.pos - Vec3::new(-1.0, 1.45, 0.0)).length() < 1e-4, "turned-head spawn {:?}", q.pose.pos);
+    ensure!((q.pose.pos - Vec3::new(-ahead, 1.45, 0.0)).length() < 1e-4, "turned-head spawn {:?}", q.pose.pos);
 
     let kb = Panel::keyboard_below(3, HEAD);
     ensure!(kb.pose.pos.y < p.pose.pos.y - p.height_m() / 2.0, "keyboard must sit below the panel");
@@ -286,8 +287,8 @@ fn pointer() -> GateResult {
         rig.hand(l).menu = false;
         rig.frames(3);
     }
-    let toggles = rig.take().iter().filter(|e| matches!(e, Event::MenuToggle)).count();
-    ensure!(toggles == 1, "menu double-tap toggles {toggles}");
+    let toggles = rig.take().iter().filter(|e| matches!(e, Event::HideToggle)).count();
+    ensure!(toggles == 1, "left menu double-tap must toggle hide / show once: {toggles}");
     Ok(())
 }
 
