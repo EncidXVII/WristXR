@@ -15,6 +15,8 @@ First public early-access release (Windows).
   Windows volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
 - Toolbar: the panel's name first, opacity slider, Room / Hand / Head as one choice, keyboard languages and
   Put away on the keyboard's toolbar.
+- Neutral graphite greys in place of the warm ones; Anton for headings and the time, Barlow for all other text,
+  both bundled, so the look no longer depends on Windows' fonts.
 - Motion: the watch grows down from the time and shrinks back the same way, its contents fading in as they are
   revealed; switches slide; buttons and rows answer on trigger-down; the menu fades in instead of flashing into
   view. All of it follows Windows' "Animation effects" setting (off = instant).

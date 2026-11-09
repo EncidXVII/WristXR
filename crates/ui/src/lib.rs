@@ -24,7 +24,10 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 slint::slint! {
-    // Night Lime (soft), as in the menu. The watch grows only downward: nothing moves under the laser when it
+    import "../fonts/Barlow-Regular.ttf";
+    import "../fonts/Barlow-SemiBold.ttf";
+    import "../fonts/Anton-Regular.ttf";
+    // Night Lime (graphite), as in the menu. The watch grows only downward: nothing moves under the laser when it
     // opens. Everything outside the card is transparent.
     // Motion: the card grows from the time and shrinks back along the same path (critically damped, no bounce);
     // what it reveals fades in with it. Presses answer on trigger-down. `motion` off (Windows "Animation
@@ -34,12 +37,14 @@ slint::slint! {
     component Round inherits Rectangle {
         in property <string> icon;
         in property <bool> filled;
-        in property <brush> tint: #F4F1EC;
+        in property <brush> tint: #F5F5F7;
         in property <brush> fill-color: transparent;
+        // Pressed colour; filled buttons (#2A2A2E) need a lighter step than bare icons to show the press.
+        in property <brush> press-color: #36363B;
         in property <bool> lit;
         callback clicked;
         border-radius: self.width / 2;
-        background: touch.pressed && !root.lit ? #36312B : touch.has-hover && !root.lit ? #2A2622 : root.fill-color;
+        background: touch.pressed && !root.lit ? root.press-color : touch.has-hover && !root.lit ? #2A2A2E : root.fill-color;
         opacity: touch.pressed && root.lit ? 0.8 : 1.0;
         Path {
             width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
@@ -59,22 +64,22 @@ slint::slint! {
         callback clicked;
         height: 62px;
         border-radius: 20px;
-        background: touch.pressed ? #36312B : touch.has-hover ? #2A2622 : transparent;
-        if root.divider : Rectangle { x: 18px; y: 0px; width: parent.width - 36px; height: 1px; background: #2A2622; }
+        background: touch.pressed ? #36363B : touch.has-hover ? #2A2A2E : transparent;
+        if root.divider : Rectangle { x: 18px; y: 0px; width: parent.width - 36px; height: 1px; background: #2A2A2E; }
         Text {
-            x: 18px; width: parent.width - 120px; text: root.label; font-size: 26px; color: #F4F1EC;
+            x: 18px; width: parent.width - 120px; text: root.label; font-size: 26px; color: #F5F5F7;
             vertical-alignment: center; overflow: elide;
         }
         if !root.switch : Text {
-            x: parent.width - self.width - 18px; text: root.value; font-size: 24px; color: #AAA49B;
+            x: parent.width - self.width - 18px; text: root.value; font-size: 24px; color: #A8A8AF;
         }
         if root.switch : Rectangle {
             x: parent.width - 76px; y: 14px; width: 58px; height: 34px; border-radius: 17px;
-            background: root.on ? #C6FF1A : #2A2622;
+            background: root.on ? #C6FF1A : #2A2A2E;
             animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
             Rectangle {
                 x: root.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
-                background: root.on ? #0C0B0A : #8A847B;
+                background: root.on ? #0B0B0C : #88888F;
                 animate x, background { duration: root.motion ? 160ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
             }
         }
@@ -82,6 +87,7 @@ slint::slint! {
     }
 
     export component WristView inherits Window {
+        default-font-family: "Barlow";
         in property <string> time;
         in property <string> date;
         in property <[RingView]> rings;
@@ -129,38 +135,43 @@ slint::slint! {
         // 0 closed .. 1 open; content shown while it is above 0, so closing fades it out instead of cutting it.
         property <float> open: root.expanded ? 1 : 0;
         animate open { duration: root.motion ? 200ms : 0ms; easing: ease-out; }
+        // The date shows under the time only when closed and nothing is on the strip.
+        property <float> date-t: root.strip == 0 && !root.expanded ? 1 : 0;
+        animate date-t { duration: root.motion ? 150ms : 0ms; easing: ease-out; }
         property <length> card-h: root.card-height * 1px;
         animate card-h { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
 
         Rectangle {
-            x: 0px; y: 0px; width: 560px; height: root.card-h; border-radius: 28px; background: #0C0B0A; clip: true;
+            x: 0px; y: 0px; width: 560px; height: root.card-h; border-radius: 28px; background: #0B0B0C; clip: true;
             Text {
-                x: 26px; y: root.date != "" ? 14px : 22px; height: 88px;
-                text: root.time; font-family: "Bahnschrift"; font-size: 88px; font-weight: 700; color: #F4F1EC;
+                // Moves only when a strip comes or goes (in step with the card), never when the watch opens.
+                x: 26px; y: root.strip == 0 ? 14px : 22px; height: 88px;
+                animate y { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
+                text: root.time; font-family: "Anton"; font-size: 88px; color: #F5F5F7;
                 vertical-alignment: center;
             }
-            if root.date != "" : Text {
-                x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #AAA49B;
+            if root.date-t > 0 && root.date != "" : Text {
+                x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #A8A8AF; opacity: root.date-t;
             }
             for r[i] in root.rings : Rectangle {
                 x: (534 - (root.rings.length - i) * 92 + 12) * 1px; y: 26px; width: 80px; height: 80px;
                 Path {
                     width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
-                    commands: root.ring-track; stroke: #2A2622; stroke-width: 8px; fill: transparent;
+                    commands: root.ring-track; stroke: #2A2A2E; stroke-width: 8px; fill: transparent;
                 }
                 Path {
                     width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
                     commands: r.arc; stroke: r.low ? #FF5A3C : #C6FF1A; stroke-width: 8px; fill: transparent;
                 }
-                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : #F4F1EC; }
+                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : #F5F5F7; }
             }
 
             // Glance strip: one line under the time (music, a new message or a low battery).
             // The glance strip leaves three times faster than the card arrives, so the two never read as one.
-            if root.open < 0.34 && root.strip > 0 : Rectangle {
-                x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px; opacity: 1 - root.open * 3;
-                background: root.strip == 3 ? #2B1712 : #1F1C18;
-                if root.strip == 2 : Rectangle { x: 0px; y: 12px; width: 4px; height: 44px; border-radius: 2px; background: #C6FF1A; }
+            // Clickable as soon as the watch closes, even while the media card is still fading over it.
+            if (!root.expanded || root.open < 0.34) && root.strip > 0 : Rectangle {
+                x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px; opacity: max(0, 1 - root.open * 3);
+                background: root.strip == 3 ? #2B1712 : #1D1D20;
                 if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: #C6FF1A; }
                 if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: #C6FF1A; }
                 if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: #C6FF1A; }
@@ -180,55 +191,55 @@ slint::slint! {
                     spacing: 8px;
                     Text {
                         text: root.strip-title; font-size: 24px; font-weight: root.strip == 2 ? 700 : 400;
-                        color: root.strip == 3 ? #FF8A6E : #F4F1EC; vertical-alignment: center; overflow: elide;
+                        color: root.strip == 3 ? #FF8A6E : #F5F5F7; vertical-alignment: center; overflow: elide;
                         max-width: root.strip == 3 ? 10000px : 260px;
                     }
                     if root.strip-text != "" : Text {
-                        text: root.strip-text; font-size: 24px; color: #AAA49B; vertical-alignment: center;
+                        text: root.strip-text; font-size: 24px; color: #A8A8AF; vertical-alignment: center;
                         overflow: elide; horizontal-stretch: 1;
                     }
                 }
                 if root.strip == 2 : Text {
-                    x: parent.width - self.width - 18px; text: root.strip-time; font-size: 24px; color: #8A847B;
+                    x: parent.width - self.width - 18px; text: root.strip-time; font-size: 24px; color: #88888F;
                 }
                 if root.strip == 1 : Round {
                     x: 476px; y: 8px; width: 52px; height: 52px;
                     icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
-                    tint: #0C0B0A; fill-color: #F4F1EC; lit: true;
+                    tint: #0B0B0C; fill-color: #F5F5F7; lit: true;
                     clicked => { root.action(5); }
                 }
             }
 
             // Pointed at: player, volume and quick switches below the time.
             if root.open > 0 && root.has-media : Rectangle {
-                x: 12px; y: 132px; width: 536px; height: 306px; border-radius: 20px; background: #1F1C18; opacity: root.open;
+                x: 12px; y: 132px; width: 536px; height: 306px; border-radius: 20px; background: #1D1D20; opacity: root.open;
                 Rectangle {
-                    x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #4A3D2A;
+                    x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #36363B;
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
-                        stroke: #F4F1EC; stroke-width: 2px; fill: transparent;
+                        stroke: #F5F5F7; stroke-width: 2px; fill: transparent;
                     }
                 }
                 Text {
                     x: 104px; y: 18px; width: 414px; height: 34px; text: root.media-title; font-size: 26px; font-weight: 700;
-                    color: #F4F1EC; overflow: elide; vertical-alignment: center;
+                    color: #F5F5F7; overflow: elide; vertical-alignment: center;
                 }
                 Text {
-                    x: 104px; y: 52px; width: 414px; height: 32px; text: root.media-sub; font-size: 24px; color: #AAA49B;
+                    x: 104px; y: 52px; width: 414px; height: 32px; text: root.media-sub; font-size: 24px; color: #A8A8AF;
                     overflow: elide; vertical-alignment: center;
                 }
-                Text { x: 18px; y: 102px; width: 64px; height: 28px; text: root.position; font-size: 24px; color: #AAA49B; }
+                Text { x: 18px; y: 102px; width: 64px; height: 28px; text: root.position; font-size: 24px; color: #A8A8AF; }
                 Text {
-                    x: 454px; y: 102px; width: 64px; height: 28px; text: root.duration; font-size: 24px; color: #AAA49B;
+                    x: 454px; y: 102px; width: 64px; height: 28px; text: root.duration; font-size: 24px; color: #A8A8AF;
                     horizontal-alignment: right;
                 }
                 Rectangle {
-                    x: 94px; y: 112px; width: 348px; height: 8px; border-radius: 4px; background: #2A2622;
-                    Rectangle { x: 0px; width: parent.width * clamp(root.progress, 0, 1); height: 8px; border-radius: 4px; background: #F4F1EC; }
+                    x: 94px; y: 112px; width: 348px; height: 8px; border-radius: 4px; background: #2A2A2E;
+                    Rectangle { x: 0px; width: parent.width * clamp(root.progress, 0, 1); height: 8px; border-radius: 4px; background: #F5F5F7; }
                     if root.can-seek : Rectangle {
                         x: parent.width * clamp(root.progress, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
-                        border-radius: 10px; background: #F4F1EC;
+                        border-radius: 10px; background: #F5F5F7;
                     }
                 }
                 TouchArea {
@@ -237,46 +248,46 @@ slint::slint! {
                 }
                 Round {
                     x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
-                    tint: root.shuffle ? #C6FF1A : #AAA49B; clicked => { root.action(7); }
+                    tint: root.shuffle ? #C6FF1A : #A8A8AF; clicked => { root.action(7); }
                 }
                 Round {
-                    x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true;
-                    fill-color: #2A2622; clicked => { root.action(4); }
+                    x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true; press-color: #444449;
+                    fill-color: #2A2A2E; clicked => { root.action(4); }
                 }
                 Round {
                     x: 228px; y: 144px; width: 80px; height: 80px;
                     icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
-                    tint: #0C0B0A; fill-color: #C6FF1A; lit: true; clicked => { root.action(5); }
+                    tint: #0B0B0C; fill-color: #C6FF1A; lit: true; clicked => { root.action(5); }
                 }
                 Round {
-                    x: 336px; y: 152px; width: 64px; height: 64px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true;
-                    fill-color: #2A2622; clicked => { root.action(6); }
+                    x: 336px; y: 152px; width: 64px; height: 64px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true; press-color: #444449;
+                    fill-color: #2A2A2E; clicked => { root.action(6); }
                 }
                 Round {
                     x: 428px; y: 158px; width: 52px; height: 52px; icon: "M4 12l16-8-6 16-3-7z M11 13l9-9";
-                    tint: #AAA49B; clicked => { root.action(8); }
+                    tint: #A8A8AF; clicked => { root.action(8); }
                 }
                 Rectangle {
                     x: 18px; y: 238px; width: 52px; height: 52px; border-radius: 14px;
                     opacity: root.has-volume ? 1.0 : 0.4;
-                    background: mute-touch.pressed ? #45403A : mute-touch.has-hover ? #3A3530 : #2A2622;
+                    background: mute-touch.pressed ? #444449 : mute-touch.has-hover ? #38383D : #2A2A2E;
                     Path {
                         width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24; fill: transparent;
                         commands: root.muted ? "M4 9h4l5-4v14l-5-4H4z M16 9l6 6 M22 9l-6 6" : "M4 9h4l5-4v14l-5-4H4z M16 9a4 4 0 0 1 0 6 M19 6a8 8 0 0 1 0 12";
-                        stroke: root.muted ? #FF5A3C : #F4F1EC; stroke-width: 2.2px;
+                        stroke: root.muted ? #FF5A3C : #F5F5F7; stroke-width: 2.2px;
                     }
                     mute-touch := TouchArea { enabled: root.has-volume; clicked => { root.action(9); } }
                 }
                 Rectangle {
-                    x: 82px; y: 258px; width: 348px; height: 12px; border-radius: 6px; background: #2A2622;
+                    x: 82px; y: 258px; width: 348px; height: 12px; border-radius: 6px; background: #2A2A2E;
                     opacity: root.has-volume ? 1.0 : 0.4;
                     Rectangle {
                         x: 0px; width: parent.width * clamp(root.volume, 0, 1); height: 12px; border-radius: 6px;
-                        background: root.muted ? #8A847B : #C6FF1A;
+                        background: root.muted ? #88888F : #C6FF1A;
                     }
                     Rectangle {
                         x: parent.width * clamp(root.volume, 0, 1) - 14px; y: -8px; width: 28px; height: 28px;
-                        border-radius: 14px; background: #F4F1EC;
+                        border-radius: 14px; background: #F5F5F7;
                     }
                 }
                 TouchArea {
@@ -285,12 +296,12 @@ slint::slint! {
                     moved => { if self.pressed { root.set-volume((self.mouse-x - 6px) / 348px); } }
                 }
                 Text {
-                    x: 446px; y: 238px; width: 72px; height: 52px; text: root.volume-text; font-size: 24px; color: #F4F1EC;
+                    x: 446px; y: 238px; width: 72px; height: 52px; text: root.volume-text; font-size: 24px; color: #F5F5F7;
                     horizontal-alignment: right; vertical-alignment: center;
                 }
             }
             if root.open > 0 : Rectangle {
-                x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1F1C18;
+                x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1D1D20;
                 opacity: root.open;
                 Row { x: 0px; y: 0px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; motion: root.motion; clicked => { root.action(1); } }
                 Row { x: 0px; y: 62px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; motion: root.motion; divider: true; clicked => { root.action(2); } }
@@ -299,7 +310,7 @@ slint::slint! {
             }
             if root.open > 0 && root.footer != "" : Text {
                 x: 26px; y: (root.list-y + 248 + 12) * 1px; width: 508px; height: 30px; opacity: root.open;
-                text: root.footer; font-size: 24px; color: #8A847B; overflow: elide;
+                text: root.footer; font-size: 24px; color: #88888F; overflow: elide;
             }
         }
     }
@@ -620,7 +631,7 @@ impl Wrist {
         let weekday = s.get(&format!("day-{}", w.weekday % 7), &[]);
         let month = s.get(&format!("month-{}", w.month.clamp(1, 12)), &[]);
         let date = s.get("wrist-date", &[("weekday", weekday), ("day", w.day.to_string()), ("month", month)]);
-        v.set_date(if strip == 0 && !w.expanded { date.into() } else { Default::default() });
+        v.set_date(date.into());
 
         // Open: player, volume, quick switches, load.
         v.set_expanded(w.expanded);
@@ -728,9 +739,9 @@ mod tests {
         wrist.set(&WristInfo { hour: 9, minute: 5, weekday: 1, day: 9, month: 11, ..WristInfo::default() });
         let first = wrist.render().expect("first frame").to_vec();
         assert_eq!(first.len(), (WRIST_SIZE.0 * WRIST_SIZE.1 * 4) as usize);
-        // Card token #0C0B0A inside the card (BGRA); compact: transparent below the card.
+        // Card token #0B0B0C inside the card (BGRA); compact: transparent below the card.
         let at = |x: usize, y: usize| &first[(y * WRIST_SIZE.0 as usize + x) * 4..][..4];
-        assert_eq!(at(280, 4), &[0x0A, 0x0B, 0x0C, 0xFF]);
+        assert_eq!(at(280, 4), &[0x0C, 0x0B, 0x0B, 0xFF]);
         assert_eq!(at(280, 300)[3], 0, "compact watch must be transparent below the card");
         // Some text pixels are light.
         assert!(first.as_chunks::<4>().0.iter().any(|p| p[0] > 0xC0 && p[1] > 0xC0 && p[2] > 0xC0));
@@ -812,6 +823,43 @@ mod tests {
     }
 
     #[test]
+    fn the_time_stays_put_when_the_watch_opens() {
+        // Topmost row of light (clock) pixels left of the rings.
+        fn clock_top(px: &[u8]) -> Option<usize> {
+            (0..132).find(|&y| (26..300).any(|x| px[(y * WRIST_SIZE.0 as usize + x) * 4 + 1] > 0xC0))
+        }
+        let mut wrist = Wrist::new().expect("wrist");
+        let closed = WristInfo { hour: 21, minute: 37, weekday: 1, day: 9, month: 11, ..WristInfo::default() };
+        wrist.set(&closed);
+        let shut = clock_top(wrist.render().expect("closed"));
+        wrist.set(&WristInfo { expanded: true, ..closed });
+        let open = clock_top(wrist.render().expect("open"));
+        assert!(shut.is_some() && shut == open, "the clock moved: {shut:?} -> {open:?}");
+    }
+
+    #[test]
+    fn glance_pause_works_right_after_the_watch_closes() {
+        set_motion(true);
+        let mut wrist = Wrist::new().expect("wrist");
+        set_motion(false);
+        let closed = WristInfo { media: Some(song()), ..WristInfo::default() };
+        wrist.set(&WristInfo { expanded: true, ..closed.clone() });
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_millis(400) {
+            wrist.render();
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        wrist.set(&closed);
+        wrist.render();
+        let (x, y) = wrist_center(WristInput::PlayPause, false, true).expect("drawn");
+        let uv = [x / WRIST_SIZE.0 as f32, y / WRIST_SIZE.1 as f32];
+        wrist.pointer_move(uv);
+        wrist.pointer_button(uv, true);
+        wrist.pointer_button(uv, false);
+        assert_eq!(wrist.take_inputs(), vec![WristInput::PlayPause], "pause must work while the card still fades");
+    }
+
+    #[test]
     fn rings_cover_the_battery_level() {
         assert_eq!(ring_arc(1.0), RING_TRACK);
         assert!(ring_arc(0.25).starts_with("M40 6A34 34 0 0 1 74.00 40.00"), "{}", ring_arc(0.25));
@@ -839,27 +887,28 @@ mod a11y {
     fn text_colors_meet_wcag_aa() {
         // (text, background, where)
         let pairs = [
-            (0xF4F1EC, 0x0C0B0A, "ink on bg"),
-            (0xAAA49B, 0x0C0B0A, "secondary on bg"),
-            (0x8A847B, 0x0C0B0A, "tertiary on bg (hints, footers)"),
-            (0xF4F1EC, 0x15130F, "ink on rail"),
-            (0xAAA49B, 0x15130F, "secondary on rail"),
-            (0xAAA49B, 0x1F1C18, "secondary on group / hovered tab"),
-            (0x8A847B, 0x1F1C18, "tertiary on group (message time)"),
-            (0xF4F1EC, 0x1F1C18, "ink on group"),
-            (0xF4F1EC, 0x2A2622, "ink on hovered row"),
-            (0xAAA49B, 0x2A2622, "secondary on hovered segment"),
-            (0xC6FF1A, 0x1F1C18, "accent value on group"),
-            (0xC6FF1A, 0x2A2622, "accent value on hovered row"),
-            (0x0C0B0A, 0xC6FF1A, "bg on lit button / tab / key"),
-            (0x0C0B0A, 0xF4F1EC, "bg on chosen segment"),
-            (0x0C0B0A, 0xFF5A3C, "bg on armed danger button"),
-            (0xFF5A3C, 0x0C0B0A, "danger on bg (outlined Quit)"),
-            (0xFF5A3C, 0x1F1C18, "danger on key"),
+            (0xF5F5F7, 0x0B0B0C, "ink on bg"),
+            (0xA8A8AF, 0x0B0B0C, "secondary on bg"),
+            (0x88888F, 0x0B0B0C, "tertiary on bg (hints, footers)"),
+            (0xF5F5F7, 0x141416, "ink on rail"),
+            (0xA8A8AF, 0x141416, "secondary on rail"),
+            (0xA8A8AF, 0x1D1D20, "secondary on group / hovered tab"),
+            (0x88888F, 0x1D1D20, "tertiary on group (message time)"),
+            (0xF5F5F7, 0x1D1D20, "ink on group"),
+            (0xF5F5F7, 0x2A2A2E, "ink on hovered row"),
+            (0xA8A8AF, 0x2A2A2E, "secondary on hovered segment"),
+            (0xC6FF1A, 0x1D1D20, "accent value on group"),
+            (0xC6FF1A, 0x2A2A2E, "accent value on hovered row"),
+            (0x0B0B0C, 0xC6FF1A, "bg on lit button / tab / key"),
+            (0x0B0B0C, 0xF5F5F7, "bg on chosen segment"),
+            (0x0B0B0C, 0xFF5A3C, "bg on armed danger button"),
+            (0xFF5A3C, 0x0B0B0C, "danger on bg (outlined Quit)"),
+            (0xFF5A3C, 0x1D1D20, "danger on key"),
             (0xFF8A6E, 0x2B1712, "low battery strip"),
-            (0xF4F1EC, 0x36312B, "ink on pressed row / button"),
-            (0xAAA49B, 0x36312B, "secondary on pressed segment"),
-            (0xC6FF1A, 0x36312B, "accent value on pressed row"),
+            (0xF5F5F7, 0x36363B, "ink on pressed row / button"),
+            (0xF5F5F7, 0x444449, "ink on pressed Previous / Next"),
+            (0xA8A8AF, 0x36363B, "secondary on pressed segment"),
+            (0xC6FF1A, 0x36363B, "accent value on pressed row"),
             (0xFF5A3C, 0x45201A, "danger on pressed Quit"),
         ];
         // Letter tiles: 24 px bold is large text (3:1).

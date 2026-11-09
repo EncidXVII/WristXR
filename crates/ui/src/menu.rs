@@ -7,8 +7,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 slint::slint! {
-    // Night Lime (soft): bg #0C0B0A, rail #15130F, surface #1F1C18, line/hover #2A2622, ink #F4F1EC,
-    // secondary #AAA49B, tertiary #8A847B, accent #C6FF1A, danger #FF5A3C. Display face: Bahnschrift.
+    import "../fonts/Barlow-Regular.ttf";
+    import "../fonts/Barlow-SemiBold.ttf";
+    import "../fonts/Anton-Regular.ttf";
+    // Night Lime (graphite): bg #0B0B0C, rail #141416, surface #1D1D20, line/hover #2A2A2E, ink #F5F5F7,
+    // secondary #A8A8AF, tertiary #88888F, accent #C6FF1A, danger #FF5A3C. Faces: Anton for headings and the time,
+    // Barlow for everything else (both bundled, fonts/).
     export struct TabView { label: string, icon: string, badge: int }
     export struct GroupView { x: int, y: int, w: int, h: int, inset: bool }
     // tone: 0 secondary, 1 ink, 2 tertiary
@@ -21,6 +25,7 @@ slint::slint! {
     }
 
     export component MenuView inherits Window {
+        default-font-family: "Barlow";
         in property <[TabView]> tabs;
         in property <int> tab;
         in property <string> heading;
@@ -37,67 +42,67 @@ slint::slint! {
         callback slot-clicked(int);
         width: 800px;
         height: 600px;
-        background: #0C0B0A;
+        background: #0B0B0C;
 
-        if root.tabs.length > 0 : Rectangle { x: 0px; y: 0px; width: 120px; height: 600px; background: #15130F; }
+        if root.tabs.length > 0 : Rectangle { x: 0px; y: 0px; width: 120px; height: 600px; background: #141416; }
         for t[i] in root.tabs : Rectangle {
             x: 10px;
             y: (12 + i * 92) * 1px;
             width: 100px;
             height: 88px;
             border-radius: 16px;
-            background: i != root.tab && tab-touch.pressed ? #2A2622 : i != root.tab && tab-touch.has-hover ? #1F1C18 : transparent;
+            background: i != root.tab && tab-touch.pressed ? #2A2A2E : i != root.tab && tab-touch.has-hover ? #1D1D20 : transparent;
             Rectangle {
                 x: 22px; y: 6px; width: 56px; height: 40px; border-radius: 20px;
                 background: i == root.tab ? #C6FF1A : transparent;
                 Path {
                     width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
                     commands: t.icon; fill: transparent; stroke-width: 2.2px;
-                    stroke: i == root.tab ? #0C0B0A : #AAA49B;
+                    stroke: i == root.tab ? #0B0B0C : #A8A8AF;
                 }
             }
             if t.badge > 0 : Rectangle {
-                x: 64px; y: 0px; width: 30px; height: 30px; border-radius: 15px; background: #F4F1EC;
-                Text { text: t.badge; font-size: 24px; font-weight: 700; color: #0C0B0A; }
+                x: 64px; y: 0px; width: 30px; height: 30px; border-radius: 15px; background: #F5F5F7;
+                Text { text: t.badge; font-size: 24px; font-weight: 700; color: #0B0B0C; }
             }
             Text {
                 y: 50px; width: parent.width; height: 32px; horizontal-alignment: center; vertical-alignment: center;
                 text: t.label; font-size: 24px; font-weight: i == root.tab ? 700 : 400;
-                color: i == root.tab ? #F4F1EC : #AAA49B;
+                color: i == root.tab ? #F5F5F7 : #A8A8AF;
             }
             tab-touch := TouchArea { clicked => { root.tab-clicked(i); } }
         }
         if root.tabs.length > 0 : Rectangle {
             x: 10px; y: 524px; width: 100px; height: 64px; border-radius: 16px;
-            background: close-touch.pressed ? #36312B : close-touch.has-hover ? #2A2622 : #1F1C18;
+            background: close-touch.pressed ? #36363B : close-touch.has-hover ? #2A2A2E : #1D1D20;
             Path {
                 width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
-                commands: root.close-icon; fill: transparent; stroke: #F4F1EC; stroke-width: 2.4px;
+                commands: root.close-icon; fill: transparent; stroke: #F5F5F7; stroke-width: 2.4px;
             }
             close-touch := TouchArea { clicked => { root.close-clicked(); } }
         }
 
         Text {
             x: root.heading-x * 1px; y: 18px; height: 52px; width: 776px - self.x;
-            text: root.heading; font-family: "Bahnschrift"; font-size: 34px; font-weight: 700; color: #F4F1EC;
+            text: root.heading; font-family: "Anton"; font-size: 34px; color: #F5F5F7;
             vertical-alignment: center; overflow: elide;
         }
         Text {
             x: 776px - self.width; y: 18px; height: 52px; width: 400px;
-            text: root.hint; font-size: 24px; color: #8A847B;
+            text: root.hint; font-size: 24px; color: #88888F;
             horizontal-alignment: right; vertical-alignment: center; overflow: elide;
         }
 
         for g in root.groups : Rectangle {
             x: g.x * 1px; y: g.y * 1px; width: g.w * 1px; height: g.h * 1px;
             border-radius: g.inset ? 12px : 16px;
-            background: g.inset ? #0C0B0A : #1F1C18;
+            background: g.inset ? #0B0B0C : #1D1D20;
         }
         for l in root.labels : Text {
             x: l.x * 1px; y: l.y * 1px; width: l.w * 1px; height: l.h * 1px;
             text: l.text; font-size: 24px; wrap: l.wrap ? word-wrap : no-wrap; overflow: elide;
             vertical-alignment: l.wrap ? top : center;
-            color: l.tone == 1 ? #F4F1EC : l.tone == 2 ? #8A847B : #AAA49B;
+            color: l.tone == 1 ? #F5F5F7 : l.tone == 2 ? #88888F : #A8A8AF;
         }
 
         for s[i] in root.slots : Rectangle {
@@ -107,19 +112,19 @@ slint::slint! {
             border-radius: s.kind == 2 ? 9px : s.kind == 5 ? 12px : s.kind == 8 ? 14px : 16px;
             border-width: s.kind == 3 && !s.on ? 2px : 0px;
             border-color: #FF5A3C;
-            background: s.kind == 2 && s.on ? #F4F1EC
+            background: s.kind == 2 && s.on ? #F5F5F7
                 : s.kind == 3 && s.on ? #FF5A3C
                 : s.kind == 6 && s.on ? #C6FF1A
                 // Pressed answers on trigger-down, before the click lands on release.
-                : touch.pressed && s.enabled ? (s.kind == 3 ? #45201A : #36312B)
-                : touch.has-hover && s.enabled ? #2A2622
-                : s.kind == 6 || s.kind == 7 || s.kind == 8 ? #1F1C18
+                : touch.pressed && s.enabled ? (s.kind == 3 ? #45201A : #36363B)
+                : touch.has-hover && s.enabled ? #2A2A2E
+                : s.kind == 6 || s.kind == 7 || s.kind == 8 ? #1D1D20
                 : transparent;
-            if s.divider : Rectangle { x: 16px; y: 0px; width: parent.width - 32px; height: 1px; background: #2A2622; }
+            if s.divider : Rectangle { x: 16px; y: 0px; width: parent.width - 32px; height: 1px; background: #2A2A2E; }
             // Open-now dot (lime when shown).
             if s.kind == 4 : Rectangle {
                 x: 16px; y: (parent.height - 12px) / 2; width: 12px; height: 12px; border-radius: 6px;
-                background: s.on ? #C6FF1A : #8A847B;
+                background: s.on ? #C6FF1A : #88888F;
             }
             // Unread dot.
             if s.kind == 9 && s.on : Rectangle {
@@ -134,30 +139,30 @@ slint::slint! {
             if s.kind == 0 || s.kind == 1 || s.kind == 4 || s.kind == 7 : Text {
                 x: s.tile != "" ? 72px : s.kind == 4 ? 40px : 16px;
                 y: 0px; height: parent.height; width: parent.width - self.x - (s.kind == 1 ? 90px : 92px);
-                text: s.label; font-size: s.kind == 4 || s.kind == 7 ? 24px : 26px; color: #F4F1EC;
+                text: s.label; font-size: s.kind == 4 || s.kind == 7 ? 24px : 26px; color: #F5F5F7;
                 vertical-alignment: center; overflow: elide;
             }
             if s.kind == 9 : Text {
                 x: 72px; y: 6px; height: 30px; width: parent.width - 168px;
-                text: s.label; font-size: 24px; font-weight: 700; color: s.on ? #F4F1EC : #AAA49B;
+                text: s.label; font-size: 24px; font-weight: 700; color: s.on ? #F5F5F7 : #A8A8AF;
                 vertical-alignment: center; overflow: elide;
             }
             if s.kind == 9 : Text {
                 x: 72px; y: 34px; height: 30px; width: parent.width - 88px;
-                text: s.detail; font-size: 24px; color: #AAA49B; vertical-alignment: center; overflow: elide;
+                text: s.detail; font-size: 24px; color: #A8A8AF; vertical-alignment: center; overflow: elide;
             }
             if s.kind == 0 || s.kind == 7 || s.kind == 9 : Text {
                 x: parent.width - self.width - 16px; y: 0px; height: s.kind == 9 ? 42px : parent.height;
                 text: s.value; font-size: s.value == "+" ? 30px : 24px;
-                color: s.kind == 9 ? #8A847B : s.on ? #C6FF1A : #AAA49B; vertical-alignment: center;
+                color: s.kind == 9 ? #88888F : s.on ? #C6FF1A : #A8A8AF; vertical-alignment: center;
             }
             if s.kind == 1 : Rectangle {
                 x: parent.width - 74px; y: (parent.height - 34px) / 2; width: 58px; height: 34px; border-radius: 17px;
-                background: s.on ? #C6FF1A : #2A2622;
+                background: s.on ? #C6FF1A : #2A2A2E;
                 animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
                 Rectangle {
                     x: s.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
-                    background: s.on ? #0C0B0A : #8A847B;
+                    background: s.on ? #0B0B0C : #88888F;
                     animate x, background { duration: root.motion ? 160ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
                 }
             }
@@ -165,12 +170,12 @@ slint::slint! {
                 x: 8px; width: parent.width - 16px; horizontal-alignment: center;
                 text: s.label; font-size: s.kind == 6 ? 26px : 24px; overflow: elide;
                 font-weight: s.on || s.kind == 3 ? 700 : 400;
-                color: s.on ? #0C0B0A : s.kind == 3 ? #FF5A3C : s.kind == 2 ? #AAA49B : #F4F1EC;
+                color: s.on ? #0B0B0C : s.kind == 3 ? #FF5A3C : s.kind == 2 ? #A8A8AF : #F5F5F7;
             }
             if s.kind == 5 || s.kind == 8 : Path {
                 width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
                 commands: s.icon; fill: transparent; stroke-width: 2.6px;
-                stroke: s.kind == 5 ? #AAA49B : #F4F1EC;
+                stroke: s.kind == 5 ? #A8A8AF : #F5F5F7;
             }
             touch := TouchArea { enabled: s.enabled; clicked => { root.slot-clicked(i); } }
         }

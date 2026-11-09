@@ -1,21 +1,21 @@
 {
-  "name": "Night Lime (warm)",
+  "name": "Night Lime (graphite)",
   "color": {
-    "bg": "#0C0B0A",
-    "surface": "#15130F",
-    "raised": "#1F1C18",
-    "line": "#2A2622",
-    "ink": "#F4F1EC",
-    "ink2": "#AAA49B",
-    "ink3": "#8A847B",
-    "edge": "#645E56",
+    "bg": "#0B0B0C",
+    "surface": "#141416",
+    "raised": "#1D1D20",
+    "line": "#2A2A2E",
+    "ink": "#F5F5F7",
+    "ink2": "#A8A8AF",
+    "ink3": "#88888F",
+    "edge": "#64646B",
     "accent": "#C6FF1A",
-    "on_accent": "#0C0B0A",
+    "on_accent": "#0B0B0C",
     "danger": "#FF5A3C"
   },
   "font": {
     "display": "Anton",
-    "body": "Ubuntu"
+    "body": "Barlow"
   },
   "type": {
     "display": 96,

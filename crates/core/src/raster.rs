@@ -7,12 +7,12 @@ const fn rgb(hex: u32) -> Color {
     [(hex & 0xFF) as u8, ((hex >> 8) & 0xFF) as u8, (hex >> 16) as u8, 0xFF]
 }
 
-// design-tokens.json "Night Lime (warm)"
-pub const BG: Color = rgb(0x0C0B0A);
-pub const RAISED: Color = rgb(0x1F1C18);
-pub const LINE: Color = rgb(0x2A2622);
-pub const INK: Color = rgb(0xF4F1EC);
-pub const INK2: Color = rgb(0xAAA49B);
+// design-tokens.json "Night Lime (graphite)"
+pub const BG: Color = rgb(0x0B0B0C);
+pub const RAISED: Color = rgb(0x1D1D20);
+pub const LINE: Color = rgb(0x2A2A2E);
+pub const INK: Color = rgb(0xF5F5F7);
+pub const INK2: Color = rgb(0xA8A8AF);
 pub const ACCENT: Color = rgb(0xC6FF1A);
 
 pub struct Image {

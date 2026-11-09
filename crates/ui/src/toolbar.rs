@@ -8,11 +8,15 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 slint::slint! {
+    import "../fonts/Barlow-Regular.ttf";
+    import "../fonts/Barlow-SemiBold.ttf";
+    import "../fonts/Anton-Regular.ttf";
     // kind: see ToolKind. Tokens as in the menu.
     export struct ToolView { x: int, y: int, w: int, h: int, kind: int, label: string, icon: string, on: bool, value: float }
     export struct BoxView { x: int, w: int }
 
     export component ToolbarView inherits Window {
+        default-font-family: "Barlow";
         in property <BoxView> bar;
         in property <[BoxView]> groups;
         in property <[ToolView]> tools;
@@ -23,53 +27,53 @@ slint::slint! {
         background: transparent;
         Rectangle {
             x: root.bar.x * 1px; y: 0px; width: root.bar.w * 1px; height: 84px; border-radius: 20px;
-            background: #0C0B0A;
+            background: #0B0B0C;
         }
         for g in root.groups : Rectangle {
-            x: g.x * 1px; y: 8px; width: g.w * 1px; height: 68px; border-radius: 14px; background: #1F1C18;
+            x: g.x * 1px; y: 8px; width: g.w * 1px; height: 68px; border-radius: 14px; background: #1D1D20;
         }
         for t[i] in root.tools : Rectangle {
             x: t.x * 1px; y: t.y * 1px; width: t.w * 1px; height: t.h * 1px;
             border-radius: t.kind == 6 || t.kind == 7 || t.kind == 8 ? 14px : 10px;
             background: t.kind == 1 && t.on ? #C6FF1A
-                : t.kind == 5 && t.on ? #F4F1EC
+                : t.kind == 5 && t.on ? #F5F5F7
                 : t.kind == 7 ? (touch.pressed ? #5A2A20 : touch.has-hover ? #45201A : #2B1712)
-                : touch.pressed && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #36312B
-                : touch.has-hover && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #2A2622
-                : t.kind == 6 || t.kind == 8 ? #1F1C18
+                : touch.pressed && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #36363B
+                : touch.has-hover && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #2A2A2E
+                : t.kind == 6 || t.kind == 8 ? #1D1D20
                 : transparent;
             if t.kind == 0 : Path {
                 x: 12px; width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
-                commands: t.icon; fill: transparent; stroke: #AAA49B; stroke-width: 2.2px;
+                commands: t.icon; fill: transparent; stroke: #A8A8AF; stroke-width: 2.2px;
             }
             if t.kind == 0 : Text {
-                x: 46px; width: parent.width - 52px; text: t.label; font-size: 24px; color: #AAA49B; overflow: elide;
+                x: 46px; width: parent.width - 52px; text: t.label; font-size: 24px; color: #A8A8AF; overflow: elide;
             }
             if t.kind == 1 || t.kind == 6 || t.kind == 7 : Path {
                 width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                 commands: t.icon; fill: transparent; stroke-width: 2.2px;
-                stroke: t.kind == 7 ? #FF5A3C : t.kind == 1 && t.on ? #0C0B0A : #F4F1EC;
+                stroke: t.kind == 7 ? #FF5A3C : t.kind == 1 && t.on ? #0B0B0C : #F5F5F7;
             }
-            if t.kind == 2 : Text { text: t.label; font-size: 30px; color: #F4F1EC; }
-            if t.kind == 3 : Text { text: t.label; font-size: 24px; color: #AAA49B; }
+            if t.kind == 2 : Text { text: t.label; font-size: 30px; color: #F5F5F7; }
+            if t.kind == 3 : Text { text: t.label; font-size: 24px; color: #A8A8AF; }
             if t.kind == 5 || t.kind == 8 : Text {
                 text: t.label; font-size: 24px; font-weight: t.on ? 700 : 400;
-                color: t.on ? #0C0B0A : t.kind == 8 ? #F4F1EC : #AAA49B;
+                color: t.on ? #0B0B0C : t.kind == 8 ? #F5F5F7 : #A8A8AF;
             }
             if t.kind == 4 : Path {
                 x: 14px; width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
-                commands: t.icon; fill: transparent; stroke: #AAA49B; stroke-width: 2.2px;
+                commands: t.icon; fill: transparent; stroke: #A8A8AF; stroke-width: 2.2px;
             }
             if t.kind == 4 : Rectangle {
                 x: 52px; y: (parent.height - 8px) / 2; width: parent.width - 68px; height: 8px; border-radius: 4px;
-                background: #2A2622;
+                background: #2A2A2E;
                 Rectangle {
                     x: 0px; width: parent.width * clamp(t.value, 0, 1); height: 8px; border-radius: 4px;
                     background: #C6FF1A;
                 }
                 Rectangle {
                     x: parent.width * clamp(t.value, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
-                    border-radius: 10px; background: #F4F1EC;
+                    border-radius: 10px; background: #F5F5F7;
                 }
             }
             touch := TouchArea {

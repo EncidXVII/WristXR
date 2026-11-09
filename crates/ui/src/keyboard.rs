@@ -5,25 +5,29 @@ use dvr_core::keyboard::{ROW_UNITS, ROWS};
 use slint::{ComponentHandle, ModelRc, VecModel};
 
 slint::slint! {
+    import "../fonts/Barlow-Regular.ttf";
+    import "../fonts/Barlow-SemiBold.ttf";
+    import "../fonts/Anton-Regular.ttf";
     export struct KeyView { label: string, x: length, y: length, w: length, lit: bool, hover: bool, small: bool }
 
     export component KeyboardView inherits Window {
+        default-font-family: "Barlow";
         in property <[KeyView]> keys;
         width: 1500px;
         height: 600px;
-        background: #0C0B0A;
+        background: #0B0B0C;
         for key in root.keys : Rectangle {
             x: key.x + 6px;
             y: key.y + 6px;
             width: key.w - 12px;
             height: 88px;
-            background: key.lit ? #C6FF1A : key.hover ? #2A2622 : #1F1C18;
+            background: key.lit ? #C6FF1A : key.hover ? #2A2A2E : #1D1D20;
             border-width: key.hover ? 4px : 0px;
             border-color: #C6FF1A;
             Text {
                 text: key.label;
                 font-size: key.small ? 28px : 44px;
-                color: key.lit ? #0C0B0A : key.small ? #AAA49B : #F4F1EC;
+                color: key.lit ? #0B0B0C : key.small ? #A8A8AF : #F5F5F7;
                 overflow: elide;
             }
         }
