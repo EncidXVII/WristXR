@@ -2,7 +2,7 @@
 //! page with [`Layout`], which also decides where every control sits, so tests can click them; this view only
 //! draws the model and reports which tab or slot was clicked.
 use crate::{Canvas, ensure_platform};
-use slint::{Color, ComponentHandle, ModelRc, SharedString, VecModel};
+use slint::{Color, ComponentHandle, Model, ModelRc, SharedString, VecModel};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -30,6 +30,8 @@ slint::slint! {
         in property <[LabelView]> labels;
         in property <[SlotView]> slots;
         in property <string> close-icon;
+        // Off: switches flip at once (Windows "Animation effects" off, tests).
+        in property <bool> motion;
         callback tab-clicked(int);
         callback close-clicked;
         callback slot-clicked(int);
@@ -44,7 +46,7 @@ slint::slint! {
             width: 100px;
             height: 88px;
             border-radius: 16px;
-            background: i != root.tab && tab-touch.has-hover ? #1F1C18 : transparent;
+            background: i != root.tab && tab-touch.pressed ? #2A2622 : i != root.tab && tab-touch.has-hover ? #1F1C18 : transparent;
             Rectangle {
                 x: 22px; y: 6px; width: 56px; height: 40px; border-radius: 20px;
                 background: i == root.tab ? #C6FF1A : transparent;
@@ -67,7 +69,7 @@ slint::slint! {
         }
         if root.tabs.length > 0 : Rectangle {
             x: 10px; y: 524px; width: 100px; height: 64px; border-radius: 16px;
-            background: close-touch.has-hover ? #2A2622 : #1F1C18;
+            background: close-touch.pressed ? #36312B : close-touch.has-hover ? #2A2622 : #1F1C18;
             Path {
                 width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
                 commands: root.close-icon; fill: transparent; stroke: #F4F1EC; stroke-width: 2.4px;
@@ -108,6 +110,8 @@ slint::slint! {
             background: s.kind == 2 && s.on ? #F4F1EC
                 : s.kind == 3 && s.on ? #FF5A3C
                 : s.kind == 6 && s.on ? #C6FF1A
+                // Pressed answers on trigger-down, before the click lands on release.
+                : touch.pressed && s.enabled ? (s.kind == 3 ? #45201A : #36312B)
                 : touch.has-hover && s.enabled ? #2A2622
                 : s.kind == 6 || s.kind == 7 || s.kind == 8 ? #1F1C18
                 : transparent;
@@ -150,9 +154,11 @@ slint::slint! {
             if s.kind == 1 : Rectangle {
                 x: parent.width - 74px; y: (parent.height - 34px) / 2; width: 58px; height: 34px; border-radius: 17px;
                 background: s.on ? #C6FF1A : #2A2622;
+                animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
                 Rectangle {
                     x: s.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
                     background: s.on ? #0C0B0A : #8A847B;
+                    animate x, background { duration: root.motion ? 160ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
                 }
             }
             if s.kind == 2 || s.kind == 3 || s.kind == 6 : Text {
@@ -568,6 +574,8 @@ pub struct Menu {
     canvas: Canvas,
     inputs: Rc<RefCell<Vec<MenuInput>>>,
     shown: MenuModel,
+    /// Kept across updates of the same page, so a flipped switch slides instead of being redrawn from scratch.
+    slots: Rc<VecModel<SlotView>>,
 }
 
 fn px(v: f32) -> i32 {
@@ -588,7 +596,10 @@ impl Menu {
         let q = inputs.clone();
         view.on_close_clicked(move || q.borrow_mut().push(MenuInput::Close));
         view.set_close_icon(crate::icons::CLOSE.into());
-        Ok(Self { view, canvas, inputs, shown: MenuModel::default() })
+        view.set_motion(crate::motion());
+        let slots = Rc::new(VecModel::default());
+        view.set_slots(ModelRc::from(slots.clone()));
+        Ok(Self { view, canvas, inputs, shown: MenuModel::default(), slots })
     }
 
     /// Updates the view; a no-op when nothing changed.
@@ -650,7 +661,16 @@ impl Menu {
                 divider: s.divider,
             })
             .collect();
-        self.view.set_slots(ModelRc::new(VecModel::from(slots)));
+        let same_page = m.tab == self.shown.tab && m.title == self.shown.title && slots.len() == self.slots.row_count();
+        if same_page {
+            for (i, s) in slots.into_iter().enumerate() {
+                if self.slots.row_data(i).as_ref() != Some(&s) {
+                    self.slots.set_row_data(i, s);
+                }
+            }
+        } else {
+            self.slots.set_vec(slots);
+        }
         self.shown = m.clone();
     }
 

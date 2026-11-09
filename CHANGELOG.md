@@ -15,6 +15,9 @@ First public early-access release (Windows).
   Windows volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
 - Toolbar: the panel's name first, opacity slider, Room / Hand / Head as one choice, keyboard languages and
   Put away on the keyboard's toolbar.
+- Motion: the watch grows down from the time and shrinks back the same way, its contents fading in as they are
+  revealed; switches slide; buttons and rows answer on trigger-down; the menu fades in instead of flashing into
+  view. All of it follows Windows' "Animation effects" setting (off = instant).
 - Desktop panels for every monitor, flat or curved, exact mapping on mixed-DPI multi-monitor setups.
 - Add any open window as its own panel from a window list.
 - Toolbar under the pointed-at panel: lock, curve, smaller / bigger, opacity, anchor, close.

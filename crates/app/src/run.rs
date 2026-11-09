@@ -252,6 +252,10 @@ pub fn run() -> Result<(), String> {
     let mut events = Vec::with_capacity(64);
     let mut dirty: Option<Instant> = None;
     let mut resized: Vec<(u32, u32, u32)> = Vec::with_capacity(8);
+    // Follow Windows' "Animation effects" setting: the watch grows, switches slide, the menu fades in.
+    let motion = dvr_sys::animations_enabled();
+    dvr_ui::set_motion(motion);
+    session.motion = motion;
     let mut wrist = Wrist::new()?;
     let media = Media::start();
     let mut now_playing: Option<MediaInfo> = None;

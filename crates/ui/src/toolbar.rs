@@ -33,7 +33,8 @@ slint::slint! {
             border-radius: t.kind == 6 || t.kind == 7 || t.kind == 8 ? 14px : 10px;
             background: t.kind == 1 && t.on ? #C6FF1A
                 : t.kind == 5 && t.on ? #F4F1EC
-                : t.kind == 7 ? (touch.has-hover ? #45201A : #2B1712)
+                : t.kind == 7 ? (touch.pressed ? #5A2A20 : touch.has-hover ? #45201A : #2B1712)
+                : touch.pressed && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #36312B
                 : touch.has-hover && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #2A2622
                 : t.kind == 6 || t.kind == 8 ? #1F1C18
                 : transparent;

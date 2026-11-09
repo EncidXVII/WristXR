@@ -44,6 +44,25 @@ pub fn local_date() -> (u16, u16, u16) {
     (t.wDayOfWeek, t.wDay, t.wMonth)
 }
 
+/// Windows' "Animation effects" setting (Settings > Accessibility > Visual effects); on when unknown.
+pub fn animations_enabled() -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
+    };
+    use windows::core::BOOL;
+    let mut on = BOOL(1);
+    // SAFETY: plain query into a BOOL we own.
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            Some((&raw mut on).cast()),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    ok.is_err() || on.as_bool()
+}
+
 /// Local wall-clock (hour, minute).
 pub fn local_time() -> (u16, u16) {
     // SAFETY: plain query.

@@ -189,6 +189,8 @@ pub struct Session {
     pub languages: Vec<String>,
     /// SteamVR starts the overlay with itself (kept by the app).
     pub auto_launch: bool,
+    /// The menu fades in when it opens (Windows "Animation effects" on; set by the app).
+    pub motion: bool,
     /// Windows refuses to share app notifications (kept by the app).
     pub notify_blocked: bool,
     /// Recent notifications, newest first.
@@ -260,6 +262,7 @@ impl Session {
             language: String::new(),
             languages: Vec::new(),
             auto_launch: false,
+            motion: false,
             notify_blocked: false,
             history: VecDeque::new(),
             clock: 0,
@@ -282,6 +285,7 @@ impl Session {
         if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
             if !m.visible {
                 m.pose = Panel::menu_in_front(head, m.aspect).pose;
+                m.dim = self.appear();
             }
             m.visible = true;
         }
@@ -307,6 +311,7 @@ impl Session {
         if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
             if !open {
                 m.pose = Panel::menu_in_front(head, m.aspect).pose;
+                m.dim = self.appear();
                 if matches!(self.page, Page::Windows(_)) {
                     self.page = Page::Tab(TAB_PANELS);
                 }
@@ -374,6 +379,12 @@ impl Session {
         if let Some(k) = find(panels, Source::Keyboard) {
             *k = Panel { id: k.id, visible: k.visible, opacity: k.opacity, ..Panel::keyboard_below(k.id, head) };
         }
+    }
+
+    /// Starting fade for a panel that appears in front of the user: a big surface fades in rather than flashing
+    /// into view (instant without motion).
+    fn appear(&self) -> f32 {
+        if self.motion { 1.0 } else { 0.0 }
     }
 
     /// Steps the fades. `watch` is how visible the watch should be (0..1); `dt` seconds since the last call.
@@ -1142,5 +1153,29 @@ impl Session {
             Act::Quit => fx.push(Effect::Quit),
         }
         fx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_fades_in_with_motion_and_appears_at_once_without() {
+        for motion in [true, false] {
+            let mut panels = Vec::new();
+            let state = State { onboarded: true, ..State::default() };
+            let mut s = Session::new(state, &mut panels, Pose::IDENTITY);
+            s.motion = motion;
+            let menu = |p: &[Panel]| *p.iter().find(|p| p.id == MENU_ID).expect("menu");
+            assert!(!menu(&panels).visible);
+            s.toggle_menu(&mut panels, Pose::IDENTITY);
+            assert!(menu(&panels).visible);
+            assert_eq!(menu(&panels).shown(), !motion, "motion {motion}: starts faded out only with motion");
+            s.update_dims(&mut panels, 1.0, 0.03);
+            assert!(menu(&panels).shown() && menu(&panels).dim < 1.0, "fading in after one frame");
+            s.update_dims(&mut panels, 1.0, 1.0);
+            assert_eq!(menu(&panels).dim, 0.0, "fully in");
+        }
     }
 }

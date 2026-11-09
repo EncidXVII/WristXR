@@ -26,6 +26,9 @@ use std::time::{Duration, Instant};
 slint::slint! {
     // Night Lime (soft), as in the menu. The watch grows only downward: nothing moves under the laser when it
     // opens. Everything outside the card is transparent.
+    // Motion: the card grows from the time and shrinks back along the same path (critically damped, no bounce);
+    // what it reveals fades in with it. Presses answer on trigger-down. `motion` off (Windows "Animation
+    // effects" off) makes every change instant.
     export struct RingView { arc: string, label: string, low: bool }
 
     component Round inherits Rectangle {
@@ -36,7 +39,8 @@ slint::slint! {
         in property <bool> lit;
         callback clicked;
         border-radius: self.width / 2;
-        background: touch.has-hover && !root.lit ? #2A2622 : root.fill-color;
+        background: touch.pressed && !root.lit ? #36312B : touch.has-hover && !root.lit ? #2A2622 : root.fill-color;
+        opacity: touch.pressed && root.lit ? 0.8 : 1.0;
         Path {
             width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
             commands: root.icon; stroke: root.tint; stroke-width: 2.2px;
@@ -51,10 +55,11 @@ slint::slint! {
         in property <bool> switch;
         in property <bool> on;
         in property <bool> divider;
+        in property <bool> motion;
         callback clicked;
         height: 62px;
         border-radius: 20px;
-        background: touch.has-hover ? #2A2622 : transparent;
+        background: touch.pressed ? #36312B : touch.has-hover ? #2A2622 : transparent;
         if root.divider : Rectangle { x: 18px; y: 0px; width: parent.width - 36px; height: 1px; background: #2A2622; }
         Text {
             x: 18px; width: parent.width - 120px; text: root.label; font-size: 26px; color: #F4F1EC;
@@ -66,9 +71,11 @@ slint::slint! {
         if root.switch : Rectangle {
             x: parent.width - 76px; y: 14px; width: 58px; height: 34px; border-radius: 17px;
             background: root.on ? #C6FF1A : #2A2622;
+            animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
             Rectangle {
                 x: root.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
                 background: root.on ? #0C0B0A : #8A847B;
+                animate x, background { duration: root.motion ? 160ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
             }
         }
         touch := TouchArea { clicked => { root.clicked(); } }
@@ -111,6 +118,7 @@ slint::slint! {
         in property <bool> keyboard-on;
         in property <bool> screens-on;
         in property <string> footer;
+        in property <bool> motion;
         callback action(int);
         callback seek(float);
         callback set-volume(float);
@@ -118,173 +126,181 @@ slint::slint! {
         height: 760px;
         background: transparent;
 
+        // 0 closed .. 1 open; content shown while it is above 0, so closing fades it out instead of cutting it.
+        property <float> open: root.expanded ? 1 : 0;
+        animate open { duration: root.motion ? 200ms : 0ms; easing: ease-out; }
+        property <length> card-h: root.card-height * 1px;
+        animate card-h { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
+
         Rectangle {
-            x: 0px; y: 0px; width: 560px; height: root.card-height * 1px; border-radius: 28px; background: #0C0B0A;
-        }
-        Text {
-            x: 26px; y: root.date != "" ? 14px : 22px; height: 88px;
-            text: root.time; font-family: "Bahnschrift"; font-size: 88px; font-weight: 700; color: #F4F1EC;
-            vertical-alignment: center;
-        }
-        if root.date != "" : Text {
-            x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #AAA49B;
-        }
-        for r[i] in root.rings : Rectangle {
-            x: (534 - (root.rings.length - i) * 92 + 12) * 1px; y: 26px; width: 80px; height: 80px;
-            Path {
-                width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
-                commands: root.ring-track; stroke: #2A2622; stroke-width: 8px; fill: transparent;
+            x: 0px; y: 0px; width: 560px; height: root.card-h; border-radius: 28px; background: #0C0B0A; clip: true;
+            Text {
+                x: 26px; y: root.date != "" ? 14px : 22px; height: 88px;
+                text: root.time; font-family: "Bahnschrift"; font-size: 88px; font-weight: 700; color: #F4F1EC;
+                vertical-alignment: center;
             }
-            Path {
-                width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
-                commands: r.arc; stroke: r.low ? #FF5A3C : #C6FF1A; stroke-width: 8px; fill: transparent;
+            if root.date != "" : Text {
+                x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #AAA49B;
             }
-            Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : #F4F1EC; }
-        }
+            for r[i] in root.rings : Rectangle {
+                x: (534 - (root.rings.length - i) * 92 + 12) * 1px; y: 26px; width: 80px; height: 80px;
+                Path {
+                    width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
+                    commands: root.ring-track; stroke: #2A2622; stroke-width: 8px; fill: transparent;
+                }
+                Path {
+                    width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
+                    commands: r.arc; stroke: r.low ? #FF5A3C : #C6FF1A; stroke-width: 8px; fill: transparent;
+                }
+                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : #F4F1EC; }
+            }
 
-        // Glance strip: one line under the time (music, a new message or a low battery).
-        if !root.expanded && root.strip > 0 : Rectangle {
-            x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px;
-            background: root.strip == 3 ? #2B1712 : #1F1C18;
-            if root.strip == 2 : Rectangle { x: 0px; y: 12px; width: 4px; height: 44px; border-radius: 2px; background: #C6FF1A; }
-            if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: #C6FF1A; }
-            if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: #C6FF1A; }
-            if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: #C6FF1A; }
-            if root.strip == 1 && root.playing : Rectangle { x: 42px; y: 32px; width: 5px; height: 18px; border-radius: 2px; background: #C6FF1A; }
-            if root.strip == 2 && root.strip-tile != "" : Rectangle {
-                x: 18px; y: 14px; width: 40px; height: 40px; border-radius: 11px; background: root.strip-tile-color;
-                Text { text: root.strip-tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
+            // Glance strip: one line under the time (music, a new message or a low battery).
+            // The glance strip leaves three times faster than the card arrives, so the two never read as one.
+            if root.open < 0.34 && root.strip > 0 : Rectangle {
+                x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px; opacity: 1 - root.open * 3;
+                background: root.strip == 3 ? #2B1712 : #1F1C18;
+                if root.strip == 2 : Rectangle { x: 0px; y: 12px; width: 4px; height: 44px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 1 && root.playing : Rectangle { x: 42px; y: 32px; width: 5px; height: 18px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 2 && root.strip-tile != "" : Rectangle {
+                    x: 18px; y: 14px; width: 40px; height: 40px; border-radius: 11px; background: root.strip-tile-color;
+                    Text { text: root.strip-tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
+                }
+                if root.strip == 3 : Path {
+                    x: 18px; y: 21px; width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
+                    commands: "M12 3l10 18H2z M12 10v5 M12 18v1"; stroke: #FF8A6E; stroke-width: 2.2px; fill: transparent;
+                }
+                HorizontalLayout {
+                    y: 0px; height: parent.height;
+                    x: root.strip == 1 && !root.playing ? 18px : root.strip == 2 ? 72px : 60px;
+                    width: parent.width - self.x - (root.strip == 1 ? 76px : root.strip == 2 ? 84px : 18px);
+                    spacing: 8px;
+                    Text {
+                        text: root.strip-title; font-size: 24px; font-weight: root.strip == 2 ? 700 : 400;
+                        color: root.strip == 3 ? #FF8A6E : #F4F1EC; vertical-alignment: center; overflow: elide;
+                        max-width: root.strip == 3 ? 10000px : 260px;
+                    }
+                    if root.strip-text != "" : Text {
+                        text: root.strip-text; font-size: 24px; color: #AAA49B; vertical-alignment: center;
+                        overflow: elide; horizontal-stretch: 1;
+                    }
+                }
+                if root.strip == 2 : Text {
+                    x: parent.width - self.width - 18px; text: root.strip-time; font-size: 24px; color: #8A847B;
+                }
+                if root.strip == 1 : Round {
+                    x: 476px; y: 8px; width: 52px; height: 52px;
+                    icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
+                    tint: #0C0B0A; fill-color: #F4F1EC; lit: true;
+                    clicked => { root.action(5); }
+                }
             }
-            if root.strip == 3 : Path {
-                x: 18px; y: 21px; width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
-                commands: "M12 3l10 18H2z M12 10v5 M12 18v1"; stroke: #FF8A6E; stroke-width: 2.2px; fill: transparent;
-            }
-            HorizontalLayout {
-                y: 0px; height: parent.height;
-                x: root.strip == 1 && !root.playing ? 18px : root.strip == 2 ? 72px : 60px;
-                width: parent.width - self.x - (root.strip == 1 ? 76px : root.strip == 2 ? 84px : 18px);
-                spacing: 8px;
+
+            // Pointed at: player, volume and quick switches below the time.
+            if root.open > 0 && root.has-media : Rectangle {
+                x: 12px; y: 132px; width: 536px; height: 306px; border-radius: 20px; background: #1F1C18; opacity: root.open;
+                Rectangle {
+                    x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #4A3D2A;
+                    Path {
+                        width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
+                        stroke: #F4F1EC; stroke-width: 2px; fill: transparent;
+                    }
+                }
                 Text {
-                    text: root.strip-title; font-size: 24px; font-weight: root.strip == 2 ? 700 : 400;
-                    color: root.strip == 3 ? #FF8A6E : #F4F1EC; vertical-alignment: center; overflow: elide;
-                    max-width: root.strip == 3 ? 10000px : 260px;
+                    x: 104px; y: 18px; width: 414px; height: 34px; text: root.media-title; font-size: 26px; font-weight: 700;
+                    color: #F4F1EC; overflow: elide; vertical-alignment: center;
                 }
-                if root.strip-text != "" : Text {
-                    text: root.strip-text; font-size: 24px; color: #AAA49B; vertical-alignment: center;
-                    overflow: elide; horizontal-stretch: 1;
+                Text {
+                    x: 104px; y: 52px; width: 414px; height: 32px; text: root.media-sub; font-size: 24px; color: #AAA49B;
+                    overflow: elide; vertical-alignment: center;
                 }
-            }
-            if root.strip == 2 : Text {
-                x: parent.width - self.width - 18px; text: root.strip-time; font-size: 24px; color: #8A847B;
-            }
-            if root.strip == 1 : Round {
-                x: 476px; y: 8px; width: 52px; height: 52px;
-                icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
-                tint: #0C0B0A; fill-color: #F4F1EC; lit: true;
-                clicked => { root.action(5); }
-            }
-        }
-
-        // Pointed at: player, volume and quick switches below the time.
-        if root.expanded && root.has-media : Rectangle {
-            x: 12px; y: 132px; width: 536px; height: 306px; border-radius: 20px; background: #1F1C18;
-            Rectangle {
-                x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #4A3D2A;
-                Path {
-                    width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
-                    commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
-                    stroke: #F4F1EC; stroke-width: 2px; fill: transparent;
-                }
-            }
-            Text {
-                x: 104px; y: 18px; width: 414px; height: 34px; text: root.media-title; font-size: 26px; font-weight: 700;
-                color: #F4F1EC; overflow: elide; vertical-alignment: center;
-            }
-            Text {
-                x: 104px; y: 52px; width: 414px; height: 32px; text: root.media-sub; font-size: 24px; color: #AAA49B;
-                overflow: elide; vertical-alignment: center;
-            }
-            Text { x: 18px; y: 102px; width: 64px; height: 28px; text: root.position; font-size: 24px; color: #AAA49B; }
-            Text {
-                x: 454px; y: 102px; width: 64px; height: 28px; text: root.duration; font-size: 24px; color: #AAA49B;
-                horizontal-alignment: right;
-            }
-            Rectangle {
-                x: 94px; y: 112px; width: 348px; height: 8px; border-radius: 4px; background: #2A2622;
-                Rectangle { x: 0px; width: parent.width * clamp(root.progress, 0, 1); height: 8px; border-radius: 4px; background: #F4F1EC; }
-                if root.can-seek : Rectangle {
-                    x: parent.width * clamp(root.progress, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
-                    border-radius: 10px; background: #F4F1EC;
-                }
-            }
-            TouchArea {
-                x: 88px; y: 96px; width: 360px; height: 40px; enabled: root.can-seek;
-                clicked => { root.seek((self.mouse-x - 6px) / 348px); }
-            }
-            Round {
-                x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
-                tint: root.shuffle ? #C6FF1A : #AAA49B; clicked => { root.action(7); }
-            }
-            Round {
-                x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true;
-                fill-color: #2A2622; clicked => { root.action(4); }
-            }
-            Round {
-                x: 228px; y: 144px; width: 80px; height: 80px;
-                icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
-                tint: #0C0B0A; fill-color: #C6FF1A; lit: true; clicked => { root.action(5); }
-            }
-            Round {
-                x: 336px; y: 152px; width: 64px; height: 64px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true;
-                fill-color: #2A2622; clicked => { root.action(6); }
-            }
-            Round {
-                x: 428px; y: 158px; width: 52px; height: 52px; icon: "M4 12l16-8-6 16-3-7z M11 13l9-9";
-                tint: #AAA49B; clicked => { root.action(8); }
-            }
-            Rectangle {
-                x: 18px; y: 238px; width: 52px; height: 52px; border-radius: 14px;
-                opacity: root.has-volume ? 1.0 : 0.4;
-                background: mute-touch.has-hover ? #3A3530 : #2A2622;
-                Path {
-                    width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24; fill: transparent;
-                    commands: root.muted ? "M4 9h4l5-4v14l-5-4H4z M16 9l6 6 M22 9l-6 6" : "M4 9h4l5-4v14l-5-4H4z M16 9a4 4 0 0 1 0 6 M19 6a8 8 0 0 1 0 12";
-                    stroke: root.muted ? #FF5A3C : #F4F1EC; stroke-width: 2.2px;
-                }
-                mute-touch := TouchArea { enabled: root.has-volume; clicked => { root.action(9); } }
-            }
-            Rectangle {
-                x: 82px; y: 258px; width: 348px; height: 12px; border-radius: 6px; background: #2A2622;
-                opacity: root.has-volume ? 1.0 : 0.4;
-                Rectangle {
-                    x: 0px; width: parent.width * clamp(root.volume, 0, 1); height: 12px; border-radius: 6px;
-                    background: root.muted ? #8A847B : #C6FF1A;
+                Text { x: 18px; y: 102px; width: 64px; height: 28px; text: root.position; font-size: 24px; color: #AAA49B; }
+                Text {
+                    x: 454px; y: 102px; width: 64px; height: 28px; text: root.duration; font-size: 24px; color: #AAA49B;
+                    horizontal-alignment: right;
                 }
                 Rectangle {
-                    x: parent.width * clamp(root.volume, 0, 1) - 14px; y: -8px; width: 28px; height: 28px;
-                    border-radius: 14px; background: #F4F1EC;
+                    x: 94px; y: 112px; width: 348px; height: 8px; border-radius: 4px; background: #2A2622;
+                    Rectangle { x: 0px; width: parent.width * clamp(root.progress, 0, 1); height: 8px; border-radius: 4px; background: #F4F1EC; }
+                    if root.can-seek : Rectangle {
+                        x: parent.width * clamp(root.progress, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
+                        border-radius: 10px; background: #F4F1EC;
+                    }
+                }
+                TouchArea {
+                    x: 88px; y: 96px; width: 360px; height: 40px; enabled: root.can-seek;
+                    clicked => { root.seek((self.mouse-x - 6px) / 348px); }
+                }
+                Round {
+                    x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
+                    tint: root.shuffle ? #C6FF1A : #AAA49B; clicked => { root.action(7); }
+                }
+                Round {
+                    x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true;
+                    fill-color: #2A2622; clicked => { root.action(4); }
+                }
+                Round {
+                    x: 228px; y: 144px; width: 80px; height: 80px;
+                    icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
+                    tint: #0C0B0A; fill-color: #C6FF1A; lit: true; clicked => { root.action(5); }
+                }
+                Round {
+                    x: 336px; y: 152px; width: 64px; height: 64px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true;
+                    fill-color: #2A2622; clicked => { root.action(6); }
+                }
+                Round {
+                    x: 428px; y: 158px; width: 52px; height: 52px; icon: "M4 12l16-8-6 16-3-7z M11 13l9-9";
+                    tint: #AAA49B; clicked => { root.action(8); }
+                }
+                Rectangle {
+                    x: 18px; y: 238px; width: 52px; height: 52px; border-radius: 14px;
+                    opacity: root.has-volume ? 1.0 : 0.4;
+                    background: mute-touch.pressed ? #45403A : mute-touch.has-hover ? #3A3530 : #2A2622;
+                    Path {
+                        width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24; fill: transparent;
+                        commands: root.muted ? "M4 9h4l5-4v14l-5-4H4z M16 9l6 6 M22 9l-6 6" : "M4 9h4l5-4v14l-5-4H4z M16 9a4 4 0 0 1 0 6 M19 6a8 8 0 0 1 0 12";
+                        stroke: root.muted ? #FF5A3C : #F4F1EC; stroke-width: 2.2px;
+                    }
+                    mute-touch := TouchArea { enabled: root.has-volume; clicked => { root.action(9); } }
+                }
+                Rectangle {
+                    x: 82px; y: 258px; width: 348px; height: 12px; border-radius: 6px; background: #2A2622;
+                    opacity: root.has-volume ? 1.0 : 0.4;
+                    Rectangle {
+                        x: 0px; width: parent.width * clamp(root.volume, 0, 1); height: 12px; border-radius: 6px;
+                        background: root.muted ? #8A847B : #C6FF1A;
+                    }
+                    Rectangle {
+                        x: parent.width * clamp(root.volume, 0, 1) - 14px; y: -8px; width: 28px; height: 28px;
+                        border-radius: 14px; background: #F4F1EC;
+                    }
+                }
+                TouchArea {
+                    x: 76px; y: 238px; width: 360px; height: 52px; enabled: root.has-volume;
+                    clicked => { root.set-volume((self.mouse-x - 6px) / 348px); }
+                    moved => { if self.pressed { root.set-volume((self.mouse-x - 6px) / 348px); } }
+                }
+                Text {
+                    x: 446px; y: 238px; width: 72px; height: 52px; text: root.volume-text; font-size: 24px; color: #F4F1EC;
+                    horizontal-alignment: right; vertical-alignment: center;
                 }
             }
-            TouchArea {
-                x: 76px; y: 238px; width: 360px; height: 52px; enabled: root.has-volume;
-                clicked => { root.set-volume((self.mouse-x - 6px) / 348px); }
-                moved => { if self.pressed { root.set-volume((self.mouse-x - 6px) / 348px); } }
+            if root.open > 0 : Rectangle {
+                x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1F1C18;
+                opacity: root.open;
+                Row { x: 0px; y: 0px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; motion: root.motion; clicked => { root.action(1); } }
+                Row { x: 0px; y: 62px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; motion: root.motion; divider: true; clicked => { root.action(2); } }
+                Row { x: 0px; y: 124px; width: parent.width; label: root.inbox-label; value: root.inbox-value; divider: true; clicked => { root.action(3); } }
+                Row { x: 0px; y: 186px; width: parent.width; label: root.menu-label; value: root.open-value; divider: true; clicked => { root.action(0); } }
             }
-            Text {
-                x: 446px; y: 238px; width: 72px; height: 52px; text: root.volume-text; font-size: 24px; color: #F4F1EC;
-                horizontal-alignment: right; vertical-alignment: center;
+            if root.open > 0 && root.footer != "" : Text {
+                x: 26px; y: (root.list-y + 248 + 12) * 1px; width: 508px; height: 30px; opacity: root.open;
+                text: root.footer; font-size: 24px; color: #8A847B; overflow: elide;
             }
-        }
-        if root.expanded : Rectangle {
-            x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1F1C18;
-            Row { x: 0px; y: 0px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; clicked => { root.action(1); } }
-            Row { x: 0px; y: 62px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; divider: true; clicked => { root.action(2); } }
-            Row { x: 0px; y: 124px; width: parent.width; label: root.inbox-label; value: root.inbox-value; divider: true; clicked => { root.action(3); } }
-            Row { x: 0px; y: 186px; width: parent.width; label: root.menu-label; value: root.open-value; divider: true; clicked => { root.action(0); } }
-        }
-        if root.expanded && root.footer != "" : Text {
-            x: 26px; y: (root.list-y + 248 + 12) * 1px; width: 508px; height: 30px;
-            text: root.footer; font-size: 24px; color: #8A847B; overflow: elide;
         }
     }
 }
@@ -344,6 +360,7 @@ pub fn wrist_center(input: WristInput, expanded: bool, media: bool) -> Option<(f
 }
 
 thread_local! {
+    static MOTION: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static CREATED: RefCell<Option<Rc<MinimalSoftwareWindow>>> = const { RefCell::new(None) };
 }
 
@@ -421,6 +438,16 @@ impl Canvas {
     pub(crate) fn pointer_leave(&self) {
         self.dispatch(WindowEvent::PointerExited);
     }
+}
+
+/// Turns UI motion on for views created after this call (off by default, so tests and snapshots see the
+/// final frame at once). The app follows Windows' "Animation effects" setting.
+pub fn set_motion(on: bool) {
+    MOTION.with(|m| m.set(on));
+}
+
+pub(crate) fn motion() -> bool {
+    MOTION.with(std::cell::Cell::get)
 }
 
 /// Installs the offscreen platform (once per process; must be the UI thread).
@@ -542,6 +569,7 @@ impl Wrist {
         view.set_menu_label(t("wrist-menu"));
         view.set_open_value(t("wrist-open"));
         view.set_ring_track(RING_TRACK.into());
+        view.set_motion(motion());
         Ok(Self { view, canvas, strings, inputs, card: HEADER_H })
     }
 
@@ -753,6 +781,37 @@ mod tests {
     }
 
     #[test]
+    fn watch_grows_from_the_time_and_settles_when_motion_is_on() {
+        // Renders until nothing changes; returns the last frame drawn.
+        fn settle(wrist: &mut Wrist) -> Vec<u8> {
+            let (start, mut last) = (Instant::now(), Vec::new());
+            while start.elapsed() < Duration::from_millis(800) {
+                if let Some(px) = wrist.render() {
+                    last = px.to_vec();
+                }
+                std::thread::sleep(Duration::from_millis(8));
+            }
+            last
+        }
+        let alpha = |px: &[u8], y: usize| px[(y * WRIST_SIZE.0 as usize + 280) * 4 + 3];
+        set_motion(true);
+        let mut wrist = Wrist::new().expect("wrist");
+        set_motion(false);
+        let closed = WristInfo { media: Some(song()), volume: Some((0.5, false)), ..WristInfo::default() };
+        wrist.set(&closed);
+        settle(&mut wrist);
+        assert!(wrist.render().is_none(), "a settled watch must not keep redrawing");
+        wrist.set(&WristInfo { expanded: true, ..closed.clone() });
+        let first = wrist.render().expect("opening redraws").to_vec();
+        assert_eq!(alpha(&first, 690), 0, "the card grows toward the bottom, it does not jump there");
+        assert_eq!(alpha(&settle(&mut wrist), 690), 0xFF, "the open card reaches the bottom");
+        wrist.set(&closed);
+        // The closed card ends at 212 px; mid-way the card still covers 300.
+        assert_eq!(alpha(wrist.render().expect("closing redraws"), 300), 0xFF, "closing shrinks back, no cut");
+        assert_eq!(alpha(&settle(&mut wrist), 690), 0, "the closed card is short again");
+    }
+
+    #[test]
     fn rings_cover_the_battery_level() {
         assert_eq!(ring_arc(1.0), RING_TRACK);
         assert!(ring_arc(0.25).starts_with("M40 6A34 34 0 0 1 74.00 40.00"), "{}", ring_arc(0.25));
@@ -798,6 +857,10 @@ mod a11y {
             (0xFF5A3C, 0x0C0B0A, "danger on bg (outlined Quit)"),
             (0xFF5A3C, 0x1F1C18, "danger on key"),
             (0xFF8A6E, 0x2B1712, "low battery strip"),
+            (0xF4F1EC, 0x36312B, "ink on pressed row / button"),
+            (0xAAA49B, 0x36312B, "secondary on pressed segment"),
+            (0xC6FF1A, 0x36312B, "accent value on pressed row"),
+            (0xFF5A3C, 0x45201A, "danger on pressed Quit"),
         ];
         // Letter tiles: 24 px bold is large text (3:1).
         for tile in [0x5865F2, 0x1B6FD1, 0xB85000, 0x2E7D4F, 0x8E44AD, 0xB03A2E] {
