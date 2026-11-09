@@ -6,7 +6,7 @@ mod media;
 mod process;
 mod toasts;
 
-pub use media::{Media, MediaCommand, MediaInfo};
+pub use media::{Media, MediaCommand, MediaInfo, app_name};
 pub use process::{Instance, ProcessWatch, exit_watchdog, single_instance, terminate};
 pub use toasts::{Access as ToastAccess, AppToast, AppToasts};
 
@@ -35,6 +35,13 @@ pub fn process_cpu_time() -> Duration {
         return Duration::ZERO;
     }
     Duration::from_nanos((ticks(kernel) + ticks(user)) * 100)
+}
+
+/// Local date: (weekday 0 = Sunday, day, month 1..=12).
+pub fn local_date() -> (u16, u16, u16) {
+    // SAFETY: plain query.
+    let t = unsafe { GetLocalTime() };
+    (t.wDayOfWeek, t.wDay, t.wMonth)
 }
 
 /// Local wall-clock (hour, minute).

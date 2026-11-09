@@ -145,9 +145,8 @@ fn foreground_layout() -> HKL {
     unsafe { GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None)) }
 }
 
-/// Short name of the foreground window's input language, e.g. "EN", "UK", "DE".
-pub fn layout_name() -> String {
-    let lang = (foreground_layout().0 as usize & 0xFFFF) as u32;
+fn short_name(layout: HKL) -> String {
+    let lang = (layout.0 as usize & 0xFFFF) as u32;
     let mut buf = [0u16; MAX_LOCALE_NAME as usize];
     // SAFETY: the buffer length is passed with the buffer.
     let n = unsafe { LCIDToLocaleName(lang, Some(&mut buf), 0) };
@@ -155,22 +154,49 @@ pub fn layout_name() -> String {
     name.split('-').next().filter(|s| !s.is_empty()).unwrap_or("??").to_uppercase()
 }
 
-/// Asks the foreground window to switch to the next installed input language (what Win+Space does).
-/// Returns false when only one language is installed.
-pub fn next_layout() -> bool {
-    // SAFETY: the list buffer is sized from the first call; posting a message to a window is harmless.
+fn layout_list() -> Vec<HKL> {
+    // SAFETY: the list buffer is sized from the first call.
     unsafe {
         let count = GetKeyboardLayoutList(None).max(0) as usize;
         let mut list = vec![HKL::default(); count];
         let n = GetKeyboardLayoutList(Some(&mut list)).max(0) as usize;
         list.truncate(n);
-        if list.len() < 2 {
-            return false;
-        }
-        let now = foreground_layout();
-        let next = list.iter().position(|h| *h == now).map_or(list[0], |i| list[(i + 1) % list.len()]);
-        PostMessageW(Some(GetForegroundWindow()), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(next.0 as isize)).is_ok()
+        list
     }
+}
+
+/// Short name of the foreground window's input language, e.g. "EN", "UK", "DE".
+pub fn layout_name() -> String {
+    short_name(foreground_layout())
+}
+
+/// Short names of the installed input languages, in Windows' order.
+pub fn layouts() -> Vec<String> {
+    layout_list().into_iter().map(short_name).collect()
+}
+
+fn request(layout: HKL) -> bool {
+    // SAFETY: posting a message to a window is harmless.
+    unsafe {
+        PostMessageW(Some(GetForegroundWindow()), WM_INPUTLANGCHANGEREQUEST, WPARAM(0), LPARAM(layout.0 as isize))
+            .is_ok()
+    }
+}
+
+/// Asks the foreground window to switch to the next installed input language (what Win+Space does).
+/// Returns false when only one language is installed.
+pub fn next_layout() -> bool {
+    let list = layout_list();
+    if list.len() < 2 {
+        return false;
+    }
+    let now = foreground_layout();
+    request(list.iter().position(|h| *h == now).map_or(list[0], |i| list[(i + 1) % list.len()]))
+}
+
+/// Asks the foreground window to switch to installed language `i` (as listed by [`layouts`]).
+pub fn select_layout(i: usize) -> bool {
+    layout_list().get(i).is_some_and(|h| request(*h))
 }
 
 fn translate(scancode: u16, shift: bool, caps: bool) -> Option<String> {

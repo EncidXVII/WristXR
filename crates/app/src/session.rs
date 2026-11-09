@@ -10,12 +10,22 @@ use dvr_core::panel::{
 };
 use dvr_core::state::{NotifyFrom, State};
 use dvr_ui::{
-    MENU_SIZE, Menu, MenuInput, MenuModel, Slot, SlotKind, Strings, TOOLBAR_SIZE, ToolButton, Toolbar, WRIST_SIZE,
+    Col, Layout, MENU_SIZE, Menu, MenuInput, MenuModel, ROW_H, Slot, SlotKind, Strings, TOOLBAR_SIZE, Tab, Tone,
+    ToolButton, ToolInput, ToolKind, Toolbar, ToolbarLayout, ToolbarModel, WRIST_SIZE, icons,
 };
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
 
-const OPACITY_STEPS: [f32; 4] = [1.0, 0.85, 0.7, 0.5];
+/// The opacity slider runs from this to fully opaque.
+const MIN_OPACITY: f32 = 0.2;
 const CURVATURE: f32 = 0.15;
-const TABS: usize = 4;
+/// Rail pages: Panels, Keys, Watch, Inbox, Setup.
+pub const TABS: usize = 5;
+pub const TAB_PANELS: usize = 0;
+pub const TAB_KEYS: usize = 1;
+pub const TAB_WATCH: usize = 2;
+pub const TAB_INBOX: usize = 3;
+pub const TAB_SETUP: usize = 4;
 /// Size buttons scale a panel by this factor.
 const SIZE_STEP: f32 = 1.25;
 /// The toolbar stays this long after the laser leaves its panel (time to move down onto it).
@@ -25,14 +35,16 @@ const FADE_S: f32 = 0.15;
 const WATCH_FADE_S: f32 = 0.06;
 /// Windows listed per page of "Add window".
 const WINDOWS_PER_PAGE: usize = 8;
-/// Notifications kept for the history page (newest first).
-pub const HISTORY_LEN: usize = 6;
+/// Notifications kept for the Inbox (newest first).
+pub const HISTORY_LEN: usize = 5;
+/// Panels listed under "Open now" before "and n more".
+const OPEN_NOW_ROWS: usize = 3;
+/// Languages offered on the keyboard's toolbar.
+const TOOLBAR_LANGUAGES: usize = 3;
 /// An added window sits this much closer than the screens so it is never behind one.
 pub const WINDOW_NEARER: f32 = 0.85;
 /// Gap between screens when the layout is reset (radians of the arc around you).
 const LAYOUT_GAP_RAD: f32 = 0.04;
-/// Menu slots that act; the rest of the 2x5 grid stays empty.
-const QUIT_SLOT: usize = 9;
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
 
@@ -49,12 +61,10 @@ pub enum Page {
     FirstKeyboard,
     /// Gesture tips; finishing it completes onboarding.
     FirstTips,
-    /// Panels, Keyboard, Wrist, Settings.
+    /// Rail page (`TAB_*`).
     Tab(usize),
     /// "Add window" list, page n.
     Windows(usize),
-    /// Recent notifications.
-    Notifications,
 }
 
 /// What the platform layer must do after a menu, toolbar or wrist action.
@@ -69,35 +79,92 @@ pub enum Effect {
     /// Show this window as a panel in front of the user.
     AddWindow(u64),
     NextLanguage,
+    /// Switch to installed input language `i`.
+    Language(usize),
     AutoLaunch(bool),
     /// Where app notifications come from changed (start or stop listening).
     NotifyFrom(NotifyFrom),
 }
 
-/// Toolbar buttons, in the order shown.
+/// What a menu slot does (kept for the slots last drawn, so a click acts on what the user saw).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Act {
+    None,
+    FirstHand(Hand),
+    FirstMonitor(usize),
+    FirstDone,
+    GotIt,
+    AddScreen,
+    OpenWindows,
+    Recenter,
+    ResetLayout,
+    Screens,
+    Keyboard,
+    ClosePanel(u32),
+    AddWindow(u64),
+    MoreWindows,
+    Back,
+    NotifyFrom(NotifyFrom),
+    ClearInbox,
+    KeyboardHere,
+    Language(usize),
+    NextLanguage,
+    Chat,
+    Sounds,
+    NowPlaying,
+    WristBattery,
+    WristMedia,
+    WristLoad,
+    WristFade,
+    LaserHand(Hand),
+    WatchHand(Hand),
+    AutoStart,
+    Haptics,
+    Smoothing,
+    Updates,
+    Curved,
+    Quit,
+}
+
+/// Toolbar controls.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
+    /// Name chip / size readout (read-only).
+    None,
     Lock,
     Curve,
     Smaller,
     Bigger,
     Opacity,
-    Attach,
+    /// Room / hand / head.
+    Pin(Pin),
+    Language(usize),
     /// Back in front of you at its default place (and size, for screens and the keyboard).
     Reset,
+    /// Screens and windows: remove. Keyboard: put away.
     Close,
 }
 
-const SCREEN_TOOLS: &[Tool] =
-    &[Tool::Lock, Tool::Curve, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Attach, Tool::Reset, Tool::Close];
-const KEYBOARD_TOOLS: &[Tool] = &[Tool::Lock, Tool::Smaller, Tool::Bigger, Tool::Opacity, Tool::Reset, Tool::Close];
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pin {
+    Room,
+    Hand,
+    Head,
+}
 
-fn tools(source: Source) -> &'static [Tool] {
-    match source {
-        Source::Monitor(_) | Source::Window(_) => SCREEN_TOOLS,
-        Source::Keyboard => KEYBOARD_TOOLS,
-        Source::Wrist | Source::Menu | Source::Toolbar => &[],
-    }
+fn has_toolbar(source: Source) -> bool {
+    matches!(source, Source::Monitor(_) | Source::Window(_) | Source::Keyboard)
+}
+
+/// A notification kept for the Inbox.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Note {
+    pub app: String,
+    pub title: String,
+    pub body: String,
+    /// `Session` clock (ms) when it came in.
+    pub at: u64,
+    pub read: bool,
 }
 
 pub struct Session {
@@ -107,26 +174,34 @@ pub struct Session {
     menu_hovered: bool,
     /// Settings came from another overlay (shown on the first-run page).
     pub imported: bool,
-    /// False when another app holds the notification port (shown on the Wrist tab).
+    /// False when another app holds the notification port (shown on the Watch page).
     pub notifications_ok: bool,
-    /// Danger button waiting for its confirming second tap.
-    armed: Option<(Page, usize)>,
-    /// Screens, windows and keyboard are faded out (hold left menu, or Hide all).
+    /// Quit waits for its confirming second tap.
+    armed: bool,
+    /// Screens, windows and keyboard are faded out (double-tap left menu, or the Screens switch).
     pub hidden: bool,
     /// Windows the user can add, front to back (filled by the app on `Effect::ListWindows`).
     pub windows: Vec<(u64, String)>,
-    /// Current input language, e.g. "EN" (kept by the app).
+    /// Names of windows shown as panels (for their toolbar and "Open now").
+    pub window_names: HashMap<u64, String>,
+    /// Current input language, e.g. "EN", and the installed ones (kept by the app).
     pub language: String,
+    pub languages: Vec<String>,
     /// SteamVR starts the overlay with itself (kept by the app).
     pub auto_launch: bool,
     /// Windows refuses to share app notifications (kept by the app).
     pub notify_blocked: bool,
-    /// Recent notifications (title, body), newest first.
-    pub history: std::collections::VecDeque<(String, String)>,
+    /// Recent notifications, newest first.
+    pub history: VecDeque<Note>,
+    /// Latest time seen (ms), for "2 m ago".
+    clock: u64,
     /// Panel whose toolbar is shown, and when the laser was last on it or its toolbar.
     toolbar: Option<u32>,
     toolbar_seen: u64,
     toolbar_hovered: bool,
+    /// What each slot / toolbar control last drawn does.
+    acts: RefCell<Vec<Act>>,
+    tools: RefCell<Vec<Tool>>,
 }
 
 pub fn next_id(panels: &[Panel]) -> u32 {
@@ -141,26 +216,20 @@ fn find(panels: &mut [Panel], source: Source) -> Option<&mut Panel> {
     panels.iter_mut().find(|p| p.source == source)
 }
 
-fn hand_name(s: &Strings, hand: Hand) -> String {
-    s.get(if hand == Hand::Left { "hand-left" } else { "hand-right" }, &[])
-}
-
 impl Session {
     /// Ensures keyboard, wrist, menu and toolbar panels exist; opens the first-run flow when not onboarded.
     pub fn new(state: State, panels: &mut Vec<Panel>, head: Pose) -> Self {
         if !panels.iter().any(|p| p.source == Source::Keyboard) {
             panels.push(Panel::keyboard_below(next_id(panels), head));
         }
+        let wrist_aspect = WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32;
         if !panels.iter().any(|p| p.source == Source::Wrist) {
-            let aspect = WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32;
-            panels.push(Panel::on_wrist(next_id(panels), state.dominant.other(), aspect));
+            panels.push(Panel::on_wrist(next_id(panels), state.dominant.other(), wrist_aspect));
         }
-        // A wrist saved by an older build has the old size and orientation.
+        // A wrist saved by an older build has the old size and orientation; the watch is never hidden (it is the
+        // way into the menu).
         if let Some(w) = find(panels, Source::Wrist) {
-            *w = Panel {
-                visible: w.visible,
-                ..Panel::on_wrist(w.id, w.anchor_hand(), WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32)
-            };
+            *w = Panel { visible: true, ..Panel::on_wrist(w.id, w.anchor_hand(), wrist_aspect) };
         }
         let mut menu = Panel::menu_in_front(head, MENU_SIZE.1 as f32 / MENU_SIZE.0 as f32);
         menu.visible = !state.onboarded;
@@ -176,7 +245,7 @@ impl Session {
         panels.retain(|p| p.id != MENU_ID && p.id != TOOLBAR_ID);
         panels.push(menu);
         panels.push(toolbar);
-        let page = if state.onboarded { Page::Tab(0) } else { Page::FirstHand };
+        let page = if state.onboarded { Page::Tab(TAB_PANELS) } else { Page::FirstHand };
         Self {
             state,
             page,
@@ -184,21 +253,52 @@ impl Session {
             menu_hovered: false,
             imported: false,
             notifications_ok: true,
-            armed: None,
+            armed: false,
             hidden: false,
             windows: Vec::new(),
+            window_names: HashMap::new(),
             language: String::new(),
+            languages: Vec::new(),
             auto_launch: false,
             notify_blocked: false,
-            history: std::collections::VecDeque::new(),
+            history: VecDeque::new(),
+            clock: 0,
             toolbar: None,
             toolbar_seen: 0,
             toolbar_hovered: false,
+            acts: RefCell::new(Vec::new()),
+            tools: RefCell::new(Vec::new()),
         }
     }
 
     pub fn menu_open(&self, panels: &[Panel]) -> bool {
         panels.iter().any(|p| p.id == MENU_ID && p.visible)
+    }
+
+    /// Opens the menu on a page (e.g. the Inbox from the watch).
+    pub fn open_menu_at(&mut self, page: Page, panels: &mut [Panel], head: Pose) {
+        self.leave_page();
+        self.page = page;
+        if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
+            if !m.visible {
+                m.pose = Panel::menu_in_front(head, m.aspect).pose;
+            }
+            m.visible = true;
+        }
+    }
+
+    /// Leaving the Inbox marks its messages read.
+    fn leave_page(&mut self) {
+        if self.page == Page::Tab(TAB_INBOX) {
+            for n in &mut self.history {
+                n.read = true;
+            }
+        }
+    }
+
+    /// Unread Inbox messages.
+    pub fn unread(&self) -> usize {
+        self.history.iter().filter(|n| !n.read).count()
     }
 
     /// Double-tap menu: open in front of the user, or close.
@@ -207,9 +307,11 @@ impl Session {
         if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
             if !open {
                 m.pose = Panel::menu_in_front(head, m.aspect).pose;
-                if matches!(self.page, Page::Windows(_) | Page::Notifications) {
-                    self.page = Page::Tab(0);
+                if matches!(self.page, Page::Windows(_)) {
+                    self.page = Page::Tab(TAB_PANELS);
                 }
+            } else {
+                self.leave_page();
             }
             m.visible = !open;
         }
@@ -298,6 +400,7 @@ impl Session {
     /// Routes laser events on the menu and toolbar to their views and decides which panel shows the toolbar.
     /// Returns true when the menu saw pointer activity.
     pub fn pointer(&mut self, events: &[Event], panels: &[Panel], menu: &Menu, toolbar: &Toolbar, now: u64) -> bool {
+        self.clock = now;
         let mut over_menu = false;
         let mut over_toolbar = false;
         for e in events {
@@ -319,7 +422,7 @@ impl Session {
                     toolbar.pointer_button(uv, down);
                 }
                 Event::Hover { panel, .. } | Event::Mouse { panel, .. } | Event::Moved { panel }
-                    if panels.iter().any(|p| p.id == panel && !tools(p.source).is_empty()) =>
+                    if panels.iter().any(|p| p.id == panel && has_toolbar(p.source)) =>
                 {
                     self.toolbar = Some(panel);
                     self.toolbar_seen = now;
@@ -344,15 +447,30 @@ impl Session {
         over_menu
     }
 
-    /// Remembers a notification for the history page.
-    pub fn notified(&mut self, title: &str, body: &str) {
-        self.history.push_front((title.to_owned(), body.to_owned()));
+    /// Remembers a notification for the Inbox.
+    pub fn notified(&mut self, app: &str, title: &str, body: &str) {
+        let note =
+            Note { app: app.to_owned(), title: title.to_owned(), body: body.to_owned(), at: self.clock, read: false };
+        self.history.push_front(note);
         self.history.truncate(HISTORY_LEN);
     }
 
     /// Panel the toolbar belongs to, if it is showing.
     pub fn toolbar_target(&self) -> Option<u32> {
         self.toolbar
+    }
+
+    /// Index of `tool` in the toolbar last built.
+    pub fn tool_index(&self, tool: Tool) -> Option<usize> {
+        self.tools.borrow().iter().position(|t| *t == tool)
+    }
+
+    fn panel_name(&self, p: &Panel, s: &Strings) -> String {
+        match p.source {
+            Source::Monitor(i) => s.get("menu-screen", &[("n", (i + 1).to_string())]),
+            Source::Window(h) => self.window_names.get(&h).cloned().unwrap_or_else(|| s.get("menu-add-window", &[])),
+            _ => s.get("tool-keyboard", &[]),
+        }
     }
 
     /// Puts the toolbar under its panel (or hides it). Call every frame before stepping the engine.
@@ -369,63 +487,122 @@ impl Session {
         }
     }
 
-    /// Buttons for the panel under the toolbar.
-    pub fn toolbar_model(&self, panels: &[Panel], s: &Strings) -> Vec<ToolButton> {
-        let Some(p) = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id)) else { return Vec::new() };
+    /// Controls for the panel under the toolbar.
+    pub fn toolbar_model(&self, panels: &[Panel], s: &Strings) -> ToolbarModel {
+        let mut tools = Vec::new();
+        let Some(p) = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id)) else {
+            self.tools.replace(tools);
+            return ToolbarModel::default();
+        };
         let t = |id: &str| s.get(id, &[]);
-        tools(p.source)
-            .iter()
-            .map(|tool| {
-                let (label, on) = match tool {
-                    Tool::Lock => (t("tool-lock"), p.locked),
-                    Tool::Curve => (t("tool-curve"), p.curvature > 0.0),
-                    Tool::Smaller => ("−".to_owned(), false),
-                    Tool::Bigger => ("+".to_owned(), false),
-                    Tool::Opacity => (format!("{:.0}%", p.opacity * 100.0), false),
-                    Tool::Attach => match p.anchor {
-                        Anchor::World => (t("tool-world"), false),
-                        Anchor::Hand(_) => (t("tool-hand"), true),
-                        Anchor::Head => (t("tool-head"), true),
-                    },
-                    Tool::Reset => (t("tool-reset"), false),
-                    Tool::Close => (t("tool-close"), false),
-                };
-                ToolButton { label, on, danger: *tool == Tool::Close }
-            })
-            .collect()
+        let b = |kind, label: String, icon| ToolButton::new(kind, label, icon);
+        let keyboard = p.source == Source::Keyboard;
+        let mut l = ToolbarLayout::new();
+        let icon = match p.source {
+            Source::Monitor(_) => icons::SCREEN,
+            Source::Window(_) => icons::WINDOW,
+            _ => icons::KEYS,
+        };
+        l.chip(self.panel_name(p, s), icon);
+        tools.push(Tool::None);
+        let mut lock = vec![(b(ToolKind::Toggle, String::new(), icons::LOCK).on(p.locked), None)];
+        tools.push(Tool::Lock);
+        if !keyboard {
+            lock.push((b(ToolKind::Toggle, String::new(), icons::CURVE).on(p.curvature > 0.0), None));
+            tools.push(Tool::Curve);
+        }
+        l.group(lock);
+        let size = s.get("tool-size", &[("m", format!("{:.1}", p.width_m))]);
+        l.group(vec![
+            (b(ToolKind::Step, "−".into(), ""), None),
+            (b(ToolKind::Readout, size, ""), None),
+            (b(ToolKind::Step, "+".into(), ""), None),
+        ]);
+        tools.extend([Tool::Smaller, Tool::None, Tool::Bigger]);
+        let opacity = ((p.opacity - MIN_OPACITY) / (1.0 - MIN_OPACITY)).clamp(0.0, 1.0);
+        l.group(vec![(b(ToolKind::Slider, String::new(), icons::OPACITY).value(opacity), None)]);
+        tools.push(Tool::Opacity);
+        if keyboard {
+            let langs: Vec<(ToolButton, Option<f32>)> = self
+                .languages
+                .iter()
+                .take(TOOLBAR_LANGUAGES)
+                .enumerate()
+                .map(|(i, name)| {
+                    tools.push(Tool::Language(i));
+                    (b(ToolKind::Segment, name.clone(), "").on(*name == self.language), Some(80.0))
+                })
+                .collect();
+            if !langs.is_empty() {
+                l.group(langs);
+            }
+        } else {
+            let pins = [(Pin::Room, "tool-room"), (Pin::Hand, "tool-hand"), (Pin::Head, "tool-head")];
+            let now = match p.anchor {
+                Anchor::World => Pin::Room,
+                Anchor::Hand(_) => Pin::Hand,
+                Anchor::Head => Pin::Head,
+            };
+            l.group(
+                pins.iter()
+                    .map(|(pin, id)| {
+                        tools.push(Tool::Pin(*pin));
+                        (b(ToolKind::Segment, t(id), "").on(*pin == now), Some(84.0))
+                    })
+                    .collect(),
+            );
+        }
+        l.button(b(ToolKind::Icon, String::new(), icons::RESET), None);
+        tools.push(Tool::Reset);
+        if keyboard {
+            l.button(b(ToolKind::Text, t("tool-put-away"), ""), Some(150.0));
+        } else {
+            l.button(b(ToolKind::Danger, String::new(), icons::CLOSE), None);
+        }
+        tools.push(Tool::Close);
+        self.tools.replace(tools);
+        l.finish()
     }
 
-    /// Applies a toolbar click (button index).
+    /// Applies a toolbar click or slider move.
     pub fn toolbar_input(
         &mut self,
-        button: usize,
+        input: ToolInput,
         panels: &mut Vec<Panel>,
         hands: &Anchors,
         head: Pose,
     ) -> Vec<Effect> {
         let mut fx = Vec::new();
         let Some(i) = self.toolbar.and_then(|id| panels.iter().position(|p| p.id == id)) else { return fx };
-        let Some(&tool) = tools(panels[i].source).get(button) else { return fx };
+        let (index, value) = match input {
+            ToolInput::Click(i) => (i, None),
+            ToolInput::Slide(i, v) => (i, Some(v)),
+        };
+        let Some(tool) = self.tools.borrow().get(index).copied() else { return fx };
+        let dominant = self.state.dominant;
         let p = &mut panels[i];
         match tool {
+            Tool::None => {}
             Tool::Lock => p.locked = !p.locked,
             Tool::Curve => p.curvature = if p.curvature > 0.0 { 0.0 } else { CURVATURE },
             Tool::Smaller => p.width_m = (p.width_m / SIZE_STEP).max(MIN_WIDTH_M),
             Tool::Bigger => p.width_m = (p.width_m * SIZE_STEP).min(MAX_WIDTH_M),
             Tool::Opacity => {
-                let now = OPACITY_STEPS.iter().position(|o| (*o - p.opacity).abs() < 0.01).unwrap_or(0);
-                p.opacity = OPACITY_STEPS[(now + 1) % OPACITY_STEPS.len()];
+                if let Some(v) = value {
+                    p.opacity = MIN_OPACITY + (1.0 - MIN_OPACITY) * v.clamp(0.0, 1.0);
+                }
             }
-            // World -> hand -> head (HUD) -> world; the panel stays where it is when it changes anchor.
-            Tool::Attach => {
+            // The panel stays where it is when it changes anchor.
+            Tool::Pin(pin) => {
                 let world = p.world_pose(hands);
-                p.anchor = match p.anchor {
-                    Anchor::World => Anchor::Hand(self.state.dominant.other()),
-                    Anchor::Hand(_) => Anchor::Head,
-                    Anchor::Head => Anchor::World,
+                p.anchor = match pin {
+                    Pin::Room => Anchor::World,
+                    Pin::Hand => Anchor::Hand(dominant.other()),
+                    Pin::Head => Anchor::Head,
                 };
                 p.set_world_pose(world, hands);
             }
+            Tool::Language(l) => fx.push(Effect::Language(l)),
             Tool::Reset if p.source == Source::Keyboard => {
                 *p = Panel { id: p.id, visible: p.visible, opacity: p.opacity, ..Panel::keyboard_below(p.id, head) };
             }
@@ -462,182 +639,300 @@ impl Session {
         (0..monitors.len() as u32).find(|i| !panels.iter().any(|p| p.source == Source::Monitor(*i)))
     }
 
+    fn ago(&self, at: u64, s: &Strings) -> String {
+        let min = self.clock.saturating_sub(at) / 60_000;
+        match min {
+            0 => s.get("ago-now", &[]),
+            1..60 => s.get("ago-min", &[("n", min.to_string())]),
+            _ => s.get("ago-hour", &[("n", (min / 60).to_string())]),
+        }
+    }
+
     /// What the menu shows now. `cost` is (GPU ms, CPU %) of this overlay.
     pub fn model(&self, panels: &[Panel], monitors: &[MonitorInfo], s: &Strings, cost: (f32, f32)) -> MenuModel {
         let t = |id: &str| s.get(id, &[]);
-        let mk = |label: String, kind: SlotKind, on: bool, enabled: bool| Slot { label, on, enabled, kind };
-        let action = |label: String, enabled: bool| mk(label, SlotKind::Action, false, enabled);
-        let toggle = |label: String, on: bool| mk(label, SlotKind::Toggle, on, true);
-        let choice = |label: String, on: bool| mk(label, SlotKind::Choice, on, true);
-        let hidden = || mk(String::new(), SlotKind::Hidden, false, false);
-        // A danger button shows "tap again" once armed.
-        let danger = |id: &str, slot: usize| {
-            let armed = self.armed == Some((self.page, slot));
-            mk(if armed { t("menu-confirm") } else { t(id) }, SlotKind::Danger, armed, true)
+        let mut acts: Vec<Act> = Vec::new();
+        // Each slot is built with what it does; the two lists stay in step.
+        let add = |acts: &mut Vec<Act>, act: Act, slot: Slot| {
+            acts.push(act);
+            slot
         };
-        let tabs = ["menu-tab-panels", "menu-tab-keyboard", "menu-tab-wrist", "menu-tab-settings"].map(t).to_vec();
+        let row = |label: String| Slot::new(SlotKind::Action, label);
+        let toggle = |label: String, on: bool| Slot::new(SlotKind::Toggle, label).on(on);
+        let seg = |label: String, on: bool| Slot::new(SlotKind::Segment, label).on(on);
+        let primary = |label: String, on: bool| Slot::new(SlotKind::Primary, label).on(on);
         let visible = |src: Source| panels.iter().any(|p| p.source == src && p.visible);
         let wrist_hand = panels.iter().find(|p| p.source == Source::Wrist).map_or(Hand::Left, Panel::anchor_hand);
-        let mut body = String::new();
-        let (tab, title, subtitle, slots) = match self.page {
-            Page::FirstHand => (
-                0,
-                t("first-hand-title"),
-                t(if self.imported { "first-hand-imported" } else { "first-hand-hint" }),
-                vec![
-                    choice(t("first-hand-left"), self.state.dominant == Hand::Left),
-                    choice(t("first-hand-right"), self.state.dominant == Hand::Right),
-                ],
-            ),
-            Page::FirstMonitor => (
-                0,
-                t("first-monitor-title"),
-                t("first-monitor-hint"),
-                monitors
+        let hands = |acts: &mut Vec<Act>, now: Hand, act: fn(Hand) -> Act| {
+            [Hand::Left, Hand::Right]
+                .map(|h| {
+                    acts.push(act(h));
+                    seg(t(if h == Hand::Left { "hand-left" } else { "hand-right" }), now == h)
+                })
+                .to_vec()
+        };
+        let mut model = match self.page {
+            Page::FirstHand => {
+                let mut l = Layout::plain(t("first-hand-title"));
+                let hint = t(if self.imported { "first-hand-imported" } else { "first-hand-hint" });
+                l.paragraph(Col::Full, hint, Tone::Secondary, 40.0);
+                let d = self.state.dominant;
+                let left = add(&mut acts, Act::FirstHand(Hand::Left), primary(t("first-hand-left"), d == Hand::Left));
+                let right =
+                    add(&mut acts, Act::FirstHand(Hand::Right), primary(t("first-hand-right"), d == Hand::Right));
+                l.cards(Col::Full, vec![left, right], 2, 120.0);
+                l.finish()
+            }
+            Page::FirstMonitor => {
+                let mut l = Layout::plain(t("first-monitor-title"));
+                l.paragraph(Col::Full, t("first-monitor-hint"), Tone::Secondary, 40.0);
+                let cards = monitors
                     .iter()
                     .enumerate()
+                    .take(4)
                     .map(|(i, m)| {
                         let args =
                             [("n", (i + 1).to_string()), ("w", m.rect.w.to_string()), ("h", m.rect.h.to_string())];
-                        choice(s.get("first-monitor", &args), m.primary)
+                        add(&mut acts, Act::FirstMonitor(i), primary(s.get("first-monitor", &args), m.primary))
                     })
-                    .collect(),
-            ),
+                    .collect();
+                l.cards(Col::Full, cards, 1, 72.0);
+                l.finish()
+            }
             Page::FirstKeyboard => {
-                let typed = self.test.text().to_lowercase();
-                (
-                    0,
-                    t("first-keyboard-title"),
-                    s.get("first-keyboard-hint", &[("typed", self.test.text().to_owned())]),
-                    vec![choice(t("first-done"), typed.contains(TEST_WORD)), action(t("first-skip"), true)],
-                )
+                let mut l = Layout::plain(t("first-keyboard-title"));
+                let hint = s.get("first-keyboard-hint", &[("typed", self.test.text().to_owned())]);
+                l.paragraph(Col::Full, hint, Tone::Secondary, 40.0);
+                let typed = self.test.text().to_lowercase().contains(TEST_WORD);
+                let done = add(&mut acts, Act::FirstDone, primary(t("first-done"), typed));
+                let skip = add(&mut acts, Act::FirstDone, primary(t("first-skip"), false));
+                l.cards(Col::Full, vec![done, skip], 2, 96.0);
+                l.finish()
             }
             Page::FirstTips => {
-                body = t("first-tips-body");
-                (0, t("first-tips-title"), t("first-tips-hint"), {
-                    let mut v = vec![hidden(); 9];
-                    v.push(choice(t("first-got-it"), true));
-                    v
-                })
+                let mut l = Layout::plain(t("first-tips-title"));
+                l.hint(t("first-tips-hint"));
+                l.paragraph(Col::Full, t("first-tips-body"), Tone::Ink, 300.0);
+                l.footer("", Some(add(&mut acts, Act::GotIt, primary(t("first-got-it"), true))));
+                l.finish()
             }
-            Page::Tab(0) => {
+            Page::Tab(TAB_PANELS) => {
+                let mut l = Layout::rail(t("menu-panels-title"));
+                l.hint(t("menu-panels-hint"));
+                l.label(Col::Left, t("menu-add"));
                 let next = Self::unshown_monitor(panels, monitors);
-                let add = match next {
-                    Some(i) => s.get("menu-add-monitor", &[("n", (i + 1).to_string())]),
-                    None => t("menu-add-monitor-none"),
+                let screen = match next {
+                    Some(i) => row(s.get("menu-add-screen", &[("n", (i + 1).to_string())])).value("+").on(true),
+                    None => row(t("menu-add-screen-none")).enabled(false),
                 };
-                (
-                    0,
-                    t("menu-panels-title"),
-                    t("menu-panels-hint"),
-                    vec![
-                        action(add, next.is_some()),
-                        action(t("menu-add-window"), true),
-                        action(t("menu-recenter"), true),
-                        action(t("menu-reset-layout"), true),
-                        mk(
-                            t(if self.hidden { "menu-show-all" } else { "menu-hide-all" }),
-                            SlotKind::Choice,
-                            self.hidden,
-                            true,
-                        ),
-                        toggle(t("menu-show-keyboard"), visible(Source::Keyboard)),
-                        action(s.get("menu-notifications", &[("n", self.history.len().to_string())]), true),
-                    ],
-                )
-            }
-            Page::Notifications => {
-                let mut slots: Vec<Slot> = (0..HISTORY_LEN)
-                    .map(|i| match self.history.get(i) {
-                        Some((title, body)) if body.is_empty() => action(title.clone(), true),
-                        Some((title, body)) => action(format!("{title}: {body}"), true),
-                        None => hidden(),
-                    })
-                    .collect();
-                let from = match self.state.notify_from {
-                    NotifyFrom::Discord => t("notify-discord"),
-                    NotifyFrom::AllApps => t("notify-all"),
-                    NotifyFrom::Off => t("notify-off"),
-                };
-                slots.push(action(s.get("menu-notify-from", &[("from", from)]), true));
-                slots.push(hidden());
-                slots.push(action(t("menu-clear"), !self.history.is_empty()));
-                slots.push(action(t("menu-back"), true));
-                let hint = if self.notify_blocked && self.state.notify_from != NotifyFrom::Off {
-                    t("menu-notify-blocked")
-                } else if self.history.is_empty() {
-                    t("menu-notifications-none")
-                } else {
-                    t("menu-notifications-hint")
-                };
-                (0, t("menu-notifications-title"), hint, slots)
+                let rows = vec![
+                    add(&mut acts, Act::OpenWindows, row(t("menu-add-window")).value("›")),
+                    add(&mut acts, Act::AddScreen, screen),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Left, t("menu-arrange"));
+                let rows = vec![
+                    add(&mut acts, Act::Recenter, row(t("menu-recenter"))),
+                    add(&mut acts, Act::ResetLayout, row(t("menu-reset-layout"))),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Right, t("menu-show"));
+                let rows = vec![
+                    add(&mut acts, Act::Screens, toggle(t("menu-screens"), !self.hidden)),
+                    add(&mut acts, Act::Keyboard, toggle(t("menu-keyboard"), visible(Source::Keyboard))),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
+                l.label(Col::Right, t("menu-open-now"));
+                let open: Vec<&Panel> =
+                    panels.iter().filter(|p| matches!(p.source, Source::Monitor(_) | Source::Window(_))).collect();
+                // Rows are placed first, then their close buttons.
+                let (mut items, mut row_acts, mut button_acts) = (Vec::new(), Vec::new(), Vec::new());
+                for p in open.iter().take(OPEN_NOW_ROWS) {
+                    let item = Slot::new(SlotKind::Item, self.panel_name(p, s)).on(p.visible && !self.hidden);
+                    items.push((item, Some(Slot::new(SlotKind::IconButton, "").icon(icons::CLOSE))));
+                    row_acts.push(Act::None);
+                    button_acts.push(Act::ClosePanel(p.id));
+                }
+                if open.len() > OPEN_NOW_ROWS {
+                    let more = s.get("menu-open-more", &[("n", (open.len() - OPEN_NOW_ROWS).to_string())]);
+                    items.push((Slot::new(SlotKind::Item, more), None));
+                    row_acts.push(Act::None);
+                }
+                if open.is_empty() {
+                    items.push((Slot::new(SlotKind::Item, t("menu-open-none")), None));
+                    row_acts.push(Act::None);
+                }
+                acts.extend(row_acts);
+                acts.extend(button_acts);
+                l.rows_with(Col::Right, items, 56.0);
+                l.footer(t("menu-double-tap"), None);
+                l.finish()
             }
             Page::Windows(page) => {
+                let mut l = Layout::rail(t("menu-windows-title"));
+                l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
+                l.hint(t("menu-windows-hint"));
                 let start = page * WINDOWS_PER_PAGE;
-                let mut slots: Vec<Slot> = (start..start + WINDOWS_PER_PAGE)
-                    .map(|i| match self.windows.get(i) {
-                        Some((h, title)) => {
-                            let shown = panels.iter().any(|p| p.source == Source::Window(*h));
-                            mk(title.clone(), SlotKind::Choice, shown, !shown)
-                        }
-                        None => hidden(),
+                let cards: Vec<Slot> = self
+                    .windows
+                    .iter()
+                    .skip(start)
+                    .take(WINDOWS_PER_PAGE)
+                    .map(|(h, title)| {
+                        let shown = panels.iter().any(|p| p.source == Source::Window(*h));
+                        let card = Slot::new(SlotKind::Entry, title.clone()).tile(title);
+                        let card = if shown {
+                            card.value(t("menu-window-shown")).on(true).enabled(false)
+                        } else {
+                            card.value("+")
+                        };
+                        add(&mut acts, Act::AddWindow(*h), card)
                     })
                     .collect();
-                slots.push(action(t("menu-more"), self.windows.len() > start + WINDOWS_PER_PAGE));
-                slots.push(action(t("menu-back"), true));
-                let hint = if self.windows.is_empty() { t("menu-windows-none") } else { t("menu-windows-hint") };
-                (0, t("menu-windows-title"), hint, slots)
+                if cards.is_empty() {
+                    l.paragraph(Col::Full, t("menu-windows-none"), Tone::Secondary, 40.0);
+                }
+                l.cards(Col::Full, cards, 2, 74.0);
+                let more = (self.windows.len() > start + WINDOWS_PER_PAGE)
+                    .then(|| add(&mut acts, Act::MoreWindows, primary(t("menu-more"), false)));
+                l.footer(t("menu-yank"), more);
+                l.finish()
             }
-            Page::Tab(1) => (
-                1,
-                t("menu-keyboard-title"),
-                t("menu-keyboard-hint"),
-                vec![
-                    toggle(t("menu-show-keyboard"), visible(Source::Keyboard)),
-                    action(t("menu-keyboard-here"), true),
-                    action(s.get("menu-language", &[("lang", self.language.clone())]), true),
-                    toggle(t("menu-chat"), self.state.chatbox),
-                    toggle(t("menu-sounds"), self.state.typing_sounds),
-                    toggle(t("menu-now-playing"), self.state.media_to_chatbox),
-                ],
-            ),
-            Page::Tab(2) => (
-                2,
-                t("menu-wrist-title"),
-                t(if self.notifications_ok { "menu-wrist-hint" } else { "menu-notifications-blocked" }),
-                vec![
-                    toggle(t("menu-show-wrist"), visible(Source::Wrist)),
-                    action(s.get("menu-wrist-on", &[("hand", hand_name(s, wrist_hand))]), true),
-                    toggle(t("menu-wrist-fade"), self.state.wrist_fade),
-                    toggle(t("menu-wrist-battery"), self.state.wrist_battery),
-                    toggle(t("menu-wrist-load"), self.state.wrist_load),
-                    toggle(t("menu-wrist-media"), self.state.wrist_media),
-                ],
-            ),
+            Page::Tab(TAB_KEYS) => {
+                let mut l = Layout::rail(t("menu-keys-title"));
+                l.hint(t("menu-keys-hint"));
+                l.label(Col::Left, t("menu-keyboard-group"));
+                let rows = vec![
+                    add(&mut acts, Act::Keyboard, toggle(t("menu-keyboard"), visible(Source::Keyboard))),
+                    add(&mut acts, Act::KeyboardHere, row(t("menu-keyboard-here"))),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Left, t("menu-language"));
+                if self.languages.len() > 1 {
+                    let segs = self
+                        .languages
+                        .iter()
+                        .take(TOOLBAR_LANGUAGES)
+                        .enumerate()
+                        .map(|(i, n)| add(&mut acts, Act::Language(i), seg(n.clone(), *n == self.language)))
+                        .collect();
+                    l.segments(Col::Left, segs);
+                } else {
+                    let r = row(t("menu-language")).value(format!("{} ›", self.language));
+                    l.rows(Col::Left, vec![add(&mut acts, Act::NextLanguage, r)], ROW_H);
+                }
+                l.label(Col::Right, t("menu-typing"));
+                let rows = vec![
+                    add(&mut acts, Act::Chat, toggle(t("menu-chat"), self.state.chatbox)),
+                    add(&mut acts, Act::Sounds, toggle(t("menu-sounds"), self.state.typing_sounds)),
+                    add(&mut acts, Act::NowPlaying, toggle(t("menu-now-playing"), self.state.media_to_chatbox)),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
+                l.finish()
+            }
+            Page::Tab(TAB_WATCH) => {
+                let mut l = Layout::rail(t("menu-watch-title"));
+                l.hint(t(if self.notifications_ok { "menu-watch-hint" } else { "menu-notifications-blocked" }));
+                l.label(Col::Left, t("menu-watch-shows"));
+                let rows = vec![
+                    add(&mut acts, Act::WristBattery, toggle(t("menu-wrist-battery"), self.state.wrist_battery)),
+                    add(&mut acts, Act::WristMedia, toggle(t("menu-wrist-media"), self.state.wrist_media)),
+                    add(&mut acts, Act::WristLoad, toggle(t("menu-wrist-load"), self.state.wrist_load)),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Right, t("menu-watch-behaves"));
+                let rows = vec![add(&mut acts, Act::WristFade, toggle(t("menu-wrist-fade"), self.state.wrist_fade))];
+                l.rows(Col::Right, rows, ROW_H);
+                l.finish()
+            }
+            Page::Tab(TAB_INBOX) => {
+                let mut l = Layout::rail(t("menu-inbox-title"));
+                let from = self.state.notify_from;
+                let segs = [
+                    (NotifyFrom::Discord, "notify-discord"),
+                    (NotifyFrom::AllApps, "notify-all"),
+                    (NotifyFrom::Off, "notify-off"),
+                ]
+                .map(|(f, id)| add(&mut acts, Act::NotifyFrom(f), seg(t(id), from == f)))
+                .to_vec();
+                l.segments(Col::Full, segs);
+                let rows: Vec<Slot> = self
+                    .history
+                    .iter()
+                    .map(|n| {
+                        let m = Slot::new(SlotKind::Message, n.title.clone())
+                            .detail(n.body.clone())
+                            .value(self.ago(n.at, s))
+                            .tile(if n.app.is_empty() { &n.title } else { &n.app })
+                            .on(!n.read);
+                        add(&mut acts, Act::None, m)
+                    })
+                    .collect();
+                if rows.is_empty() {
+                    l.paragraph(Col::Full, t("menu-inbox-empty"), Tone::Secondary, 40.0);
+                } else {
+                    l.rows(Col::Full, rows, 68.0);
+                }
+                let note = if self.notify_blocked && from != NotifyFrom::Off {
+                    t("menu-notify-blocked")
+                } else if from == NotifyFrom::Off {
+                    t("menu-inbox-off")
+                } else {
+                    t("menu-inbox-hint")
+                };
+                let clear =
+                    add(&mut acts, Act::ClearInbox, primary(t("menu-clear"), false).enabled(!self.history.is_empty()));
+                l.footer(note, Some(clear));
+                l.finish()
+            }
             Page::Tab(_) => {
-                let cost = [("gpu", format!("{:.2}", cost.0)), ("cpu", format!("{:.1}", cost.1))];
-                (
-                    3,
-                    t("menu-settings-title"),
-                    s.get("menu-cost", &cost),
-                    vec![
-                        action(s.get("menu-point", &[("hand", hand_name(s, self.state.dominant))]), true),
-                        toggle(t("menu-autostart"), self.auto_launch),
-                        toggle(t("menu-haptics"), self.state.haptics),
-                        toggle(t("menu-curved-default"), self.state.default_curved),
-                        toggle(t("menu-update-check"), self.state.update_check),
-                        toggle(t("menu-smoothing"), self.state.smoothing),
-                        hidden(),
-                        hidden(),
-                        hidden(),
-                        danger("menu-quit", QUIT_SLOT),
-                    ],
-                )
+                let mut l = Layout::rail(t("menu-setup-title"));
+                l.hint(s.get("menu-cost", &[("gpu", format!("{:.2}", cost.0)), ("cpu", format!("{:.1}", cost.1))]));
+                l.label(Col::Left, t("menu-hands"));
+                let laser = hands(&mut acts, self.state.dominant, Act::LaserHand);
+                let watch = hands(&mut acts, wrist_hand, Act::WatchHand);
+                l.choices(Col::Left, vec![(t("menu-laser-hand"), laser), (t("menu-watch-on"), watch)]);
+                l.label(Col::Left, t("menu-feel"));
+                let rows = vec![
+                    add(&mut acts, Act::Haptics, toggle(t("menu-haptics"), self.state.haptics)),
+                    add(&mut acts, Act::Smoothing, toggle(t("menu-smoothing"), self.state.smoothing)),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Right, t("menu-start"));
+                let rows = vec![
+                    add(&mut acts, Act::AutoStart, toggle(t("menu-autostart"), self.auto_launch)),
+                    add(&mut acts, Act::Updates, toggle(t("menu-update-check"), self.state.update_check)),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
+                l.label(Col::Right, t("menu-new-screens"));
+                let rows =
+                    vec![add(&mut acts, Act::Curved, toggle(t("menu-curved-default"), self.state.default_curved))];
+                l.rows(Col::Right, rows, ROW_H);
+                let quit = Slot::new(SlotKind::Danger, t(if self.armed { "menu-confirm" } else { "menu-quit" }))
+                    .on(self.armed);
+                l.footer("", Some(add(&mut acts, Act::Quit, quit)));
+                l.finish()
             }
         };
         let first_run =
             matches!(self.page, Page::FirstHand | Page::FirstMonitor | Page::FirstKeyboard | Page::FirstTips);
-        MenuModel { tabs: if first_run { Vec::new() } else { tabs }, tab, title, subtitle, body, slots }
+        if !first_run {
+            let tabs = [
+                ("menu-tab-panels", icons::SCREEN, 0),
+                ("menu-tab-keys", icons::KEYS, 0),
+                ("menu-tab-watch", icons::WATCH, 0),
+                ("menu-tab-inbox", icons::BELL, self.unread()),
+                ("menu-tab-setup", icons::SLIDERS, 0),
+            ];
+            model.tabs = tabs.iter().map(|(id, icon, badge)| Tab { label: t(id), icon, badge: *badge }).collect();
+            model.tab = match self.page {
+                Page::Tab(i) => i.min(TABS - 1),
+                _ => TAB_PANELS,
+            };
+        }
+        debug_assert_eq!(acts.len(), model.slots.len(), "every slot needs its act");
+        self.acts.replace(acts);
+        model
     }
 
     /// A new screen panel with the user's defaults (curvature, opacity).
@@ -714,34 +1009,35 @@ impl Session {
         let mut fx = Vec::new();
         let slot = match input {
             MenuInput::Tab(i) => {
-                self.armed = None;
-                if matches!(self.page, Page::Tab(_) | Page::Windows(_) | Page::Notifications) && i < TABS {
+                self.armed = false;
+                if matches!(self.page, Page::Tab(_) | Page::Windows(_)) && i < TABS {
+                    self.leave_page();
                     self.page = Page::Tab(i);
                 }
                 return fx;
             }
             MenuInput::Slot(i) => i,
             MenuInput::Close => {
-                self.armed = None;
-                if let Some(m) = panels.iter_mut().find(|p| p.id == MENU_ID) {
-                    m.visible = false;
-                }
+                self.armed = false;
+                self.leave_page();
+                Self::close(panels);
                 return fx;
             }
         };
-        // Destructive buttons need a second tap on the same button; any other click disarms.
-        let destructive = (self.page, slot) == (Page::Tab(3), QUIT_SLOT);
-        if destructive && self.armed != Some((self.page, slot)) {
-            self.armed = Some((self.page, slot));
+        let Some(act) = self.acts.borrow().get(slot).copied() else { return fx };
+        // Quit needs a second tap; any other click disarms it.
+        if act == Act::Quit && !self.armed {
+            self.armed = true;
             return fx;
         }
-        self.armed = None;
-        match (self.page, slot) {
-            (Page::FirstHand, 0 | 1) => {
-                self.set_dominant(if slot == 0 { Hand::Left } else { Hand::Right }, panels);
+        self.armed = false;
+        match act {
+            Act::None => {}
+            Act::FirstHand(hand) => {
+                self.set_dominant(hand, panels);
                 self.page = Page::FirstMonitor;
             }
-            (Page::FirstMonitor, i) => {
+            Act::FirstMonitor(i) => {
                 if let Some(m) = monitors.get(i) {
                     let id = next_id(panels);
                     panels.push(self.new_screen(id, i as u32, head, m));
@@ -753,16 +1049,16 @@ impl Session {
                     fx.push(Effect::Added(id));
                 }
             }
-            (Page::FirstKeyboard, 0 | 1) => self.page = Page::FirstTips,
-            (Page::FirstTips, 9) => {
+            Act::FirstDone => self.page = Page::FirstTips,
+            Act::GotIt => {
                 self.state.onboarded = true;
-                self.page = Page::Tab(0);
+                self.page = Page::Tab(TAB_PANELS);
                 for p in panels.iter_mut().filter(|p| p.id == MENU_ID || p.source == Source::Keyboard) {
                     p.visible = false;
                 }
             }
             // Adding a screen or window closes the menu so the new panel is not hidden behind it.
-            (Page::Tab(0), 0) => {
+            Act::AddScreen => {
                 if let Some(i) = Self::unshown_monitor(panels, monitors) {
                     let id = next_id(panels);
                     panels.push(self.new_screen(id, i, head, &monitors[i as usize]));
@@ -770,72 +1066,80 @@ impl Session {
                     Self::close(panels);
                 }
             }
-            (Page::Tab(0), 1) => {
+            Act::OpenWindows => {
                 self.page = Page::Windows(0);
                 fx.push(Effect::ListWindows);
             }
-            (Page::Tab(0), 2) => Self::recenter(panels, head),
-            (Page::Tab(0), 3) => Self::reset_layout(panels, head, monitors),
-            (Page::Tab(0), 4) => self.toggle_hidden(panels, head),
-            (Page::Tab(0), 5) | (Page::Tab(1), 0) => Self::toggle_keyboard(panels, head),
-            (Page::Windows(page), i) if i < WINDOWS_PER_PAGE => {
-                if let Some(&(h, _)) = self.windows.get(page * WINDOWS_PER_PAGE + i)
-                    && !panels.iter().any(|p| p.source == Source::Window(h))
-                {
+            Act::Recenter => Self::recenter(panels, head),
+            Act::ResetLayout => Self::reset_layout(panels, head, monitors),
+            Act::Screens => self.toggle_hidden(panels, head),
+            Act::Keyboard => Self::toggle_keyboard(panels, head),
+            Act::ClosePanel(id) => {
+                if let Some(i) = panels.iter().position(|p| p.id == id) {
+                    panels.remove(i);
+                    if self.toolbar == Some(id) {
+                        self.toolbar = None;
+                    }
+                    fx.push(Effect::Removed(id));
+                }
+            }
+            Act::AddWindow(h) => {
+                if !panels.iter().any(|p| p.source == Source::Window(h)) {
+                    if let Some((_, name)) = self.windows.iter().find(|(w, _)| *w == h) {
+                        self.window_names.insert(h, name.clone());
+                    }
                     fx.push(Effect::AddWindow(h));
-                    self.page = Page::Tab(0);
+                    self.page = Page::Tab(TAB_PANELS);
                     Self::close(panels);
                 }
             }
-            (Page::Windows(page), 8) => {
-                if self.windows.len() > (page + 1) * WINDOWS_PER_PAGE {
+            Act::MoreWindows => {
+                if let Page::Windows(page) = self.page
+                    && self.windows.len() > (page + 1) * WINDOWS_PER_PAGE
+                {
                     self.page = Page::Windows(page + 1);
                 }
             }
-            (Page::Windows(_), _) => self.page = Page::Tab(0),
-            (Page::Tab(0), 6) => self.page = Page::Notifications,
-            (Page::Notifications, 6) => {
-                self.state.notify_from = self.state.notify_from.next();
-                fx.push(Effect::NotifyFrom(self.state.notify_from));
+            Act::Back => self.page = Page::Tab(TAB_PANELS),
+            Act::NotifyFrom(from) => {
+                if from != self.state.notify_from {
+                    self.state.notify_from = from;
+                    fx.push(Effect::NotifyFrom(from));
+                }
             }
-            (Page::Notifications, 8) => self.history.clear(),
-            (Page::Notifications, 9) => self.page = Page::Tab(0),
-            (Page::Tab(1), 1) => {
+            Act::ClearInbox => self.history.clear(),
+            Act::KeyboardHere => {
                 if let Some(k) = find(panels, Source::Keyboard) {
                     *k = Panel { id: k.id, ..Panel::keyboard_below(k.id, head) };
                 }
             }
-            (Page::Tab(1), 2) => fx.push(Effect::NextLanguage),
-            (Page::Tab(1), 3) => {
+            Act::Language(i) => fx.push(Effect::Language(i)),
+            Act::NextLanguage => fx.push(Effect::NextLanguage),
+            Act::Chat => {
                 self.state.chatbox = !self.state.chatbox;
                 fx.push(Effect::RedrawKeyboard);
             }
-            (Page::Tab(1), 4) => self.state.typing_sounds = !self.state.typing_sounds,
-            (Page::Tab(1), 5) => self.state.media_to_chatbox = !self.state.media_to_chatbox,
-            (Page::Tab(2), 0) => {
-                if let Some(w) = find(panels, Source::Wrist) {
-                    w.visible = !w.visible;
+            Act::Sounds => self.state.typing_sounds = !self.state.typing_sounds,
+            Act::NowPlaying => self.state.media_to_chatbox = !self.state.media_to_chatbox,
+            Act::WristBattery => self.state.wrist_battery = !self.state.wrist_battery,
+            Act::WristMedia => self.state.wrist_media = !self.state.wrist_media,
+            Act::WristLoad => self.state.wrist_load = !self.state.wrist_load,
+            Act::WristFade => self.state.wrist_fade = !self.state.wrist_fade,
+            Act::LaserHand(hand) => {
+                if hand != self.state.dominant {
+                    self.set_dominant(hand, panels);
                 }
             }
-            (Page::Tab(2), 1) => {
-                let now = panels.iter().find(|p| p.source == Source::Wrist).map_or(Hand::Left, Panel::anchor_hand);
-                self.wear_wrist(now.other(), panels);
-            }
-            (Page::Tab(2), 2) => self.state.wrist_fade = !self.state.wrist_fade,
-            (Page::Tab(2), 3) => self.state.wrist_battery = !self.state.wrist_battery,
-            (Page::Tab(2), 4) => self.state.wrist_load = !self.state.wrist_load,
-            (Page::Tab(2), 5) => self.state.wrist_media = !self.state.wrist_media,
-            (Page::Tab(3), 0) => self.set_dominant(self.state.dominant.other(), panels),
-            (Page::Tab(3), 1) => {
+            Act::WatchHand(hand) => self.wear_wrist(hand, panels),
+            Act::AutoStart => {
                 self.auto_launch = !self.auto_launch;
                 fx.push(Effect::AutoLaunch(self.auto_launch));
             }
-            (Page::Tab(3), 2) => self.state.haptics = !self.state.haptics,
-            (Page::Tab(3), 3) => self.state.default_curved = !self.state.default_curved,
-            (Page::Tab(3), 4) => self.state.update_check = !self.state.update_check,
-            (Page::Tab(3), 5) => self.state.smoothing = !self.state.smoothing,
-            (Page::Tab(3), QUIT_SLOT) => fx.push(Effect::Quit),
-            _ => {}
+            Act::Haptics => self.state.haptics = !self.state.haptics,
+            Act::Smoothing => self.state.smoothing = !self.state.smoothing,
+            Act::Updates => self.state.update_check = !self.state.update_check,
+            Act::Curved => self.state.default_curved = !self.state.default_curved,
+            Act::Quit => fx.push(Effect::Quit),
         }
         fx
     }

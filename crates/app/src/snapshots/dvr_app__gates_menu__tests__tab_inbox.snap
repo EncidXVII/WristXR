@@ -1,0 +1,17 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Inbox | 
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Shown on your watch with a buzz
+Segment "Discord" "" "" [on]
+Segment "All apps" "" ""
+Segment "Off" "" ""
+Message "Alex" "are you on? joining the club world" "now" [on]
+Message "Mira · #vr-night" "bring the new avatar" "now" [on]
+Primary "Clear all" "" ""

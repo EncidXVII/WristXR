@@ -1,25 +1,8 @@
 ---
 source: crates/app/src/gates_menu.rs
-expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+expression: outline(&m)
 ---
-MenuModel {
-    tabs: [],
-    tab: 0,
-    title: "Which hand do you point with?",
-    subtitle: "Step 1 of 4",
-    body: "",
-    slots: [
-        Slot {
-            label: "Left hand",
-            on: false,
-            enabled: true,
-            kind: Choice,
-        },
-        Slot {
-            label: "Right hand",
-            on: true,
-            enabled: true,
-            kind: Choice,
-        },
-    ],
-}
+Which hand do you point with? | 
+  Step 1 of 4
+Primary "Left hand" "" ""
+Primary "Right hand" "" "" [on]

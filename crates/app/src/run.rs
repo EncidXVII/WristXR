@@ -1,6 +1,6 @@
 //! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
 use crate::bindings::APP_KEY;
-use crate::session::{Effect, MonitorInfo, Session, WINDOW_NEARER};
+use crate::session::{Effect, MonitorInfo, Page, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
@@ -19,7 +19,7 @@ use dvr_osc::{Chatbox, VRCHAT_ADDR};
 use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
 use dvr_ui::{
     KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, WRIST_SIZE, Wrist,
-    WristInfo, WristInput, WristLoad,
+    WristInfo, WristInput, WristLoad, WristMedia,
 };
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
@@ -135,11 +135,15 @@ fn wrist_info(
     media: Option<&MediaInfo>,
 ) -> WristInfo {
     let (hour, minute) = dvr_sys::local_time();
+    let (weekday, day, month) = dvr_sys::local_date();
     let stats = vr.stats();
     let battery = state.wrist_battery;
     WristInfo {
         hour,
         minute,
+        weekday,
+        day,
+        month,
         controllers: if battery { stats.controllers } else { [None, None] },
         lowest_tracker: stats.lowest_tracker.filter(|_| battery),
         expanded,
@@ -149,10 +153,24 @@ fn wrist_info(
             gpu: load.gpu,
             own_gpu_ms,
         }),
-        toast: toast.map(|(t, _)| (t.title.clone(), t.content.clone())),
-        media: media.filter(|_| state.wrist_media).map(|m| (m.title.clone(), m.artist.clone(), m.playing)),
+        toast: toast.map(|(t, _)| (t.source_app.clone(), t.title.clone(), t.content.clone())),
+        // The position only shows (and changes) while the watch is open.
+        media: media.filter(|_| state.wrist_media).map(|m| WristMedia {
+            title: m.title.clone(),
+            artist: m.artist.clone(),
+            app: m.app.clone(),
+            playing: m.playing,
+            position: if expanded { m.position_now() } else { 0.0 },
+            duration: m.duration,
+            shuffle: m.shuffle,
+        }),
         ..WristInfo::default()
     }
+}
+
+/// "Title – Artist" for the VRChat chatbox.
+fn now_playing_line(m: &MediaInfo) -> String {
+    if m.artist.is_empty() { m.title.clone() } else { format!("{} – {}", m.title, m.artist) }
 }
 
 /// A window shown as its own panel in front of the user, at the physical scale it has on the main screen.
@@ -185,6 +203,13 @@ pub fn run() -> Result<(), String> {
     let mut session = Session::new(state, &mut panels, head(&vr));
     session.imported = imported.is_some();
     session.language = dvr_input_win::layout_name();
+    session.languages = dvr_input_win::layouts();
+    // Names for windows kept from last time (toolbar chip, "Open now").
+    for (h, title) in dvr_capture_win::windows() {
+        if panels.iter().any(|p| p.source == Source::Window(h as u64)) {
+            session.window_names.insert(h as u64, title);
+        }
+    }
 
     // SteamVR knows us as an app (dashboard overlay) so it can start us with itself; first run opts in.
     let app = std::env::current_exe()
@@ -339,14 +364,17 @@ pub fn run() -> Result<(), String> {
         // The other hand's laser on the wrist drives its media buttons.
         let on_wrist = |id: u32| engine.panels.iter().any(|p| p.id == id && p.source == Source::Wrist);
         let mut over_wrist = false;
+        let mut holds_open = false;
         for e in &events {
             match *e {
                 Event::Hover { panel, uv, .. } if on_wrist(panel) => {
                     over_wrist = true;
+                    holds_open |= wrist.opens_at(uv, wrist_expanded);
                     wrist.pointer_move(uv);
                 }
                 Event::Mouse { panel, uv, button: MouseButton::Left, down } if on_wrist(panel) => {
                     over_wrist = true;
+                    holds_open |= wrist.opens_at(uv, wrist_expanded);
                     wrist.pointer_button(uv, down);
                 }
                 _ => {}
@@ -356,7 +384,8 @@ pub fn run() -> Result<(), String> {
             wrist.pointer_leave();
         }
         wrist_hovered = over_wrist;
-        if over_wrist {
+        // Only the time row opens the watch, so the glance strip's pause button works without opening it.
+        if holds_open {
             wrist_seen = Some(now);
         }
         let expanded = wrist_seen.is_some_and(|t| now.saturating_sub(t) <= WRIST_LINGER_MS);
@@ -376,10 +405,31 @@ pub fn run() -> Result<(), String> {
                     dirty = Some(Instant::now());
                 }
                 WristInput::HideAll => session.toggle_hidden(&mut engine.panels, head_now),
+                WristInput::Inbox => {
+                    session.open_menu_at(Page::Tab(TAB_INBOX), &mut engine.panels, head_now);
+                    menu_dirty = true;
+                }
                 WristInput::Previous => media.send(MediaCommand::Previous),
                 WristInput::PlayPause => media.send(MediaCommand::PlayPause),
                 WristInput::Next => media.send(MediaCommand::Next),
+                WristInput::Shuffle => media.send(MediaCommand::ToggleShuffle),
+                WristInput::Mute => media.send(MediaCommand::ToggleMute),
+                WristInput::Volume(f) => media.send(MediaCommand::Volume(f)),
+                WristInput::Seek(f) => {
+                    if let Some(m) = &now_playing {
+                        media.send(MediaCommand::Seek(f * m.duration));
+                    }
+                }
+                WristInput::Share => {
+                    if let Some(m) = media.info() {
+                        let name = now_playing_line(&m);
+                        if let Err(e) = chatbox.send_quiet(&strings.get("chat-now-playing", &[("track", name)])) {
+                            tracing::warn!(%e, "now-playing send failed");
+                        }
+                    }
+                }
             }
+            refresh_wrist = true;
         }
         for e in &events {
             let rect = |panel: u32| surfaces.get(&panel).and_then(|s: &Surface| s.rect);
@@ -466,6 +516,9 @@ pub fn run() -> Result<(), String> {
             surfaces.insert(id, surface(&gpu, &p, &monitors)?);
             engine.panels.push(p);
             engine.start_grab(hand, id, &poses);
+            if let Some((_, title)) = dvr_capture_win::windows().into_iter().find(|(w, _)| *w == h) {
+                session.window_names.insert(h as u64, title);
+            }
             menu_dirty = true;
             dirty = Some(Instant::now());
         }
@@ -509,6 +562,9 @@ pub fn run() -> Result<(), String> {
                 Effect::NextLanguage => {
                     dvr_input_win::next_layout();
                 }
+                Effect::Language(i) => {
+                    dvr_input_win::select_layout(i);
+                }
                 Effect::NotifyFrom(from) => {
                     if from != NotifyFrom::Off && app_toasts.is_none() {
                         app_toasts = Some(AppToasts::start());
@@ -524,10 +580,6 @@ pub fn run() -> Result<(), String> {
                 }
             }
         }
-        if toolbar_dirty {
-            toolbar.set(&session.toolbar_model(&engine.panels, &strings));
-            toolbar_for = session.toolbar_target();
-        }
 
         if layout_checked.elapsed() >= LAYOUT_POLL {
             layout_checked = Instant::now();
@@ -535,9 +587,16 @@ pub fn run() -> Result<(), String> {
             if id != layout {
                 redraw_keyboard = true;
                 session.language = dvr_input_win::layout_name();
+                session.languages = dvr_input_win::layouts();
                 menu_dirty = true;
+                toolbar_dirty = true;
             }
             layout = id;
+        }
+
+        if toolbar_dirty {
+            toolbar.set(&session.toolbar_model(&engine.panels, &strings));
+            toolbar_for = session.toolbar_target();
         }
 
         // Watch buttons show hide / keyboard state as soon as it changes.
@@ -569,7 +628,7 @@ pub fn run() -> Result<(), String> {
                 && let Some(m) = playing.as_ref().filter(|m| m.playing)
                 && now_playing.as_ref().map(track) != Some(track(m))
             {
-                let name = if m.artist.is_empty() { m.title.clone() } else { format!("{} – {}", m.title, m.artist) };
+                let name = now_playing_line(m);
                 if let Err(e) = chatbox.send_quiet(&strings.get("chat-now-playing", &[("track", name)])) {
                     tracing::warn!(%e, "now-playing send failed");
                 }
@@ -577,7 +636,7 @@ pub fn run() -> Result<(), String> {
             now_playing = playing;
         }
         if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
-            session.notified(&t.title, &t.content);
+            session.notified(&t.source_app, &t.title, &t.content);
             menu_dirty = true;
             toast = Some((t, Instant::now()));
             if session.state.haptics {
@@ -592,7 +651,7 @@ pub fn run() -> Result<(), String> {
             // Discord's first line already names the sender; other apps get their name in front.
             let title =
                 if t.app.to_lowercase().contains("discord") { t.title } else { format!("{}: {}", t.app, t.title) };
-            session.notified(&title, &t.body);
+            session.notified(&t.app, &title, &t.body);
             menu_dirty = true;
             if session.state.haptics {
                 vr.haptic(session.state.dominant.other());
@@ -620,7 +679,9 @@ pub fn run() -> Result<(), String> {
                 toast.as_ref(),
                 now_playing.as_ref(),
             );
-            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, ..info });
+            let volume = media.volume().filter(|_| wrist_expanded);
+            let unread = session.unread();
+            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, ..info });
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {

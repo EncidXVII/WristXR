@@ -1,0 +1,16 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Watch | Point at it to open it
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Shows
+  Behaves
+Toggle "Batteries" "" "" [on]
+Toggle "Music" "" "" [on]
+Toggle "FPS and load" "" ""
+Toggle "Only when looked at" "" "" [on]

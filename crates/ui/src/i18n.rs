@@ -39,7 +39,8 @@ mod tests {
     #[test]
     fn every_message_formats_without_errors() {
         let s = Strings::english().expect("bundle");
-        assert_eq!(s.get("wrist-battery", &[("left", "80%".into()), ("right", "65%".into())]), "L 80%  R 65%");
+        let date = [("weekday", "Mon".into()), ("day", "9".into()), ("month", "Nov".into())];
+        assert_eq!(s.get("wrist-date", &date), "Mon 9 Nov");
         assert_eq!(s.get("missing-id", &[]), "missing-id");
     }
 }

@@ -1,0 +1,27 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Setup | Overlay 0.05 ms · 1.2% CPU
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Hands
+  Laser hand
+  Watch on
+  Feel
+  Start
+  New screens
+  
+Segment "Left" "" ""
+Segment "Right" "" "" [on]
+Segment "Left" "" "" [on]
+Segment "Right" "" ""
+Toggle "Vibration" "" "" [on]
+Toggle "Steady laser" "" "" [on]
+Toggle "With SteamVR" "" ""
+Toggle "Check updates" "" "" [on]
+Toggle "Curved" "" ""
+Danger "Quit DesktopVR" "" ""

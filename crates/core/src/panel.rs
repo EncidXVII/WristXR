@@ -8,6 +8,8 @@ pub const DEFAULT_DISTANCE_M: f32 = 1.2;
 pub const DEFAULT_DROP_M: f32 = 0.15;
 pub const KEYBOARD_WIDTH_M: f32 = 0.6;
 pub const WRIST_WIDTH_M: f32 = 0.14;
+/// Distance from the watch's anchor point to its top edge.
+const WRIST_TOP_M: f32 = 0.049;
 pub const MIN_WIDTH_M: f32 = 0.1;
 pub const MAX_WIDTH_M: f32 = 10.0;
 
@@ -48,7 +50,7 @@ pub const MENU_ID: u32 = u32::MAX - 1;
 pub const MENU_WIDTH_M: f32 = 0.5;
 /// Fixed id of the toolbar panel.
 pub const TOOLBAR_ID: u32 = u32::MAX - 2;
-pub const TOOLBAR_WIDTH_M: f32 = 0.38;
+pub const TOOLBAR_WIDTH_M: f32 = 0.59;
 /// Gap between a panel's bottom edge and its toolbar.
 const TOOLBAR_GAP_M: f32 = 0.02;
 /// A panel dimmed this far is hidden and ignores the laser.
@@ -156,7 +158,10 @@ impl Panel {
         use std::f32::consts::FRAC_PI_2;
         let face_up = Quat::from_axis_angle(Vec3::X, -FRAC_PI_2);
         let along_arm = Quat::from_axis_angle(Vec3::Z, if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 });
-        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16), face_up * along_arm);
+        let rot = face_up * along_arm;
+        // The top edge stays put whatever the height: the watch grows downward (toward the elbow) when it opens.
+        let drop = WRIST_WIDTH_M * aspect * 0.5 - WRIST_TOP_M;
+        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
         let mut p = Self::new(id, Source::Wrist, pose, WRIST_WIDTH_M, aspect);
         p.anchor = Anchor::Hand(hand);
         p
@@ -277,6 +282,15 @@ mod tests {
             assert!(text_up.dot(Vec3::new(0.0, 0.0, -1.0)) > 0.99, "{hand:?}: top points {text_up:?}");
             assert!(normal.dot(Vec3::Y) > 0.99, "{hand:?}: faces {normal:?}");
         }
+    }
+
+    #[test]
+    fn watch_top_edge_stays_put_when_it_grows() {
+        let top = |aspect: f32| {
+            let w = Panel::on_wrist(1, Hand::Left, aspect);
+            w.pose.transform_point(Vec3::new(0.0, w.height_m() * 0.5, 0.0))
+        };
+        assert!((top(0.7) - top(1.36)).length() < 1e-5);
     }
 
     #[test]

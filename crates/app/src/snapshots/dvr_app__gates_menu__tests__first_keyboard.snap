@@ -1,25 +1,8 @@
 ---
 source: crates/app/src/gates_menu.rs
-expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+expression: outline(&m)
 ---
-MenuModel {
-    tabs: [],
-    tab: 0,
-    title: "Type hi on the keyboard below",
-    subtitle: "Step 3 of 4 · Typed: ",
-    body: "",
-    slots: [
-        Slot {
-            label: "Done",
-            on: false,
-            enabled: true,
-            kind: Choice,
-        },
-        Slot {
-            label: "Skip",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-    ],
-}
+Type hi on the keyboard below | 
+  Step 3 of 4 · Typed: 
+Primary "Done" "" ""
+Primary "Skip" "" ""

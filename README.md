@@ -25,8 +25,9 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   Mixed-DPI and multi-monitor setups map exactly.
 - **Any window as its own panel**: pick it from the window list, or grip a screen and yank the window under
   the pointer out of it.
-- **Panel toolbar**: point at a screen or window and a toolbar appears under it: lock, curve, smaller / bigger,
-  opacity, anchor (world, hand, or head-locked HUD that follows your view), close.
+- **Panel toolbar**: point at a screen or window and a toolbar appears under it, starting with the panel's name:
+  lock, curve, size, an opacity slider, Room / Hand / Head (a head-locked HUD that follows your view), reset,
+  close.
 - **Hide everything with one button**: double-tap the left menu button, like XSOverlay, to fade screens, windows
   and keyboard out (and back in). Hidden
   panels stop capturing, so they cost nothing.
@@ -36,20 +37,23 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   input languages), sticky Shift / Ctrl / Alt and typing sounds.
 - **VRChat chatbox keyboard**: Chat mode sends what you type straight to the VRChat chatbox over OSC, plus
   "share now playing".
-- **Wrist watch that stays out of the way**: just the time and batteries, shown only while you look at your
-  wrist. Point at it for Menu, Keyboard, Hide all, media controls, fps / load and this overlay's own cost.
-  Notifications pop up on it; the last few stay in Menu > Notifications.
+- **Wrist watch that stays out of the way**: the time, date and battery rings, shown only while you look at your
+  wrist, plus one line for what is playing (with a pause button), a new message or a low battery. Point at the
+  time to open it: seek bar, play / skip / shuffle, share the song to VRChat, Windows volume and mute, switches
+  for Keyboard and Screens, the Inbox, the menu, and fps / load / this overlay's own cost.
 - **Discord notifications on your wrist**: Discord messages (or, if you choose, any app's Windows notifications)
-  pop up on the watch with a buzz, no Discord login or bot needed. Apps that send XSOverlay notifications
+  pop up on the watch with a buzz, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
   (UDP 42069) work too.
 - **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
   other hand keeps playing.
 - **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
   HTC Vive, Windows Mixed Reality and Steam Frame controllers.
 
-| Wrist (point at it to expand) | Panel toolbar |
+| Watch at a glance | Watch, pointed at |
 |---|---|
-| ![Expanded wrist watch: time, batteries, Menu / Keyboard / Hide all buttons, media controls, fps and load](docs/img/wrist-expanded.png) | ![Toolbar under a screen: Lock, Curve, smaller, bigger, opacity, attach to hand, Close](docs/img/toolbar.png) |
+| ![Watch: 21:37, battery rings for both controllers, and the song playing with a pause button](docs/img/wrist.png) ![Watch with a new Discord message from Alex](docs/img/wrist-message.png) ![Watch warning that the right controller is at 12 percent](docs/img/wrist-low.png) | ![Open watch: seek bar, play, skip, shuffle, share, volume slider, Keyboard and Screens switches, Inbox, Menu, fps and load](docs/img/wrist-expanded.png) |
+
+![Toolbar under a window: its name, lock, curve, size, opacity slider, Room / Hand / Head, reset, close](docs/img/toolbar.png)
 
 ![VR keyboard with Shift lit, the language key showing EN and the laser hovering H](docs/img/keyboard.png)
 
@@ -84,17 +88,24 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag.
 - **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
-- **Point at a panel**: its toolbar appears underneath (lock, curve, size, opacity, World / Hand / Head, close).
+- **Point at a panel**: its toolbar appears underneath (name, lock, curve, size, opacity, Room / Hand / Head,
+  reset, close). The keyboard's toolbar has your input languages and Put away.
 - **Left menu button**: double-tap to hide or show screens, windows and keyboard.
 - **Toolbar Reset** puts a panel back in front of you; **Menu > Reset layout** arranges all screens and windows
   in an arc in front of you.
-- **Watch**: look at your wrist to see it; point at it with the other hand for Menu, Keyboard and Hide all.
+- **Watch**: look at your wrist to see it; its pause button works as is. Point at the time with the other hand
+  to open the player, volume and quick switches. It grows downward, so nothing moves under your laser.
 - **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
   key switches input language.
-- **Menu**: Panels (add screen or window, recenter, hide all, notifications), Keyboard, Wrist (what the watch shows, which
-  wrist), Settings (pointing hand, start with SteamVR, vibration, curved screens, updates, quit).
+- **Menu** (side rail): Panels (add a window or screen, recenter, reset layout, Screens / Keyboard switches, and
+  everything open now with a close button), Keys (language, chat, key sounds, share songs), Watch (what it
+  shows), Inbox (recent messages; Discord / All apps / Off), Setup (laser hand, watch hand, vibration, steady
+  laser, start with SteamVR, updates, curved screens, quit).
 
-![The DesktopVR menu: add screens and windows, recenter, hide all](docs/img/menu-panels.png)
+| Panels | Setup |
+|---|---|
+| ![Menu, Panels page: add a window or screen, recenter, reset layout, Screens and Keyboard switches, open panels with close buttons](docs/img/menu-panels.png) | ![Menu, Setup page: laser hand and watch hand as Left / Right choices, vibration, steady laser, start with SteamVR, updates, curved, Quit](docs/img/menu-settings.png) |
+| ![Menu, Inbox page: Discord / All apps / Off, recent messages with unread dots](docs/img/menu-inbox.png) | ![Menu, Add window page: open windows with app tiles, Shown or +](docs/img/menu-windows.png) |
 
 ## Performance
 
@@ -107,7 +118,7 @@ the worst case (60 fps capture):
 | CPU, one core | < 3 % | 0.6–2.8 % |
 | RAM | < 150 MB | 64–78 MB |
 
-The same numbers are shown live in Settings and on the expanded watch, so you can check them on your own
+The same numbers are shown live in Setup and on the open watch, so you can check them on your own
 machine.
 
 ## FAQ
@@ -124,7 +135,7 @@ VRChat's Action Menu), and takes only the hand you're pointing with away from th
 in progress; the Linux release builds and runs the self-test today.
 
 **Does it slow down my game?** It's designed not to: about 0.01 ms GPU per frame and a few percent of one CPU
-core. Hidden panels stop capturing entirely. Settings shows the real cost on your machine.
+core. Hidden panels stop capturing entirely. Setup shows the real cost on your machine.
 
 **Is Windows SmartScreen warning me?** Early builds aren't code-signed yet (see
 [code signing policy](docs/code-signing-policy.md)). Every release ships a SHA-256 checksum.
@@ -139,7 +150,7 @@ GPU model, monitor resolutions; no names, paths or identifiers). Attach it to a
 
 No telemetry. Network use: a GitHub release check (no identifiers), VRChat OSC on localhost, the notification
 API on localhost. Nothing else. Windows notifications (Discord by default) are read on your PC only to show them
-on the watch; they are never stored on disk or sent anywhere. Switch it off in Menu > Notifications.
+on the watch; they are never stored on disk or sent anywhere. Switch it off in Menu > Inbox (Off).
 
 ## Building from source
 

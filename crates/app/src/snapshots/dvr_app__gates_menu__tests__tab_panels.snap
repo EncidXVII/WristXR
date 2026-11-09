@@ -1,60 +1,25 @@
 ---
 source: crates/app/src/gates_menu.rs
-expression: "session.model(&panels, &screens, &strings, (0.05, 1.2))"
+expression: outline(&m)
 ---
-MenuModel {
-    tabs: [
-        "Panels",
-        "Keyboard",
-        "Wrist",
-        "Settings",
-    ],
-    tab: 0,
-    title: "Screens and windows",
-    subtitle: "Point at a screen for its toolbar. Double-tap left menu: hide / show.",
-    body: "",
-    slots: [
-        Slot {
-            label: "Add screen 2",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-        Slot {
-            label: "Add window",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-        Slot {
-            label: "Recenter",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-        Slot {
-            label: "Reset layout",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-        Slot {
-            label: "Hide all",
-            on: false,
-            enabled: true,
-            kind: Choice,
-        },
-        Slot {
-            label: "Keyboard",
-            on: true,
-            enabled: true,
-            kind: Toggle,
-        },
-        Slot {
-            label: "Notifications (1)",
-            on: false,
-            enabled: true,
-            kind: Action,
-        },
-    ],
-}
+Panels | Point at one for its toolbar
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Add
+  Arrange
+  Show
+  Open now
+  Double-tap left menu: hide or show everything
+Action "Window" "" "›"
+Action "Screen 2" "" "+" [on]
+Action "Recenter" "" ""
+Action "Reset layout" "" ""
+Toggle "Screens" "" "" [on]
+Toggle "Keyboard" "" "" [on]
+Item "Screen 1" "" "" [on]
+Item "Vesktop" "" "" [on]
+IconButton "" "" ""
+IconButton "" "" ""

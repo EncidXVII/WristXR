@@ -1,0 +1,20 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Keyboard | Chat sends what you type to VRChat
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Keyboard
+  Language
+  Typing
+Toggle "Keyboard" "" "" [on]
+Action "Bring it here" "" ""
+Segment "EN" "" "" [on]
+Segment "UK" "" ""
+Toggle "Chat to VRChat" "" ""
+Toggle "Key sounds" "" ""
+Toggle "Share songs" "" ""

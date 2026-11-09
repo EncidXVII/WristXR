@@ -8,6 +8,13 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Added
+- New look ("Night Lime"): side-rail menu with grouped lists, switches and Left / Right choices; Open now list
+  to find and close any panel; Inbox page with unread dots and a count on the rail.
+- Watch: date and battery rings at a glance, one line for the song (with a pause button that works without
+  opening the watch), a new message or a low battery. Pointed at: seek bar, shuffle, share the song to VRChat,
+  Windows volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
+- Toolbar: the panel's name first, opacity slider, Room / Hand / Head as one choice, keyboard languages and
+  Put away on the keyboard's toolbar.
 - Desktop panels for every monitor, flat or curved, exact mapping on mixed-DPI multi-monitor setups.
 - Add any open window as its own panel from a window list.
 - Toolbar under the pointed-at panel: lock, curve, smaller / bigger, opacity, anchor, close.

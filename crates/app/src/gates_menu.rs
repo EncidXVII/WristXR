@@ -1,12 +1,14 @@
 //! Gate 4c (first run < 60 s), menu, toolbar and hide-all, driven through the real Slint views with scripted
-//! pointers.
+//! pointers. Controls are found by their label, as a user would.
 use crate::gates::{GateResult, HEAD, Rig, key_sc, press_key, us_char};
-use crate::session::{Effect, MonitorInfo, Page, Session, TEST_WORD};
+use crate::session::{
+    Effect, MonitorInfo, Page, Pin, Session, TAB_INBOX, TAB_KEYS, TAB_PANELS, TAB_SETUP, TAB_WATCH, TEST_WORD, Tool,
+};
 use dvr_core::engine::Event;
 use dvr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
-use dvr_core::state::State;
+use dvr_core::state::{NotifyFrom, State};
 use dvr_ui::{
-    MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, close_center, slot_center, tab_center, toolbar_button_center,
+    MENU_SIZE, Menu, MenuModel, SlotKind, Strings, TOOLBAR_SIZE, Toolbar, ToolbarModel, close_center, tab_center,
 };
 
 const FIRST_RUN_BUDGET_MS: u64 = 60_000;
@@ -19,6 +21,9 @@ struct Ctx {
     strings: Strings,
     screens: Vec<MonitorInfo>,
     effects: Vec<Effect>,
+    /// What the menu and toolbar show now.
+    shown: MenuModel,
+    bar: ToolbarModel,
 }
 
 impl Ctx {
@@ -45,12 +50,13 @@ impl Ctx {
             let fx = self.session.toolbar_input(click, &mut self.rig.engine.panels, &poses, HEAD);
             self.effects.extend(fx);
         }
-        let model = self.session.model(&self.rig.engine.panels, &self.screens, &self.strings, (0.0, 0.0));
-        self.menu.set(&model);
-        self.toolbar.set(&self.session.toolbar_model(&self.rig.engine.panels, &self.strings));
+        self.shown = self.session.model(&self.rig.engine.panels, &self.screens, &self.strings, (0.0, 0.0));
+        self.menu.set(&self.shown);
         // Fades settle (the run loop steps them every frame).
         self.session.update_dims(&mut self.rig.engine.panels, 1.0, 1.0);
         self.session.place_toolbar(&mut self.rig.engine.panels, &poses);
+        self.bar = self.session.toolbar_model(&self.rig.engine.panels, &self.strings);
+        self.toolbar.set(&self.bar);
     }
 
     /// Points the right hand at menu pixel `at` and clicks with the trigger.
@@ -58,9 +64,45 @@ impl Ctx {
         self.click_on(MENU_ID, [at.0 / MENU_SIZE.0 as f32, at.1 / MENU_SIZE.1 as f32])
     }
 
-    /// Clicks toolbar button `i` of `n`.
-    fn tool(&mut self, i: usize, n: usize) -> GateResult {
-        let (x, y) = toolbar_button_center(i, n);
+    /// Clicks the `nth` (0-based) slot labelled with string `id`.
+    fn press_nth(&mut self, id: &str, nth: usize) -> GateResult {
+        let label = self.strings.get(id, &[]);
+        self.press_label(&label, nth)
+    }
+
+    fn press(&mut self, id: &str) -> GateResult {
+        self.press_nth(id, 0)
+    }
+
+    fn press_label(&mut self, label: &str, nth: usize) -> GateResult {
+        let i = (0..self.shown.slots.len())
+            .filter(|&i| self.shown.slots[i].label == label)
+            .nth(nth)
+            .ok_or_else(|| format!("no slot {label:?} on {:?}: {:?}", self.session.page, self.shown.texts()))?;
+        self.press_slot(i)
+    }
+
+    fn press_slot(&mut self, i: usize) -> GateResult {
+        let at = self.shown.center(i).ok_or("no such slot")?;
+        self.click(at)
+    }
+
+    fn slot_on(&self, id: &str) -> Option<bool> {
+        let label = self.strings.get(id, &[]);
+        self.shown.find(&label).map(|i| self.shown.slots[i].on)
+    }
+
+    /// Clicks toolbar control `tool`.
+    fn tool(&mut self, tool: Tool) -> GateResult {
+        let i = self.session.tool_index(tool).ok_or_else(|| format!("no {tool:?} on the toolbar"))?;
+        let (x, y) = self.bar.center(i).ok_or("toolbar control missing")?;
+        self.click_on(TOOLBAR_ID, [x / TOOLBAR_SIZE.0 as f32, y / TOOLBAR_SIZE.1 as f32])
+    }
+
+    /// Sets the opacity slider to `value` (0..1).
+    fn slide(&mut self, value: f32) -> GateResult {
+        let i = self.session.tool_index(Tool::Opacity).ok_or("no opacity slider")?;
+        let (x, y) = self.bar.slider_at(i, value).ok_or("slider missing")?;
         self.click_on(TOOLBAR_ID, [x / TOOLBAR_SIZE.0 as f32, y / TOOLBAR_SIZE.1 as f32])
     }
 
@@ -70,6 +112,17 @@ impl Ctx {
         self.rig.tap(Hand::Right);
         self.rig.frames(1);
         self.pump();
+        Ok(())
+    }
+
+    /// Points at a panel until its toolbar shows.
+    fn point_at(&mut self, id: u32, uv: [f32; 2]) -> GateResult {
+        self.rig.aim(Hand::Right, id, uv)?;
+        self.rig.frames(2);
+        self.pump();
+        if self.session.toolbar_target() != Some(id) {
+            return Err(format!("pointing at panel {id} must show its toolbar"));
+        }
         Ok(())
     }
 
@@ -86,6 +139,11 @@ impl Ctx {
 
     fn panel(&self, source: Source) -> Option<dvr_core::panel::Panel> {
         self.rig.engine.panels.iter().find(|p| p.source == source).copied()
+    }
+
+    fn open_menu(&mut self) {
+        self.session.toggle_menu(&mut self.rig.engine.panels, HEAD);
+        self.pump();
     }
 }
 
@@ -105,23 +163,24 @@ pub fn first_run_and_menu() -> GateResult {
         strings: Strings::english()?,
         screens: vec![screen(0, 2560, 1440, true), screen(2560, 1920, 1080, false)],
         effects: Vec::new(),
+        shown: MenuModel::default(),
+        bar: ToolbarModel::default(),
     };
     c.pump();
     if !(c.session.menu_open(&c.rig.engine.panels) && c.session.page == Page::FirstHand) {
         return Err("first run must open the menu on the hand question".into());
     }
-
-    if !c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0)).subtitle.contains("XSOverlay") {
+    if !c.shown.texts().iter().any(|t| t.contains("XSOverlay")) {
         return Err("first run must say settings were imported".into());
     }
-    c.click(slot_center(1))?;
+    c.press("first-hand-right")?;
     if c.session.state.dominant != Hand::Right || c.session.page != Page::FirstMonitor {
         return Err(format!("hand step: dominant {:?}, page {:?}", c.session.state.dominant, c.session.page));
     }
     if c.panel(Source::Wrist).map(|w| w.anchor) != Some(Anchor::Hand(Hand::Left)) {
         return Err("wrist must be on the non-dominant hand".into());
     }
-    c.click(slot_center(0))?;
+    c.press_slot(0)?;
     if c.panel(Source::Monitor(0)).is_none() || c.session.page != Page::FirstKeyboard {
         return Err(format!("screen step: page {:?}", c.session.page));
     }
@@ -133,11 +192,14 @@ pub fn first_run_and_menu() -> GateResult {
         press_key(&mut c.rig, hand, key_sc(&ch.to_string())?)?;
         c.pump();
     }
-    c.click(slot_center(0))?;
+    if c.slot_on("first-done") != Some(true) {
+        return Err("Done must light up once the word is typed".into());
+    }
+    c.press("first-done")?;
     if c.session.page != Page::FirstTips {
         return Err(format!("Done must show the gesture tips, page {:?}", c.session.page));
     }
-    c.click(slot_center(9))?;
+    c.press("first-got-it")?;
     if !c.session.state.onboarded || c.session.menu_open(&c.rig.engine.panels) {
         return Err("Got it must finish onboarding and close the menu".into());
     }
@@ -148,32 +210,34 @@ pub fn first_run_and_menu() -> GateResult {
         return Err(format!("first run took {} ms of scripted time", c.rig.now));
     }
 
-    // Toolbar: pointing at the screen shows it; Lock, + and close work from there.
+    // Toolbar: pointing at the screen shows it, named; Lock, +, opacity, pin and reset work from there.
     let screen_id = c.panel(Source::Monitor(0)).ok_or("screen missing")?.id;
-    c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
-    c.rig.frames(2);
-    c.pump();
-    if c.session.toolbar_target() != Some(screen_id) {
-        return Err("pointing at a screen must show its toolbar".into());
+    c.point_at(screen_id, [0.5, 0.9])?;
+    if c.bar.tools.first().map(|t| t.label.as_str()) != Some("Screen 1") {
+        return Err(format!("the toolbar must start with the panel's name: {:?}", c.bar.tools.first()));
     }
     let width = c.panel(Source::Monitor(0)).ok_or("screen missing")?.width_m;
     let home = c.panel(Source::Monitor(0)).ok_or("screen missing")?.pose;
-    c.tool(0, 8)?;
-    c.tool(3, 8)?;
+    c.tool(Tool::Lock)?;
+    c.tool(Tool::Bigger)?;
+    c.slide(0.5)?;
     let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
-    if !p.locked || p.width_m <= width {
-        return Err(format!("toolbar Lock / + failed: locked {}, width {} -> {}", p.locked, width, p.width_m));
+    if !p.locked || p.width_m <= width || (p.opacity - 0.6).abs() > 0.03 {
+        return Err(format!("toolbar Lock / + / opacity: {} {} -> {} {}", p.locked, width, p.width_m, p.opacity));
     }
+    c.tool(Tool::Pin(Pin::Head))?;
+    if c.panel(Source::Monitor(0)).map(|p| p.anchor) != Some(Anchor::Head) {
+        return Err("toolbar Head must pin the screen to the head".into());
+    }
+    c.tool(Tool::Pin(Pin::Room))?;
     // Reset puts it back at its default place and size.
     if let Some(m) = c.rig.engine.panels.iter_mut().find(|p| p.source == Source::Monitor(0)) {
         m.pose.pos = m.pose.pos + dvr_core::math::Vec3::new(0.4, 0.3, 0.0);
     }
-    c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
-    c.rig.frames(2);
-    c.pump();
-    c.tool(6, 8)?;
+    c.point_at(screen_id, [0.5, 0.9])?;
+    c.tool(Tool::Reset)?;
     let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
-    if (p.pose.pos - home.pos).length() > 1e-3 || (p.width_m - width).abs() > 1e-4 {
+    if (p.pose.pos - home.pos).length() > 1e-3 || (p.width_m - width).abs() > 1e-4 || p.anchor != Anchor::World {
         return Err(format!("toolbar Reset must restore place and size: {:?} vs {:?}", p.pose.pos, home.pos));
     }
 
@@ -192,113 +256,127 @@ pub fn first_run_and_menu() -> GateResult {
         return Err("double-tapping again must show the screens and the keyboard".into());
     }
 
-    // The menu opens from the watch (or the tray); here directly.
-    c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
-    c.pump();
-    // Hide all from the menu: the menu stays and the button now reads Show all, lit.
-    c.click(slot_center(4))?;
-    let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
-    if !c.session.hidden || !c.session.menu_open(&c.rig.engine.panels) || !model.slots[4].on {
-        return Err("menu Hide all must hide, keep the menu and show its state".into());
+    // The menu opens from the watch (or the tray); here directly. The Screens switch hides everything, keeps
+    // the menu and shows its state.
+    c.open_menu();
+    c.press("menu-screens")?;
+    if !c.session.hidden || !c.session.menu_open(&c.rig.engine.panels) || c.slot_on("menu-screens") != Some(false) {
+        return Err("the Screens switch must hide, keep the menu and show its state".into());
     }
-    c.click(slot_center(4))?;
+    c.press("menu-screens")?;
     if c.session.hidden {
-        return Err("menu Show all must show again".into());
+        return Err("the Screens switch must show again".into());
     }
 
-    // Add window: the list opens, picking a window asks the app to show it.
-    c.click(slot_center(1))?;
+    // Add window: the list opens, picking a window asks the app to show it; Back returns.
+    c.press("menu-add-window")?;
     if c.session.page != Page::Windows(0) || !c.effects.contains(&Effect::ListWindows) {
         return Err(format!("Add window must open the window list, page {:?}", c.session.page));
     }
     c.session.windows = vec![(77, "Notes".into()), (78, "Browser".into())];
     c.pump();
-    c.click(slot_center(1))?;
+    c.press_label("Browser", 0)?;
     if !c.effects.contains(&Effect::AddWindow(78)) || c.session.menu_open(&c.rig.engine.panels) {
         return Err("picking a window must add it and close the menu so it is visible".into());
     }
-    c.session.toggle_menu(&mut c.rig.engine.panels, HEAD);
-    c.pump();
-    c.click(slot_center(1))?;
-    c.click(slot_center(9))?;
-    if c.session.page != Page::Tab(0) {
-        return Err("Back must return to the Panels tab".into());
+    if c.session.window_names.get(&78).map(String::as_str) != Some("Browser") {
+        return Err("an added window must keep its name for its toolbar".into());
+    }
+    c.open_menu();
+    c.press("menu-add-window")?;
+    c.press("menu-back")?;
+    if c.session.page != Page::Tab(TAB_PANELS) {
+        return Err("Back must return to Panels".into());
     }
 
-    // Notification history: newest first, Clear empties it.
-    c.session.notified("Discord", "hey");
-    c.session.notified("Steam", "Download finished");
-    c.pump();
-    c.click(slot_center(6))?;
-    let model = c.session.model(&c.rig.engine.panels, &c.screens, &c.strings, (0.0, 0.0));
-    if c.session.page != Page::Notifications || !model.slots[0].label.starts_with("Steam") {
-        return Err(format!("history must list newest first, page {:?}", c.session.page));
-    }
-    c.click(slot_center(6))?;
-    if !c.effects.contains(&Effect::NotifyFrom(dvr_core::state::NotifyFrom::AllApps)) {
-        return Err("From: must cycle Discord -> All apps".into());
-    }
-    c.click(slot_center(8))?;
-    c.click(slot_center(9))?;
-    if !c.session.history.is_empty() || c.session.page != Page::Tab(0) {
-        return Err("Clear must empty the history and Back return".into());
+    // Add screen 2, then close it from "Open now" (its close button).
+    c.press_label("Screen 2", 0)?;
+    let second = c.panel(Source::Monitor(1)).ok_or("Screen 2 must be added")?.id;
+    c.open_menu();
+    let close = (0..c.shown.slots.len()).filter(|&i| c.shown.slots[i].kind == SlotKind::IconButton).nth(1);
+    c.press_slot(close.ok_or("Open now must list both screens with close buttons")?)?;
+    if c.panel(Source::Monitor(1)).is_some() || !c.effects.contains(&Effect::Removed(second)) {
+        return Err("closing from Open now must remove that screen".into());
     }
 
-    c.click(tab_center(3))?;
-    c.click(slot_center(0))?;
+    // Inbox: newest first with unread dots and a count on the rail; leaving marks them read; Clear all.
+    c.session.notified("Discord", "Alex", "are you on?");
+    c.session.notified("Steam", "Steam", "Download finished");
+    c.pump();
+    if c.shown.tabs.get(TAB_INBOX).map(|t| t.badge) != Some(2) {
+        return Err("the Inbox tab must count unread messages".into());
+    }
+    c.click(tab_center(TAB_INBOX))?;
+    let first = c.shown.slots.iter().find(|s| s.kind == SlotKind::Message);
+    if c.session.page != Page::Tab(TAB_INBOX) || !first.is_some_and(|m| m.label == "Steam" && m.on) {
+        return Err(format!("the Inbox must list newest first, unread: {first:?}"));
+    }
+    c.press("notify-all")?;
+    if !c.effects.contains(&Effect::NotifyFrom(NotifyFrom::AllApps)) {
+        return Err("All apps must switch where notifications come from".into());
+    }
+    c.click(tab_center(TAB_PANELS))?;
+    if c.session.unread() != 0 {
+        return Err("leaving the Inbox must mark its messages read".into());
+    }
+    c.click(tab_center(TAB_INBOX))?;
+    c.press("menu-clear")?;
+    if !c.session.history.is_empty() {
+        return Err("Clear all must empty the Inbox".into());
+    }
+
+    // Setup: laser hand moves the watch to the other hand; the watch hand is its own choice.
+    c.click(tab_center(TAB_SETUP))?;
+    c.press_nth("hand-left", 0)?;
     if c.session.state.dominant != Hand::Left
         || c.panel(Source::Wrist).map(|w| w.anchor) != Some(Anchor::Hand(Hand::Right))
     {
-        return Err("Settings: pointing hand / wrist swap failed".into());
+        return Err("Setup: laser hand / watch swap failed".into());
     }
-    c.click(tab_center(1))?;
+    c.press_nth("hand-left", 1)?;
+    if c.panel(Source::Wrist).map(|w| w.anchor) != Some(Anchor::Hand(Hand::Left)) {
+        return Err("Setup: Watch on Left failed".into());
+    }
+    c.click(tab_center(TAB_KEYS))?;
     let sounds = c.session.state.typing_sounds;
-    c.click(slot_center(2))?;
-    c.click(slot_center(4))?;
-    c.click(slot_center(5))?;
+    c.press("menu-language")?;
+    c.press("menu-sounds")?;
+    c.press("menu-now-playing")?;
     if !c.effects.contains(&Effect::NextLanguage) {
-        return Err("Keyboard tab: language button must switch language".into());
+        return Err("Keys: language must switch language".into());
     }
-    if !c.session.state.media_to_chatbox {
-        return Err("Keyboard tab: now-playing toggle failed".into());
+    if !c.session.state.media_to_chatbox || c.session.state.typing_sounds == sounds {
+        return Err("Keys: share songs / key sounds switches failed".into());
     }
-    if c.session.state.typing_sounds == sounds {
-        return Err("Keyboard tab: typing sounds toggle failed".into());
-    }
-    c.click(tab_center(2))?;
-    c.click(slot_center(2))?;
+    c.click(tab_center(TAB_WATCH))?;
+    c.press("menu-wrist-fade")?;
     if c.session.state.wrist_fade {
-        return Err("Wrist tab: look-to-show toggle failed".into());
+        return Err("Watch: only-when-looked-at switch failed".into());
     }
     // Quit is destructive: the first tap only arms it.
-    c.click(tab_center(3))?;
-    c.click(slot_center(9))?;
+    c.click(tab_center(TAB_SETUP))?;
+    c.press("menu-quit")?;
     if c.effects.contains(&Effect::Quit) {
         return Err("Quit must ask for a second tap".into());
     }
-    c.click(slot_center(9))?;
+    c.press("menu-confirm")?;
     if !c.effects.contains(&Effect::Quit) {
         return Err("second tap on Quit must quit".into());
     }
 
-    // The menu's Close button; then toolbar close removes the screen.
+    // The rail's Close button; then the keyboard's toolbar puts it away and a screen's removes it.
     c.click(close_center())?;
     if c.session.menu_open(&c.rig.engine.panels) {
         return Err("Close must close the menu".into());
     }
-    // The keyboard's own toolbar (above it) closes it.
     let kb = c.panel(Source::Keyboard).ok_or("keyboard missing")?.id;
-    c.rig.aim(Hand::Right, kb, [0.5, 0.5])?;
-    c.rig.frames(2);
-    c.pump();
-    c.tool(5, 6)?;
+    c.point_at(kb, [0.5, 0.5])?;
+    c.tool(Tool::Close)?;
     if c.panel(Source::Keyboard).is_some_and(|k| k.visible) {
-        return Err("keyboard toolbar Close must put the keyboard away".into());
+        return Err("keyboard toolbar Put away must put the keyboard away".into());
     }
-    c.rig.aim(Hand::Right, screen_id, [0.5, 0.9])?;
-    c.rig.frames(2);
-    c.pump();
-    c.tool(7, 8)?;
+    c.point_at(screen_id, [0.5, 0.9])?;
+    c.tool(Tool::Close)?;
     if c.panel(Source::Monitor(0)).is_some() || !c.effects.contains(&Effect::Removed(screen_id)) {
         return Err("toolbar close must remove the screen".into());
     }
@@ -326,13 +404,39 @@ mod tests {
         let mut panels = Vec::new();
         let mut session = Session::new(State::default(), &mut panels, HEAD);
         panels.push(dvr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
+        let window = dvr_core::panel::Panel::in_front_of(10, Source::Window(1), HEAD, 0.75);
+        panels.push(window);
+        session.window_names.insert(1, "Vesktop".into());
         session.language = "EN".into();
-        session.windows = vec![(1, "Discord".into()), (2, "Firefox".into()), (3, "Notepad".into())];
-        session.notified("Discord", "Alex: are you on?");
+        session.languages = vec!["EN".into(), "UK".into()];
+        session.windows = vec![(1, "Vesktop".into()), (2, "Steam".into()), (3, "notes.txt – Notepad".into())];
+        session.notified("Vesktop", "Mira · #vr-night", "bring the new avatar");
+        session.notified("Vesktop", "Alex", "are you on? joining the club world");
         (session, panels, screens)
     }
 
-    /// Gate 7: every menu view's content (titles, labels, toggle states). Text-level snapshots stay portable
+    /// One line per control: what a user reads and its state, without pixel positions.
+    fn outline(m: &MenuModel) -> String {
+        let mut out = format!("{} | {}\n", m.title, m.hint);
+        for t in &m.tabs {
+            out += &format!("tab {} ({})\n", t.label, t.badge);
+        }
+        for l in &m.labels {
+            out += &format!("  {}\n", l.text.replace('\n', " / "));
+        }
+        for s in &m.slots {
+            let state = match (s.on, s.enabled) {
+                (true, true) => " [on]",
+                (true, false) => " [on, off-limits]",
+                (false, false) => " [disabled]",
+                (false, true) => "",
+            };
+            out += &format!("{:?} {:?} {:?} {:?}{state}\n", s.kind, s.label, s.detail, s.value);
+        }
+        out
+    }
+
+    /// Gate 7: every menu view's content (titles, labels, switch states). Text-level snapshots stay portable
     /// across machines, unlike pixels rendered with each system's fonts.
     #[test]
     fn menu_views_match_snapshots() {
@@ -343,16 +447,24 @@ mod tests {
             ("first_monitor", Page::FirstMonitor),
             ("first_keyboard", Page::FirstKeyboard),
             ("first_tips", Page::FirstTips),
-            ("tab_panels", Page::Tab(0)),
-            ("tab_keyboard", Page::Tab(1)),
-            ("tab_wrist", Page::Tab(2)),
-            ("tab_settings", Page::Tab(3)),
+            ("tab_panels", Page::Tab(TAB_PANELS)),
+            ("tab_keys", Page::Tab(TAB_KEYS)),
+            ("tab_watch", Page::Tab(TAB_WATCH)),
+            ("tab_inbox", Page::Tab(TAB_INBOX)),
+            ("tab_setup", Page::Tab(TAB_SETUP)),
             ("windows", Page::Windows(0)),
-            ("notifications", Page::Notifications),
         ];
         for (name, page) in pages {
             session.page = page;
-            insta::assert_debug_snapshot!(name, session.model(&panels, &screens, &strings, (0.05, 1.2)));
+            let m = session.model(&panels, &screens, &strings, (0.05, 1.2));
+            for (i, a) in m.slots.iter().enumerate() {
+                let r = a.rect;
+                assert!(
+                    r.x >= 0.0 && r.x + r.w <= 800.0 && r.y >= 0.0 && r.y + r.h <= 600.0,
+                    "{name}: slot {i} off page"
+                );
+            }
+            insta::assert_snapshot!(name, outline(&m));
         }
     }
 
@@ -361,13 +473,14 @@ mod tests {
     #[test]
     #[ignore = "writes docs/img; run on demand"]
     fn screenshots() {
-        use dvr_ui::{KeyFace, Keyboard, Wrist, WristInfo, WristLoad};
-        fn save(name: &str, size: (u32, u32), bgra: &[u8]) {
+        use dvr_ui::{KeyFace, Keyboard, Wrist, WristInfo, WristLoad, WristMedia};
+        fn save(name: &str, size: (u32, u32), bgra: &[u8], height: u32) {
             let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/img");
             std::fs::create_dir_all(&dir).expect("img dir");
-            let rgba: Vec<u8> = bgra.as_chunks::<4>().0.iter().flat_map(|&[b, g, r, a]| [r, g, b, a]).collect();
+            let rows = (height.min(size.1) * size.0 * 4) as usize;
+            let rgba: Vec<u8> = bgra[..rows].as_chunks::<4>().0.iter().flat_map(|&[b, g, r, a]| [r, g, b, a]).collect();
             let file = std::fs::File::create(dir.join(format!("{name}.png"))).expect("png file");
-            let mut enc = png::Encoder::new(std::io::BufWriter::new(file), size.0, size.1);
+            let mut enc = png::Encoder::new(std::io::BufWriter::new(file), size.0, height.min(size.1));
             enc.set_color(png::ColorType::Rgba);
             enc.set_depth(png::BitDepth::Eight);
             enc.write_header().and_then(|mut w| w.write_image_data(&rgba)).expect("png write");
@@ -375,39 +488,81 @@ mod tests {
         let strings = Strings::english().expect("strings");
         let (mut session, panels, screens) = setup();
         let mut menu = Menu::new().expect("menu");
-        for (name, page) in
-            [("menu-panels", Page::Tab(0)), ("menu-settings", Page::Tab(3)), ("first-run", Page::FirstHand)]
-        {
+        for (name, page) in [
+            ("menu-panels", Page::Tab(TAB_PANELS)),
+            ("menu-inbox", Page::Tab(TAB_INBOX)),
+            ("menu-settings", Page::Tab(TAB_SETUP)),
+            ("menu-windows", Page::Windows(0)),
+            ("first-run", Page::FirstHand),
+        ] {
             session.page = page;
             menu.set(&session.model(&panels, &screens, &strings, (0.012, 1.4)));
             let px = menu.render().expect("menu render").to_vec();
-            save(name, MENU_SIZE, &px);
+            save(name, MENU_SIZE, &px, MENU_SIZE.1);
         }
         let mut toolbar = Toolbar::new().expect("toolbar");
-        let hover = [Event::Hover { hand: Hand::Right, panel: 9, uv: [0.5, 0.5], cursor: true }];
-        session.pointer(&hover, &panels, &menu, &toolbar, 0);
-        toolbar.set(&session.toolbar_model(&panels, &strings));
-        let px = toolbar.render().expect("toolbar render").to_vec();
-        save("toolbar", TOOLBAR_SIZE, &px);
+        for (name, id) in [("toolbar", 10), ("toolbar-keyboard", 1)] {
+            let id =
+                if id == 1 { panels.iter().find(|p| p.source == Source::Keyboard).map_or(1, |p| p.id) } else { id };
+            let hover = [Event::Hover { hand: Hand::Right, panel: id, uv: [0.5, 0.5], cursor: true }];
+            session.pointer(&hover, &panels, &menu, &toolbar, 0);
+            toolbar.set(&session.toolbar_model(&panels, &strings));
+            let px = toolbar.render().expect("toolbar render").to_vec();
+            save(name, TOOLBAR_SIZE, &px, TOOLBAR_SIZE.1);
+        }
         let mut wrist = Wrist::new().expect("wrist");
+        let song = WristMedia {
+            title: "Night Drive".into(),
+            artist: "Synthwave Radio".into(),
+            app: "Spotify".into(),
+            playing: true,
+            position: 72.0,
+            duration: 220.0,
+            shuffle: false,
+        };
         let mut info = WristInfo {
             hour: 21,
             minute: 37,
+            weekday: 1,
+            day: 9,
+            month: 11,
             controllers: [Some(0.8), Some(0.65)],
-            lowest_tracker: None,
-            expanded: false,
             load: Some(WristLoad { game_fps: Some(90.0), cpu: Some(0.23), gpu: Some(0.67), own_gpu_ms: 0.012 }),
-            toast: None,
-            media: Some(("Night Drive".into(), "Synthwave Radio".into(), true)),
+            volume: Some((0.62, false)),
+            unread: 3,
+            keyboard: true,
             ..WristInfo::default()
         };
-        wrist.set(&info);
-        let px = wrist.render().expect("wrist render").to_vec();
-        save("wrist", dvr_ui::WRIST_SIZE, &px);
-        info.expanded = true;
-        wrist.set(&info);
-        let px = wrist.render().expect("wrist render").to_vec();
-        save("wrist-expanded", dvr_ui::WRIST_SIZE, &px);
+        type Change<'a> = Box<dyn Fn(&mut WristInfo) + 'a>;
+        let shots: [(&str, Change, u32); 5] = [
+            ("wrist-idle", Box::new(|_| {}), 140),
+            ("wrist", Box::new(|i| i.media = Some(song.clone())), 220),
+            (
+                "wrist-message",
+                Box::new(|i| {
+                    i.media = Some(song.clone());
+                    i.toast = Some(("Vesktop".into(), "Alex".into(), "are you on? joining the club".into()));
+                }),
+                220,
+            ),
+            ("wrist-low", Box::new(|i| i.controllers = [Some(0.8), Some(0.12)]), 220),
+            (
+                "wrist-expanded",
+                Box::new(|i| {
+                    i.media = Some(song.clone());
+                    i.expanded = true;
+                }),
+                760,
+            ),
+        ];
+        for (name, change, height) in shots {
+            let mut shot = info.clone();
+            change(&mut shot);
+            wrist.set(&shot);
+            let px = wrist.render().expect("wrist render").to_vec();
+            save(name, dvr_ui::WRIST_SIZE, &px, height);
+        }
+        info.expanded = false;
         let mut kb = Keyboard::new().expect("keyboard");
         let faces: Vec<KeyFace> = dvr_core::keyboard::ROWS
             .iter()
@@ -424,6 +579,6 @@ mod tests {
             .collect();
         kb.set(&faces);
         let px = kb.render().expect("keyboard render").to_vec();
-        save("keyboard", dvr_ui::KEYBOARD_SIZE, &px);
+        save("keyboard", dvr_ui::KEYBOARD_SIZE, &px, dvr_ui::KEYBOARD_SIZE.1);
     }
 }

@@ -1,74 +1,138 @@
+## Watch
 wrist-no-game = no game
-wrist-battery = L { $left }  R { $right }
-wrist-battery-trackers = L { $left }  R { $right }  T { $trackers }
-wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · overlay { $own } ms
+wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · DVR { $own } ms
+wrist-date = { $weekday } { $day } { $month }
+wrist-media-sub = { $artist } · { $app }
+wrist-low = { $device } { $level } · charge soon
+wrist-left-controller = Left controller
+wrist-right-controller = Right controller
+wrist-tracker = Tracker
+wrist-now = now
 wrist-menu = Menu
 wrist-keyboard = Keyboard
-wrist-hide = Hide all
-wrist-show = Show all
+wrist-screens = Screens
+wrist-inbox = Inbox
+wrist-inbox-new = { $n } new ›
+wrist-open = ›
+day-0 = Sun
+day-1 = Mon
+day-2 = Tue
+day-3 = Wed
+day-4 = Thu
+day-5 = Fri
+day-6 = Sat
+month-1 = Jan
+month-2 = Feb
+month-3 = Mar
+month-4 = Apr
+month-5 = May
+month-6 = Jun
+month-7 = Jul
+month-8 = Aug
+month-9 = Sep
+month-10 = Oct
+month-11 = Nov
+month-12 = Dec
+
+## Menu rail
 menu-tab-panels = Panels
-menu-tab-keyboard = Keyboard
-menu-tab-wrist = Wrist
-menu-tab-settings = Settings
-hand-left = left
-hand-right = right
-menu-panels-title = Screens and windows
-menu-panels-hint = Point at a screen for its toolbar. Double-tap left menu: hide / show.
-menu-add-monitor = Add screen { $n }
-menu-add-monitor-none = All screens shown
-menu-add-window = Add window
+menu-tab-keys = Keys
+menu-tab-watch = Watch
+menu-tab-inbox = Inbox
+menu-tab-setup = Setup
+menu-confirm = Tap again to confirm
+menu-back = Back
+
+## Panels
+menu-panels-title = Panels
+menu-panels-hint = Point at one for its toolbar
+menu-add = Add
+menu-add-window = Window
+menu-add-screen = Screen { $n }
+menu-add-screen-none = All screens shown
+menu-arrange = Arrange
 menu-recenter = Recenter
-menu-hide-all = Hide all
-menu-show-all = Show all
 menu-reset-layout = Reset layout
-menu-smoothing = Laser smoothing
-tool-reset = Reset
-menu-windows-title = Add a window
-menu-windows-hint = Open windows, front to back
+menu-show = Show
+menu-screens = Screens
+menu-keyboard = Keyboard
+menu-open-now = Open now
+menu-open-none = Nothing open yet
+menu-open-more = and { $n } more
+menu-screen = Screen { $n }
+menu-double-tap = Double-tap left menu: hide or show everything
+
+## Add window
+menu-windows-title = Add window
+menu-windows-hint = Front to back
 menu-windows-none = No windows to add
+menu-window-shown = Shown
 menu-more = More
-menu-notifications = Notifications ({ $n })
-menu-notifications-title = Notifications
-menu-notifications-hint = Newest first
-menu-notifications-none = Nothing yet
-menu-clear = Clear
-menu-close = Close
-menu-notify-from = From: { $from }
+menu-yank = Or yank a window out of a screen
+
+## Inbox
+menu-inbox-title = Inbox
+menu-inbox-empty = Nothing yet. Messages show on your watch with a buzz.
+menu-inbox-hint = Shown on your watch with a buzz
+menu-inbox-off = Off: nothing is shown on your watch
+menu-notify-blocked = Windows blocks it: Settings > Privacy > Notifications
+menu-notifications-blocked = Off: another overlay uses port 42069
+menu-clear = Clear all
 notify-discord = Discord
 notify-all = All apps
 notify-off = Off
-menu-notify-blocked = Windows blocks it: Settings > Privacy > Notifications
-menu-back = Back
-tool-lock = Lock
-tool-curve = Curve
-tool-world = World
+ago-now = now
+ago-min = { $n } m
+ago-hour = { $n } h
+
+## Keys
+menu-keys-title = Keyboard
+menu-keys-hint = Chat sends what you type to VRChat
+menu-keyboard-group = Keyboard
+menu-keyboard-here = Bring it here
+menu-language = Language
+menu-typing = Typing
+menu-chat = Chat to VRChat
+menu-sounds = Key sounds
+menu-now-playing = Share songs
+
+## Watch
+menu-watch-title = Watch
+menu-watch-hint = Point at it to open it
+menu-watch-shows = Shows
+menu-wrist-battery = Batteries
+menu-wrist-media = Music
+menu-wrist-load = FPS and load
+menu-watch-behaves = Behaves
+menu-wrist-fade = Only when looked at
+
+## Setup
+menu-setup-title = Setup
+menu-cost = Overlay { $gpu } ms · { $cpu }% CPU
+menu-hands = Hands
+menu-laser-hand = Laser hand
+menu-watch-on = Watch on
+hand-left = Left
+hand-right = Right
+menu-feel = Feel
+menu-haptics = Vibration
+menu-smoothing = Steady laser
+menu-start = Start
+menu-autostart = With SteamVR
+menu-update-check = Check updates
+menu-new-screens = New screens
+menu-curved-default = Curved
+menu-quit = Quit DesktopVR
+
+## Toolbar
+tool-keyboard = Keyboard
+tool-room = Room
 tool-hand = Hand
 tool-head = Head
-tool-close = Close
-menu-keyboard-title = Keyboard
-menu-keyboard-hint = Chat mode sends what you type to VRChat.
-menu-show-keyboard = Keyboard
-menu-keyboard-here = Keyboard here
-menu-language = Language: { $lang }
-menu-chat = Chat mode
-menu-sounds = Typing sounds
-menu-now-playing = Share song
-menu-wrist-title = Wrist
-menu-wrist-hint = Look at it for the time; point at it for Menu, Keyboard, Hide all.
-menu-show-wrist = Watch
-menu-wrist-on = On { $hand } wrist
-menu-wrist-fade = Only when looking
-menu-wrist-battery = Batteries
-menu-wrist-load = FPS and load
-menu-wrist-media = Media
-menu-settings-title = Settings
-menu-cost = This overlay: { $gpu } ms GPU · { $cpu }% CPU
-menu-point = Point with { $hand }
-menu-autostart = Auto-start
-menu-haptics = Vibration
-menu-curved-default = Curved screens
-menu-update-check = Check updates
-menu-quit = Quit overlay
+tool-put-away = Put away
+tool-size = { $m } m
+
+## First run
 first-hand-title = Which hand do you point with?
 first-hand-hint = Step 1 of 4
 first-hand-imported = Step 1 of 4 · XSOverlay settings imported
@@ -81,22 +145,6 @@ first-keyboard-title = Type hi on the keyboard below
 first-keyboard-hint = Step 3 of 4 · Typed: { $typed }
 first-done = Done
 first-skip = Skip
-tray-tooltip = DesktopVR
-tray-open = Open menu in VR
-tray-hide = Hide / show overlays
-tray-autostart = Start with SteamVR
-tray-update = Download update { $version }
-tray-quit = Quit
-wrist-media = { $title } · { $artist }
-wrist-prev = Prev
-wrist-play = Play
-wrist-pause = Pause
-wrist-next = Next
-chat-now-playing = ♪ { $track }
-menu-on = On
-menu-off = Off
-menu-confirm = Tap again to confirm
-menu-notifications-blocked = Notifications off: another overlay uses port 42069.
 first-tips-title = Good to know
 first-tips-hint = Step 4 of 4
 first-tips-body =
@@ -106,3 +154,12 @@ first-tips-body =
     Double-tap the left menu button: hide / show everything
     Look at your wrist for the time; point at it for the menu
 first-got-it = Got it
+
+## Tray and chat
+tray-tooltip = DesktopVR
+tray-open = Open menu in VR
+tray-hide = Hide / show overlays
+tray-autostart = Start with SteamVR
+tray-update = Download update { $version }
+tray-quit = Quit
+chat-now-playing = ♪ { $track }
