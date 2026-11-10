@@ -216,6 +216,23 @@ impl Panel {
 
     /// Ray along `ray.forward()`; returns distance and uv.
     pub fn hit(&self, world: Pose, ray: Pose) -> Option<(f32, [f32; 2])> {
+        let (t, uv) = self.plane_hit(world, ray)?;
+        let inside = (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]);
+        inside.then_some((t, uv))
+    }
+
+    /// The ray runs through the gap between this panel and its toolbar (`bar_aspect`: the toolbar's height / width),
+    /// or over either: the toolbar must stay while the laser travels from one to the other.
+    pub fn toolbar_bridge(&self, world: Pose, ray: Pose, bar_aspect: f32) -> bool {
+        let Some((_, [u, v])) = self.plane_hit(world, ray) else { return false };
+        let half = TOOLBAR_WIDTH_M.max(self.width_m) * 0.5 / self.width_m + 0.03;
+        let reach = (TOOLBAR_GAP_M + TOOLBAR_WIDTH_M * bar_aspect) / self.height_m() + 0.02;
+        let along = if self.source == Source::Keyboard { -reach..=1.0 } else { 0.0..=1.0 + reach };
+        (u - 0.5).abs() <= half && along.contains(&v)
+    }
+
+    /// Where the ray meets the panel's plane: distance along the ray and UV (outside 0..1 off the panel).
+    fn plane_hit(&self, world: Pose, ray: Pose) -> Option<(f32, [f32; 2])> {
         let inv = world.inverse();
         let o = inv.transform_point(ray.pos);
         let d = inv.rot.rotate(ray.forward());
@@ -227,28 +244,54 @@ impl Panel {
             return None;
         }
         let p = o + d * t;
-        let uv = [p.x / self.width_m + 0.5, 0.5 - p.y / self.height_m()];
-        let inside = (0.0..=1.0).contains(&uv[0]) && (0.0..=1.0).contains(&uv[1]);
-        inside.then_some((t, uv))
+        Some((t, [p.x / self.width_m + 0.5, 0.5 - p.y / self.height_m()]))
     }
 }
 
-/// How visible the watch should be (0..1): its face turned toward the eyes and the head looking at it.
-pub fn gaze_visibility(head: Pose, watch: Pose) -> f32 {
+/// Whether the watch shows: its face turned toward the eyes and the eyes on it. Wide to show (a glance from the
+/// corner of the eye is enough), wider still to stay, and shown for at least `GLANCE_HOLD_S`, so hand tremor and
+/// head bob at the edge never make it blink.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Glance {
+    shown: bool,
+    held_s: f32,
+}
+
+/// Shows when the face is within about 66 degrees of the eyes and the watch within 45 degrees of where the head
+/// looks; stays until those pass about 81 and 63 degrees.
+const GLANCE_SHOW: (f32, f32) = (0.4, 0.7);
+const GLANCE_KEEP: (f32, f32) = (0.15, 0.45);
+const GLANCE_HOLD_S: f32 = 0.3;
+
+impl Glance {
+    /// Steps by `dt` seconds; true while the watch should show.
+    pub fn update(&mut self, head: Pose, watch: Pose, dt: f32) -> bool {
+        let (facing, looking) = gaze(head, watch);
+        self.held_s += dt;
+        let (f, l) = if self.shown { GLANCE_KEEP } else { GLANCE_SHOW };
+        let want = facing > f && looking > l;
+        if want != self.shown && (want || self.held_s >= GLANCE_HOLD_S) {
+            self.shown = want;
+            self.held_s = 0.0;
+        }
+        self.shown
+    }
+}
+
+/// How squarely the watch face points at the eyes and how near the middle of the view it is (cosines, 1 = dead on).
+fn gaze(head: Pose, watch: Pose) -> (f32, f32) {
     let to_eye = head.pos - watch.pos;
     let d = to_eye.length();
     if d < 1e-4 {
-        return 1.0;
+        return (1.0, 1.0);
     }
     let to_eye = to_eye * (1.0 / d);
-    let facing = watch.rot.rotate(Vec3::Z).dot(to_eye);
-    let looking = head.forward().dot(to_eye * -1.0);
-    smoothstep(0.55, 0.7, facing) * smoothstep(0.8, 0.9, looking)
+    (watch.rot.rotate(Vec3::Z).dot(to_eye), head.forward().dot(to_eye * -1.0))
 }
 
-fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
-    let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+/// The head frame turned only about the vertical: where "in front of the user" is.
+pub fn yaw_frame(head: Pose) -> Pose {
+    Pose::new(head.pos, facing(flat_forward(head)))
 }
 
 fn flat_forward(head: Pose) -> Vec3 {
@@ -294,13 +337,43 @@ mod tests {
     }
 
     #[test]
-    fn watch_shows_only_when_looked_at() {
+    fn watch_shows_only_when_looked_at_and_never_blinks() {
         let watch = Pose::new(Vec3::new(0.0, 1.2, -0.3), Quat::from_axis_angle(Vec3::X, -std::f32::consts::FRAC_PI_2));
         let eye = Vec3::new(0.0, 1.6, 0.0);
         let at = |target: Vec3| Pose::new(eye, Quat::from_arc(Vec3::FORWARD, (target - eye).normalized()));
-        assert!(gaze_visibility(at(watch.pos), watch) > 0.9, "looking at the face");
-        assert!(gaze_visibility(at(Vec3::new(0.0, 1.6, -2.0)), watch) < 0.01, "looking ahead");
+        let ahead = at(Vec3::new(0.0, 1.6, -2.0));
+        let mut g = Glance::default();
+        assert!(!g.update(ahead, watch, 0.016), "looking ahead");
+        assert!(g.update(at(watch.pos), watch, 0.016), "looking at the face");
+        // Looking 50 degrees past it (outside "show", inside "keep") does not hide it.
+        let side = at(watch.pos + Vec3::new(0.0, 0.0, -0.45));
+        assert!(g.update(side, watch, 1.0), "still within keep");
+        // Looking away (up, well past "keep") hides it, but not before the hold.
+        let away = at(Vec3::new(0.0, 2.6, -1.0));
+        let mut quick = Glance::default();
+        quick.update(at(watch.pos), watch, 0.016);
+        assert!(quick.update(away, watch, 0.1), "held");
+        assert!(!quick.update(away, watch, 0.3), "then hidden");
         let turned = Pose::new(watch.pos, Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_2));
-        assert!(gaze_visibility(at(watch.pos), turned) < 0.01, "face turned away");
+        assert!(!Glance::default().update(at(watch.pos), turned, 0.016), "face turned away");
+    }
+
+    #[test]
+    fn toolbar_stays_while_the_laser_crosses_the_gap() {
+        let screen = Panel::new(5, Source::Monitor(0), Pose::IDENTITY, 1.0, 0.5);
+        let bar = 84.0 / 1180.0;
+        let ray = |y: f32| Pose::new(Vec3::new(0.0, y, 1.0), Quat::default());
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.26), bar), "just below the screen, in the gap");
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.29), bar), "on the toolbar");
+        assert!(!screen.toolbar_bridge(Pose::IDENTITY, ray(-0.5), bar), "well below");
+        assert!(!screen.toolbar_bridge(Pose::IDENTITY, ray(0.3), bar), "above");
+    }
+
+    #[test]
+    fn yaw_frame_turns_only_about_the_vertical() {
+        let head = Pose::new(Vec3::new(1.0, 1.6, 0.0), Quat::from_axis_angle(Vec3::X, -0.5));
+        let f = yaw_frame(head);
+        assert!((f.forward() - Vec3::FORWARD).length() < 1e-4);
+        assert!((f.pos - head.pos).length() < 1e-6);
     }
 }

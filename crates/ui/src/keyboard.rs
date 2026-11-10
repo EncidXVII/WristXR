@@ -15,12 +15,15 @@ slint::slint! {
         in property <[KeyView]> keys;
         width: 1500px;
         height: 600px;
-        background: #0B0B0C;
+        // Rounded board and keys, like the menu and toolbar; the corners are see-through.
+        background: transparent;
+        Rectangle { x: 0px; y: 0px; width: 1500px; height: 600px; border-radius: 28px; background: #0B0B0C; }
         for key in root.keys : Rectangle {
             x: key.x + 6px;
             y: key.y + 6px;
             width: key.w - 12px;
             height: 88px;
+            border-radius: 14px;
             background: key.lit ? #C6FF1A : key.hover ? #2A2A2E : #1D1D20;
             border-width: key.hover ? 4px : 0px;
             border-color: #C6FF1A;

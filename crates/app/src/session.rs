@@ -6,7 +6,7 @@ use dvr_core::engine::{Event, MouseButton};
 use dvr_core::math::Pose;
 use dvr_core::panel::{
     Anchor, Anchors, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect,
-    Source, TOOLBAR_ID, TOOLBAR_WIDTH_M,
+    Source, TOOLBAR_ID, TOOLBAR_WIDTH_M, yaw_frame,
 };
 use dvr_core::state::{NotifyFrom, State};
 use dvr_ui::{
@@ -30,9 +30,12 @@ pub const TAB_SETUP: usize = 4;
 const SIZE_STEP: f32 = 1.25;
 /// The toolbar stays this long after the laser leaves its panel (time to move down onto it).
 const TOOLBAR_LINGER_MS: u64 = 1500;
-/// Hide / show fades take about this long; the watch reacts faster to a glance.
-const FADE_S: f32 = 0.15;
-const WATCH_FADE_S: f32 = 0.06;
+/// Fade lengths (linear, seconds). Hiding is quicker than showing: going away should never feel sluggish. The
+/// watch answers a glance at once and leaves a little slower, so a glance that ends early does not cut it.
+const SHOW_S: f32 = 0.2;
+const HIDE_S: f32 = 0.1;
+const WATCH_SHOW_S: f32 = 0.08;
+const WATCH_HIDE_S: f32 = 0.18;
 /// Windows listed per page of "Add window".
 const WINDOWS_PER_PAGE: usize = 8;
 /// Notifications kept for the Inbox (newest first).
@@ -178,8 +181,10 @@ pub struct Session {
     pub notifications_ok: bool,
     /// Quit waits for its confirming second tap.
     armed: bool,
-    /// Screens, windows and keyboard are faded out (double-tap left menu, or the Screens switch).
+    /// Screens, windows and keyboard are faded out (double-tap left menu, or the Overlay switch).
     pub hidden: bool,
+    /// Where the user was facing when everything was hidden: showing again brings the layout to where they face now.
+    hidden_head: Option<Pose>,
     /// Windows the user can add, front to back (filled by the app on `Effect::ListWindows`).
     pub windows: Vec<(u64, String)>,
     /// Names of windows shown as panels (for their toolbar and "Open now").
@@ -204,6 +209,14 @@ pub struct Session {
     /// What each slot / toolbar control last drawn does.
     acts: RefCell<Vec<Act>>,
     tools: RefCell<Vec<Tool>>,
+}
+
+/// What `Session::pointer` sees of one frame.
+pub struct PointerInput<'a> {
+    pub events: &'a [Event],
+    pub now: u64,
+    pub rays: [Option<Pose>; 2],
+    pub anchors: Anchors,
 }
 
 pub fn next_id(panels: &[Panel]) -> u32 {
@@ -257,6 +270,7 @@ impl Session {
             notifications_ok: true,
             armed: false,
             hidden: false,
+            hidden_head: None,
             windows: Vec::new(),
             window_names: HashMap::new(),
             language: String::new(),
@@ -323,12 +337,26 @@ impl Session {
     }
 
     /// Double-tap left menu / Hide all (as in XSOverlay): fade screens, windows and keyboard out, or bring them all
-    /// back, the keyboard included. The menu and watch stay.
+    /// back, the keyboard included. The menu and watch stay. Showing again turns and moves the whole layout, as it
+    /// was arranged, to where the user now faces: after a playspace mover or a walk around the room everything is
+    /// back in front with one double-tap.
     pub fn toggle_hidden(&mut self, panels: &mut [Panel], head: Pose) {
         self.hidden = !self.hidden;
         if self.hidden {
             self.toolbar = None;
-        } else if let Some(k) = find(panels, Source::Keyboard)
+            self.hidden_head = Some(head);
+            return;
+        }
+        if let Some(then) = self.hidden_head.take() {
+            let carry = yaw_frame(head) * yaw_frame(then).inverse();
+            for p in panels.iter_mut().filter(|p| {
+                p.anchor == Anchor::World
+                    && matches!(p.source, Source::Monitor(_) | Source::Window(_) | Source::Keyboard)
+            }) {
+                p.pose = carry * p.pose;
+            }
+        }
+        if let Some(k) = find(panels, Source::Keyboard)
             && !k.visible
         {
             k.visible = true;
@@ -390,16 +418,20 @@ impl Session {
     /// Steps the fades. `watch` is how visible the watch should be (0..1); `dt` seconds since the last call.
     pub fn update_dims(&self, panels: &mut [Panel], watch: f32, dt: f32) {
         for p in panels.iter_mut() {
-            let k = (dt / if p.source == Source::Wrist { WATCH_FADE_S } else { FADE_S }).min(1.0);
             let target = match p.source {
                 Source::Monitor(_) | Source::Window(_) | Source::Keyboard => f32::from(u8::from(self.hidden)),
                 Source::Wrist => 1.0 - watch,
                 Source::Menu | Source::Toolbar => 0.0,
             };
-            p.dim += (target - p.dim) * k;
-            if (target - p.dim).abs() < 0.01 {
-                p.dim = target;
-            }
+            let hiding = target > p.dim;
+            let length = match (p.source == Source::Wrist, hiding) {
+                (true, true) => WATCH_HIDE_S,
+                (true, false) => WATCH_SHOW_S,
+                (false, true) => HIDE_S,
+                (false, false) => SHOW_S,
+            };
+            let step = if self.motion { dt / length } else { 1.0 };
+            p.dim = if hiding { (p.dim + step).min(target) } else { (p.dim - step).max(target) };
         }
     }
 
@@ -409,11 +441,22 @@ impl Session {
     }
 
     /// Routes laser events on the menu and toolbar to their views and decides which panel shows the toolbar.
-    /// Returns true when the menu saw pointer activity.
-    pub fn pointer(&mut self, events: &[Event], panels: &[Panel], menu: &Menu, toolbar: &Toolbar, now: u64) -> bool {
+    /// `rays`: each hand's laser. Returns true when the menu saw pointer activity.
+    pub fn pointer(&mut self, input: PointerInput, panels: &[Panel], menu: &Menu, toolbar: &Toolbar) -> bool {
+        let PointerInput { events, now, rays, anchors } = input;
         self.clock = now;
         let mut over_menu = false;
         let mut over_toolbar = false;
+        // A laser between the panel and its toolbar (the gap, or another panel seen through it) keeps the toolbar
+        // where it is.
+        let bar_aspect = TOOLBAR_SIZE.1 as f32 / TOOLBAR_SIZE.0 as f32;
+        let bridged = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id)).is_some_and(|p| {
+            let world = p.world_pose(&anchors);
+            rays.iter().flatten().any(|r| p.toolbar_bridge(world, *r, bar_aspect))
+        });
+        if bridged {
+            self.toolbar_seen = now;
+        }
         for e in events {
             match *e {
                 Event::Hover { panel: MENU_ID, uv, .. } => {
@@ -433,7 +476,8 @@ impl Session {
                     toolbar.pointer_button(uv, down);
                 }
                 Event::Hover { panel, .. } | Event::Mouse { panel, .. } | Event::Moved { panel }
-                    if panels.iter().any(|p| p.id == panel && has_toolbar(p.source)) =>
+                    if panels.iter().any(|p| p.id == panel && has_toolbar(p.source))
+                        && !(bridged && Some(panel) != self.toolbar) =>
                 {
                     self.toolbar = Some(panel);
                     self.toolbar_seen = now;
@@ -1177,5 +1221,22 @@ mod tests {
             s.update_dims(&mut panels, 1.0, 1.0);
             assert_eq!(menu(&panels).dim, 0.0, "fully in");
         }
+    }
+
+    #[test]
+    fn showing_again_brings_the_layout_to_where_you_face() {
+        use dvr_core::math::{Quat, Vec3};
+        let mut panels = Vec::new();
+        let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
+        let screen = Pose::new(Vec3::new(0.3, 1.5, -1.2), Quat::default());
+        panels.push(Panel::new(50, Source::Monitor(0), screen, 1.0, 0.56));
+        s.toggle_hidden(&mut panels, Pose::IDENTITY);
+        // Turned a quarter left and moved (playspace mover): the screen comes back in front, as arranged.
+        let head = Pose::new(Vec3::new(2.0, 0.0, 1.0), Quat::from_axis_angle(Vec3::Y, std::f32::consts::FRAC_PI_2));
+        s.toggle_hidden(&mut panels, head);
+        let p = panels.iter().find(|p| p.id == 50).expect("screen").pose;
+        let seen = head.inverse().transform_point(p.pos);
+        assert!((seen - screen.pos).length() < 1e-4, "screen at {seen:?} from the head");
+        assert!(!s.hidden);
     }
 }

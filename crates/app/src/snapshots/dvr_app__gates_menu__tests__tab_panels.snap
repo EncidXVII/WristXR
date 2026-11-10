@@ -12,12 +12,12 @@ tab Setup (0)
   Arrange
   Show
   Open now
-  Double-tap left menu: hide or show everything
+  Double-tap left menu: hide all, or bring it back in front
 Action "Window" "" "›"
 Action "Screen 2" "" "+" [on]
 Action "Recenter" "" ""
 Action "Reset layout" "" ""
-Toggle "Screens" "" "" [on]
+Toggle "Overlay" "" "" [on]
 Toggle "Keyboard" "" "" [on]
 Item "Screen 1" "" "" [on]
 Item "Vesktop" "" "" [on]

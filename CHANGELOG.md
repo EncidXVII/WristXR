@@ -15,6 +15,15 @@ First public early-access release (Windows).
   Windows volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
 - Toolbar: the panel's name first, opacity slider, Room / Hand / Head as one choice, keyboard languages and
   Put away on the keyboard's toolbar.
+- Hide all and show again (double-tap left menu, or Show overlay) brings screens, windows and keyboard back as
+  arranged, in front of where you face now: after a playspace mover or a walk, one double-tap puts everything back.
+- The watch's first switch is Show overlay (screens, windows and keyboard together); the menu calls it Overlay.
+- The watch shows at a wider glance and no longer flickers at the edge (it holds once shown and needs a clear look
+  away to go); hiding fades out in a tenth of a second.
+- The toolbar stays while the laser crosses the gap between a panel and it (or a panel seen through that gap).
+- Rounded menu and keyboard, rounded keys.
+- Battery rings: every connected controller gets one, an empty ring with a dim L / R when it reports no level;
+  controllers are found by type when SteamVR assigns no hands; a charging controller is never shown as low.
 - Neutral graphite greys in place of the warm ones; Anton for headings and the time, Barlow for all other text,
   both bundled, so the look no longer depends on Windows' fonts.
 - Motion: the watch grows down from the time and shrinks back the same way, its contents fading in as they are

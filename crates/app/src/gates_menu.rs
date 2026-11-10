@@ -2,7 +2,8 @@
 //! pointers. Controls are found by their label, as a user would.
 use crate::gates::{GateResult, HEAD, Rig, key_sc, press_key, us_char};
 use crate::session::{
-    Effect, MonitorInfo, Page, Pin, Session, TAB_INBOX, TAB_KEYS, TAB_PANELS, TAB_SETUP, TAB_WATCH, TEST_WORD, Tool,
+    Effect, MonitorInfo, Page, Pin, PointerInput, Session, TAB_INBOX, TAB_KEYS, TAB_PANELS, TAB_SETUP, TAB_WATCH,
+    TEST_WORD, Tool,
 };
 use dvr_core::engine::Event;
 use dvr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
@@ -31,7 +32,8 @@ impl Ctx {
     fn pump(&mut self) {
         let events = self.rig.take();
         let now = self.rig.now;
-        self.session.pointer(&events, &self.rig.engine.panels, &self.menu, &self.toolbar, now);
+        let seen = PointerInput { events: &events, now, rays: [None; 2], anchors: Default::default() };
+        self.session.pointer(seen, &self.rig.engine.panels, &self.menu, &self.toolbar);
         for e in &events {
             match *e {
                 Event::Key { scancode, down } => {
@@ -505,7 +507,12 @@ mod tests {
             let id =
                 if id == 1 { panels.iter().find(|p| p.source == Source::Keyboard).map_or(1, |p| p.id) } else { id };
             let hover = [Event::Hover { hand: Hand::Right, panel: id, uv: [0.5, 0.5], cursor: true }];
-            session.pointer(&hover, &panels, &menu, &toolbar, 0);
+            session.pointer(
+                PointerInput { events: &hover, now: 0, rays: [None; 2], anchors: Default::default() },
+                &panels,
+                &menu,
+                &toolbar,
+            );
             toolbar.set(&session.toolbar_model(&panels, &strings));
             let px = toolbar.render().expect("toolbar render").to_vec();
             save(name, TOOLBAR_SIZE, &px, TOOLBAR_SIZE.1);

@@ -1,6 +1,6 @@
 //! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
 use crate::bindings::APP_KEY;
-use crate::session::{Effect, MonitorInfo, Page, Session, TAB_INBOX, WINDOW_NEARER};
+use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
@@ -8,7 +8,7 @@ use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
 use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{DEFAULT_WIDTH_M, Hand, MIN_WIDTH_M, Panel, PixelRect, Source, gaze_visibility};
+use dvr_core::panel::{DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
 use dvr_core::state::NotifyFrom;
 use dvr_core::state::State;
@@ -144,7 +144,9 @@ fn wrist_info(
         weekday,
         day,
         month,
-        controllers: if battery { stats.controllers } else { [None, None] },
+        controllers: stats.controllers.map(|b| b.level.filter(|_| battery)),
+        controllers_on: stats.controllers.map(|b| b.on && battery),
+        charging: stats.controllers.map(|b| b.charging),
         lowest_tracker: stats.lowest_tracker.filter(|_| battery),
         expanded,
         load: state.wrist_load.then_some(WristLoad {
@@ -268,6 +270,7 @@ pub fn run() -> Result<(), String> {
     let mut wrist_expanded = false;
     let mut wrist_flags = (false, false);
     let mut last_ms = 0u64;
+    let mut glance = Glance::default();
     let mut sampler = dvr_sys::Sampler::new();
     let mut load = dvr_sys::Load::default();
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
@@ -334,7 +337,7 @@ pub fn run() -> Result<(), String> {
         let head_now = head(&vr);
         let watch = match engine.panels.iter().find(|p| p.source == Source::Wrist) {
             Some(w) if session.state.wrist_fade && !wrist_expanded && toast.is_none() => {
-                gaze_visibility(head_now, w.world_pose(&poses))
+                f32::from(u8::from(glance.update(head_now, w.world_pose(&poses), dt)))
             }
             _ => 1.0,
         };
@@ -364,7 +367,8 @@ pub fn run() -> Result<(), String> {
             dirty = Some(Instant::now());
         }
         let mut pop = None;
-        session.pointer(&events, &engine.panels, &menu, &toolbar, now);
+        let seen = PointerInput { events: &events, now, rays: engine.rays(), anchors: poses };
+        session.pointer(seen, &engine.panels, &menu, &toolbar);
         // The other hand's laser on the wrist drives its media buttons.
         let on_wrist = |id: u32| engine.panels.iter().any(|p| p.id == id && p.source == Source::Wrist);
         let mut over_wrist = false;
@@ -620,7 +624,8 @@ pub fn run() -> Result<(), String> {
             }
             let stats = vr.stats();
             for hand in Hand::BOTH {
-                let low = stats.controllers[hand.index()].is_some_and(|b| b < LOW_BATTERY);
+                let b = stats.controllers[hand.index()];
+                let low = !b.charging && b.level.is_some_and(|l| l < LOW_BATTERY);
                 if low && !battery_low[hand.index()] && session.state.haptics {
                     vr.haptic(hand);
                 }

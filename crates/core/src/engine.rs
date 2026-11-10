@@ -192,6 +192,11 @@ impl Engine {
         &self.keyboard
     }
 
+    /// Each hand's (smoothed) laser ray as last stepped.
+    pub fn rays(&self) -> [Option<Pose>; 2] {
+        [self.hands[0].ray, self.hands[1].ray]
+    }
+
     /// The hand is using the overlay: laser on a panel, a press or drag in progress, or holding a panel.
     /// The app gives such a hand's input to the overlay alone so the game never sees it.
     pub fn engaged(&self, hand: Hand) -> bool {

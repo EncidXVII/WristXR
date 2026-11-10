@@ -10,7 +10,7 @@ wrist-tracker = Tracker
 wrist-now = now
 wrist-menu = Menu
 wrist-keyboard = Keyboard
-wrist-screens = Screens
+wrist-screens = Show overlay
 wrist-inbox = Inbox
 wrist-inbox-new = { $n } new ›
 wrist-open = ›
@@ -54,13 +54,13 @@ menu-arrange = Arrange
 menu-recenter = Recenter
 menu-reset-layout = Reset layout
 menu-show = Show
-menu-screens = Screens
+menu-screens = Overlay
 menu-keyboard = Keyboard
 menu-open-now = Open now
 menu-open-none = Nothing open yet
 menu-open-more = and { $n } more
 menu-screen = Screen { $n }
-menu-double-tap = Double-tap left menu: hide or show everything
+menu-double-tap = Double-tap left menu: hide all, or bring it back in front
 
 ## Add window
 menu-windows-title = Add window

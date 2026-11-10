@@ -43,10 +43,20 @@ pub fn cursor_key(hand: Hand) -> u64 {
 pub struct VrStats {
     /// Frame rate of the scene app (game); `None` when no game is presenting.
     pub game_fps: Option<f32>,
-    /// Battery 0..1 per hand (`Hand::index()`).
-    pub controllers: [Option<f32>; 2],
+    /// Each hand's controller (`Hand::index()`).
+    pub controllers: [Battery; 2],
     /// Lowest battery among trackers.
     pub lowest_tracker: Option<f32>,
+}
+
+/// A controller's battery as SteamVR reports it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Battery {
+    /// The controller is connected.
+    pub on: bool,
+    /// 0..1; `None` when the controller does not report it.
+    pub level: Option<f32>,
+    pub charging: bool,
 }
 
 struct Actions {
@@ -316,14 +326,56 @@ impl OpenVr {
             ffi::PROP_BATTERY_PERCENT,
             &mut e
         );
-        (e == 0).then_some(v)
+        // Some drivers report percent (0..100) instead of 0..1.
+        (e == 0 && v.is_finite() && v >= 0.0).then(|| if v > 1.0 { (v / 100.0).min(1.0) } else { v })
+    }
+
+    /// The left and right controllers: by role, else (a driver that assigns no roles) the connected controllers in
+    /// device order, left first.
+    fn controller_devices(&self) -> [Option<u32>; 2] {
+        let connected = |d: u32| call!(self.system, system::IS_TRACKED_DEVICE_CONNECTED, fn(u32) -> u8, d) != 0;
+        let role = |r: i32| {
+            let d = call!(self.system, system::GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE, fn(i32) -> u32, r);
+            (d < ffi::MAX_DEVICES && connected(d)).then_some(d)
+        };
+        let mut found = [role(ffi::ROLE_LEFT_HAND), role(ffi::ROLE_RIGHT_HAND)];
+        let taken = found;
+        let mut spare = (0..ffi::MAX_DEVICES).filter(|&d| {
+            call!(self.system, system::GET_TRACKED_DEVICE_CLASS, fn(u32) -> i32, d) == ffi::CLASS_CONTROLLER
+                && connected(d)
+                && !taken.contains(&Some(d))
+                && !matches!(
+                    call!(self.system, system::GET_CONTROLLER_ROLE_FOR_TRACKED_DEVICE_INDEX, fn(u32) -> i32, d),
+                    ffi::ROLE_LEFT_HAND | ffi::ROLE_RIGHT_HAND
+                )
+        });
+        for slot in &mut found {
+            if slot.is_none() {
+                *slot = spare.next();
+            }
+        }
+        found
+    }
+
+    fn controller_battery(&self, device: Option<u32>) -> Battery {
+        let Some(d) = device else { return Battery::default() };
+        let mut e = 0i32;
+        let charging = call!(
+            self.system,
+            system::GET_BOOL_TRACKED_DEVICE_PROPERTY,
+            fn(u32, i32, *mut i32) -> u8,
+            d,
+            ffi::PROP_IS_CHARGING,
+            &mut e
+        ) != 0
+            && e == 0;
+        Battery { on: true, level: self.battery(d), charging }
     }
 
     pub fn stats(&self) -> VrStats {
         let mut timing = FrameTiming { size: size_of::<FrameTiming>() as u32, ..FrameTiming::default() };
         let ok = call!(self.compositor, compositor::GET_FRAME_TIMING, fn(*mut FrameTiming, u32) -> u8, &mut timing, 0);
         let interval = timing.client_frame_interval_ms;
-        let role = |r: i32| call!(self.system, system::GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE, fn(i32) -> u32, r);
         let lowest_tracker = (0..ffi::MAX_DEVICES)
             .filter(|&d| {
                 call!(self.system, system::GET_TRACKED_DEVICE_CLASS, fn(u32) -> i32, d) == ffi::CLASS_GENERIC_TRACKER
@@ -332,7 +384,7 @@ impl OpenVr {
             .reduce(f32::min);
         VrStats {
             game_fps: (ok != 0 && timing.presents > 0 && interval > 0.0).then(|| 1000.0 / interval),
-            controllers: [self.battery(role(ffi::ROLE_LEFT_HAND)), self.battery(role(ffi::ROLE_RIGHT_HAND))],
+            controllers: self.controller_devices().map(|d| self.controller_battery(d)),
             lowest_tracker,
         }
     }

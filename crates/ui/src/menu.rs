@@ -42,9 +42,14 @@ slint::slint! {
         callback slot-clicked(int);
         width: 800px;
         height: 600px;
-        background: #0B0B0C;
+        // Rounded like the watch and toolbar; the corners are see-through.
+        background: transparent;
+        Rectangle { x: 0px; y: 0px; width: 800px; height: 600px; border-radius: 28px; background: #0B0B0C; }
 
-        if root.tabs.length > 0 : Rectangle { x: 0px; y: 0px; width: 120px; height: 600px; background: #141416; }
+        if root.tabs.length > 0 : Rectangle {
+            x: 0px; y: 0px; width: 120px; height: 600px; background: #141416;
+            border-top-left-radius: 28px; border-bottom-left-radius: 28px;
+        }
         for t[i] in root.tabs : Rectangle {
             x: 10px;
             y: (12 + i * 92) * 1px;

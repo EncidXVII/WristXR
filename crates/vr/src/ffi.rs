@@ -11,7 +11,9 @@ pub const HMD_INDEX: usize = 0;
 pub const MAX_DEVICES: u32 = 64;
 pub const ROLE_LEFT_HAND: i32 = 1;
 pub const ROLE_RIGHT_HAND: i32 = 2;
+pub const CLASS_CONTROLLER: i32 = 2;
 pub const CLASS_GENERIC_TRACKER: i32 = 3;
+pub const PROP_IS_CHARGING: i32 = 1011;
 pub const PROP_BATTERY_PERCENT: i32 = 1012;
 
 pub const SYSTEM_VERSION: &CStr = c"FnTable:IVRSystem_026";
@@ -25,7 +27,10 @@ pub mod system {
     pub const GET_DXGI_OUTPUT_INFO: usize = 8;
     pub const GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE: usize = 12;
     pub const GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE: usize = 18;
+    pub const GET_CONTROLLER_ROLE_FOR_TRACKED_DEVICE_INDEX: usize = 19;
     pub const GET_TRACKED_DEVICE_CLASS: usize = 20;
+    pub const IS_TRACKED_DEVICE_CONNECTED: usize = 21;
+    pub const GET_BOOL_TRACKED_DEVICE_PROPERTY: usize = 22;
     pub const GET_FLOAT_TRACKED_DEVICE_PROPERTY: usize = 23;
     pub const POLL_NEXT_EVENT: usize = 30;
     pub const ACKNOWLEDGE_QUIT_EXITING: usize = 47;
@@ -268,6 +273,13 @@ mod tests {
                 system::GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE,
             ),
             ("IVRSystem", "GetTrackedDeviceClass", system::GET_TRACKED_DEVICE_CLASS),
+            (
+                "IVRSystem",
+                "GetControllerRoleForTrackedDeviceIndex",
+                system::GET_CONTROLLER_ROLE_FOR_TRACKED_DEVICE_INDEX,
+            ),
+            ("IVRSystem", "IsTrackedDeviceConnected", system::IS_TRACKED_DEVICE_CONNECTED),
+            ("IVRSystem", "GetBoolTrackedDeviceProperty", system::GET_BOOL_TRACKED_DEVICE_PROPERTY),
             ("IVRSystem", "GetFloatTrackedDeviceProperty", system::GET_FLOAT_TRACKED_DEVICE_PROPERTY),
             ("IVRCompositor", "GetFrameTiming", compositor::GET_FRAME_TIMING),
             ("IVRApplications", "AddApplicationManifest", applications::ADD_APPLICATION_MANIFEST),

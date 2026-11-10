@@ -29,7 +29,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   lock, curve, size, an opacity slider, Room / Hand / Head (a head-locked HUD that follows your view), reset,
   close.
 - **Hide everything with one button**: double-tap the left menu button, like XSOverlay, to fade screens, windows
-  and keyboard out (and back in). Hidden
+  and keyboard out; again, and they come back as arranged in front of where you face now. Hidden
   panels stop capturing, so they cost nothing.
 - **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
   Hovering never clicks, and hand tremor is smoothed out without making fast aiming lag.
@@ -40,7 +40,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Wrist watch that stays out of the way**: the time, date and battery rings, shown only while you look at your
   wrist, plus one line for what is playing (with a pause button), a new message or a low battery. Point at the
   time to open it: seek bar, play / skip / shuffle, share the song to VRChat, Windows volume and mute, switches
-  for Keyboard and Screens, the Inbox, the menu, and fps / load / this overlay's own cost.
+  for Show overlay and Keyboard, the Inbox, the menu, and fps / load / this overlay's own cost.
 - **Discord notifications on your wrist**: Discord messages (or, if you choose, any app's Windows notifications)
   pop up on the watch with a buzz, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
   (UDP 42069) work too.
@@ -51,7 +51,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 
 | Watch at a glance | Watch, pointed at |
 |---|---|
-| ![Watch: 21:37, battery rings for both controllers, and the song playing with a pause button](docs/img/wrist.png) ![Watch with a new Discord message from Alex](docs/img/wrist-message.png) ![Watch warning that the right controller is at 12 percent](docs/img/wrist-low.png) | ![Open watch: seek bar, play, skip, shuffle, share, volume slider, Keyboard and Screens switches, Inbox, Menu, fps and load](docs/img/wrist-expanded.png) |
+| ![Watch: 21:37, battery rings for both controllers, and the song playing with a pause button](docs/img/wrist.png) ![Watch with a new Discord message from Alex](docs/img/wrist-message.png) ![Watch warning that the right controller is at 12 percent](docs/img/wrist-low.png) | ![Open watch: seek bar, play, skip, shuffle, share, volume slider, Show overlay and Keyboard switches, Inbox, Menu, fps and load](docs/img/wrist-expanded.png) |
 
 ![Toolbar under a window: its name, lock, curve, size, opacity slider, Room / Hand / Head, reset, close](docs/img/toolbar.png)
 
@@ -90,21 +90,22 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
 - **Point at a panel**: its toolbar appears underneath (name, lock, curve, size, opacity, Room / Hand / Head,
   reset, close). The keyboard's toolbar has your input languages and Put away.
-- **Left menu button**: double-tap to hide or show screens, windows and keyboard.
+- **Left menu button**: double-tap to hide screens, windows and keyboard; again to bring them back, as arranged,
+  in front of where you face now (handy after a playspace mover).
 - **Toolbar Reset** puts a panel back in front of you; **Menu > Reset layout** arranges all screens and windows
   in an arc in front of you.
 - **Watch**: look at your wrist to see it; its pause button works as is. Point at the time with the other hand
   to open the player, volume and quick switches. It grows downward, so nothing moves under your laser.
 - **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
   key switches input language.
-- **Menu** (side rail): Panels (add a window or screen, recenter, reset layout, Screens / Keyboard switches, and
+- **Menu** (side rail): Panels (add a window or screen, recenter, reset layout, Overlay / Keyboard switches, and
   everything open now with a close button), Keys (language, chat, key sounds, share songs), Watch (what it
   shows), Inbox (recent messages; Discord / All apps / Off), Setup (laser hand, watch hand, vibration, steady
   laser, start with SteamVR, updates, curved screens, quit).
 
 | Panels | Setup |
 |---|---|
-| ![Menu, Panels page: add a window or screen, recenter, reset layout, Screens and Keyboard switches, open panels with close buttons](docs/img/menu-panels.png) | ![Menu, Setup page: laser hand and watch hand as Left / Right choices, vibration, steady laser, start with SteamVR, updates, curved, Quit](docs/img/menu-settings.png) |
+| ![Menu, Panels page: add a window or screen, recenter, reset layout, Overlay and Keyboard switches, open panels with close buttons](docs/img/menu-panels.png) | ![Menu, Setup page: laser hand and watch hand as Left / Right choices, vibration, steady laser, start with SteamVR, updates, curved, Quit](docs/img/menu-settings.png) |
 | ![Menu, Inbox page: Discord / All apps / Off, recent messages with unread dots](docs/img/menu-inbox.png) | ![Menu, Add window page: open windows with app tiles, Shown or +](docs/img/menu-windows.png) |
 
 ## Performance

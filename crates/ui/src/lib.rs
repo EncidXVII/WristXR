@@ -32,7 +32,7 @@ slint::slint! {
     // Motion: the card grows from the time and shrinks back along the same path (critically damped, no bounce);
     // what it reveals fades in with it. Presses answer on trigger-down. `motion` off (Windows "Animation
     // effects" off) makes every change instant.
-    export struct RingView { arc: string, label: string, low: bool }
+    export struct RingView { arc: string, label: string, low: bool, dim: bool }
 
     component Round inherits Rectangle {
         in property <string> icon;
@@ -163,7 +163,7 @@ slint::slint! {
                     width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
                     commands: r.arc; stroke: r.low ? #FF5A3C : #C6FF1A; stroke-width: 8px; fill: transparent;
                 }
-                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : #F5F5F7; }
+                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : r.dim ? #88888F : #F5F5F7; }
             }
 
             // Glance strip: one line under the time (music, a new message or a low battery).
@@ -303,8 +303,9 @@ slint::slint! {
             if root.open > 0 : Rectangle {
                 x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1D1D20;
                 opacity: root.open;
-                Row { x: 0px; y: 0px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; motion: root.motion; clicked => { root.action(1); } }
-                Row { x: 0px; y: 62px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; motion: root.motion; divider: true; clicked => { root.action(2); } }
+                // One switch for everything (screens, windows, keyboard), then the keyboard alone.
+                Row { x: 0px; y: 0px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; motion: root.motion; clicked => { root.action(2); } }
+                Row { x: 0px; y: 62px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; motion: root.motion; divider: true; clicked => { root.action(1); } }
                 Row { x: 0px; y: 124px; width: parent.width; label: root.inbox-label; value: root.inbox-value; divider: true; clicked => { root.action(3); } }
                 Row { x: 0px; y: 186px; width: parent.width; label: root.menu-label; value: root.open-value; divider: true; clicked => { root.action(0); } }
             }
@@ -330,7 +331,7 @@ const LIST_H: f32 = 248.0;
 pub enum WristInput {
     Menu,
     Keyboard,
-    /// Screens switch: hide or show everything.
+    /// Show overlay switch: hide or show screens, windows and keyboard together.
     HideAll,
     Inbox,
     Previous,
@@ -355,8 +356,8 @@ pub fn wrist_center(input: WristInput, expanded: bool, media: bool) -> Option<(f
     match input {
         PlayPause if !expanded => media.then_some((514.0, 166.0)),
         _ if !expanded => None,
-        Keyboard => row(0.0),
-        HideAll => row(1.0),
+        HideAll => row(0.0),
+        Keyboard => row(1.0),
         Inbox => row(2.0),
         Menu => row(3.0),
         Shuffle => card(82.0, 184.0),
@@ -477,8 +478,13 @@ pub struct WristInfo {
     pub day: u16,
     /// 1..=12.
     pub month: u16,
-    /// 0..1 per hand, left then right; both `None` and no tracker hides the rings.
+    /// 0..1 per hand, left then right.
     pub controllers: [Option<f32>; 2],
+    /// The controller is connected: its ring shows even when it reports no level (an empty ring, dim label), so the
+    /// watch never has a blank where the battery should be. Nothing connected and no level hides the ring.
+    pub controllers_on: [bool; 2],
+    /// Charging: never shown as low.
+    pub charging: [bool; 2],
     pub lowest_tracker: Option<f32>,
     /// Player, volume and quick switches are shown (the other hand's laser is on the watch).
     pub expanded: bool,
@@ -590,23 +596,36 @@ impl Wrist {
         v.set_time(format!("{:02}:{:02}", w.hour, w.minute).into());
 
         // Battery rings: L / R (numbers when open), plus the lowest tracker.
+        // (level, connected, charging, short label, warning name)
         let devices = [
-            (w.controllers[0], "L", "wrist-left-controller"),
-            (w.controllers[1], "R", "wrist-right-controller"),
-            (w.lowest_tracker, "T", "wrist-tracker"),
+            (w.controllers[0], w.controllers_on[0], w.charging[0], "L", "wrist-left-controller"),
+            (w.controllers[1], w.controllers_on[1], w.charging[1], "R", "wrist-right-controller"),
+            (w.lowest_tracker, false, false, "T", "wrist-tracker"),
         ];
         let rings: Vec<RingView> = devices
             .iter()
-            .filter_map(|(level, short, _)| {
-                let level = (*level)?;
-                let label = if w.expanded { format!("{:.0}", level * 100.0) } else { (*short).to_owned() };
-                Some(RingView { arc: ring_arc(level).into(), label: label.into(), low: level < LOW_BATTERY })
+            .filter_map(|&(level, on, charging, short, _)| match level {
+                Some(level) => {
+                    let label = if w.expanded { format!("{:.0}", level * 100.0) } else { short.to_owned() };
+                    let low = level < LOW_BATTERY && !charging;
+                    Some(RingView { arc: ring_arc(level).into(), label: label.into(), low, dim: false })
+                }
+                // Connected, level unknown: the empty track and a dim label.
+                None if on => Some(RingView {
+                    arc: "".into(),
+                    label: if w.expanded { "–".into() } else { short.into() },
+                    low: false,
+                    dim: true,
+                }),
+                None => None,
             })
             .collect();
         v.set_rings(ModelRc::new(VecModel::from(rings)));
         let low = devices
             .iter()
-            .filter_map(|(level, _, name)| level.filter(|l| *l < LOW_BATTERY).map(|l| (l, *name)))
+            .filter_map(|&(level, _, charging, _, name)| {
+                level.filter(|l| *l < LOW_BATTERY && !charging).map(|l| (l, name))
+            })
             .min_by(|a, b| a.0.total_cmp(&b.0));
 
         // One glance strip: a new message, else a low battery, else the song.
@@ -857,6 +876,24 @@ mod tests {
         wrist.pointer_button(uv, true);
         wrist.pointer_button(uv, false);
         assert_eq!(wrist.take_inputs(), vec![WristInput::PlayPause], "pause must work while the card still fades");
+    }
+
+    #[test]
+    fn every_connected_controller_gets_a_ring() {
+        use slint::Model;
+        let mut wrist = Wrist::new().expect("wrist");
+        wrist.set(&WristInfo {
+            controllers: [Some(0.1), None],
+            controllers_on: [true, true],
+            charging: [true, false],
+            ..WristInfo::default()
+        });
+        let rings: Vec<RingView> = wrist.view.get_rings().iter().collect();
+        assert_eq!(rings.len(), 2, "both hands, the right one without a level");
+        assert!(!rings[0].low, "charging is never low");
+        assert!(rings[1].dim && rings[1].arc.is_empty() && rings[1].label == "R");
+        wrist.set(&WristInfo::default());
+        assert_eq!(wrist.view.get_rings().row_count(), 0, "nothing connected, nothing shown");
     }
 
     #[test]
