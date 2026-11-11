@@ -14,6 +14,7 @@ tab Setup (0)
   Feel
   Start
   New screens
+  Look
   
 Segment "Left" "" ""
 Segment "Right" "" "" [on]
@@ -24,4 +25,5 @@ Toggle "Steady laser" "" "" [on]
 Toggle "With SteamVR" "" ""
 Toggle "Check updates" "" "" [on]
 Toggle "Curved" "" ""
+Action "Theme" "" "Lime ›"
 Danger "Quit DesktopVR" "" ""

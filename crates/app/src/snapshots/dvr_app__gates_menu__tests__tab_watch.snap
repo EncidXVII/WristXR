@@ -8,8 +8,10 @@ tab Keys (0)
 tab Watch (0)
 tab Inbox (2)
 tab Setup (0)
+  Glance
   Shows
   Behaves
+Action "Layout" "" "Standard ›"
 Toggle "Batteries" "" "" [on]
 Toggle "Music" "" "" [on]
 Toggle "FPS and load" "" ""

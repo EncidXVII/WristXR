@@ -1,0 +1,19 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Watch layout | What a glance shows
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Opening the watch looks the same in every layout
+Back "Back" "" ""
+Choice "Standard" "" "Time, batteries, song" [on]
+Choice "Clock" "" "Time and date"
+Choice "No batteries" "" "Time, date, song"
+Choice "Batteries" "" "Every battery as a number"
+Choice "Music" "" "A small player"
+Choice "Performance" "" "FPS, CPU and GPU"
+Choice "Compact" "" "One slim bar"

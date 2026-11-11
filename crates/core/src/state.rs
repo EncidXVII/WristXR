@@ -43,6 +43,99 @@ impl NotifyFrom {
     }
 }
 
+/// Accent colour (Setup > Theme). Only the accent changes; greys, fonts and the warning red stay. Each is light
+/// enough for dark text on it at 7:1 or better.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Accent {
+    #[default]
+    Lime,
+    Mint,
+    Aqua,
+    Sky,
+    Violet,
+    Pink,
+    Amber,
+    White,
+}
+
+impl Accent {
+    pub const ALL: [Self; 8] =
+        [Self::Lime, Self::Mint, Self::Aqua, Self::Sky, Self::Violet, Self::Pink, Self::Amber, Self::White];
+
+    /// 0xRRGGBB.
+    pub fn rgb(self) -> u32 {
+        match self {
+            Self::Lime => 0xC6FF1A,
+            Self::Mint => 0x5CF2A0,
+            Self::Aqua => 0x3DF2E0,
+            Self::Sky => 0x5CC8FF,
+            Self::Violet => 0xB49AFF,
+            Self::Pink => 0xFF7ADB,
+            Self::Amber => 0xFFB627,
+            Self::White => 0xF5F5F7,
+        }
+    }
+
+    /// Fluent id of its name.
+    pub fn name_id(self) -> &'static str {
+        match self {
+            Self::Lime => "theme-lime",
+            Self::Mint => "theme-mint",
+            Self::Aqua => "theme-aqua",
+            Self::Sky => "theme-sky",
+            Self::Violet => "theme-violet",
+            Self::Pink => "theme-pink",
+            Self::Amber => "theme-amber",
+            Self::White => "theme-white",
+        }
+    }
+}
+
+/// What the closed watch shows (Watch > Layout). The open watch is the same in every layout.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WatchLayout {
+    /// Time, L and R batteries, the song line.
+    #[default]
+    Standard,
+    /// Time and date.
+    Clock,
+    /// Time, date and the song line.
+    NoBatteries,
+    /// Time and every battery as a number (L, R, lowest tracker).
+    Batteries,
+    /// Time, batteries, and a small two-line player.
+    Music,
+    /// Time, batteries, and game fps with CPU and GPU load.
+    Performance,
+    /// One slim bar: time, battery numbers, the song.
+    Compact,
+}
+
+impl WatchLayout {
+    pub const ALL: [Self; 7] = [
+        Self::Standard,
+        Self::Clock,
+        Self::NoBatteries,
+        Self::Batteries,
+        Self::Music,
+        Self::Performance,
+        Self::Compact,
+    ];
+
+    /// Fluent ids of its name and one-line description.
+    pub fn ids(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Standard => ("layout-standard", "layout-standard-hint"),
+            Self::Clock => ("layout-clock", "layout-clock-hint"),
+            Self::NoBatteries => ("layout-no-batteries", "layout-no-batteries-hint"),
+            Self::Batteries => ("layout-batteries", "layout-batteries-hint"),
+            Self::Music => ("layout-music", "layout-music-hint"),
+            Self::Performance => ("layout-performance", "layout-performance-hint"),
+            Self::Compact => ("layout-compact", "layout-compact-hint"),
+        }
+    }
+}
+
 /// The single auto-restored layout.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -66,6 +159,8 @@ pub struct State {
     /// Game fps and CPU / GPU load on the watch.
     pub wrist_load: bool,
     pub wrist_media: bool,
+    pub wrist_layout: WatchLayout,
+    pub accent: Accent,
     pub notify_from: NotifyFrom,
     /// Laser smoothing (tremor filter).
     pub smoothing: bool,
@@ -88,6 +183,8 @@ impl Default for State {
             wrist_battery: true,
             wrist_load: false,
             wrist_media: true,
+            wrist_layout: WatchLayout::Standard,
+            accent: Accent::Lime,
             notify_from: NotifyFrom::Discord,
             smoothing: true,
         }

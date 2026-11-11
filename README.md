@@ -40,7 +40,12 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Wrist watch that stays out of the way**: the time, date and battery rings, shown only while you look at your
   wrist, plus one line for what is playing (with a pause button), a new message or a low battery. Point at the
   time to open it: seek bar, play / skip / shuffle, share the song to VRChat, Windows volume and mute, switches
-  for Show overlay and Keyboard, the Inbox, the menu, and fps / load / this overlay's own cost.
+  for Show overlay and Keyboard, Add (a window or the next screen, right there on the watch), the Inbox, the menu,
+  and fps / load / this overlay's own cost.
+- **Seven watch layouts** for the glance: Standard, Clock, No batteries, Batteries, Music (a small player with
+  back / play / next), Performance (fps, CPU and GPU) and Compact (one slim bar). Messages and low batteries come
+  through in every one, and opening the watch looks the same in all of them.
+- **Themes**: eight accent colours (Lime, Mint, Aqua, Sky, Violet, Pink, Amber, White) in Setup > Theme.
 - **Discord notifications on your wrist**: Discord messages (or, if you choose, any app's Windows notifications)
   pop up on the watch with a buzz, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
   (UDP 42069) work too.
@@ -51,7 +56,11 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 
 | Watch at a glance | Watch, pointed at |
 |---|---|
-| ![Watch: 21:37, battery rings for both controllers, and the song playing with a pause button](docs/img/wrist.png) ![Watch with a new Discord message from Alex](docs/img/wrist-message.png) ![Watch warning that the right controller is at 12 percent](docs/img/wrist-low.png) | ![Open watch: seek bar, play, skip, shuffle, share, volume slider, Show overlay and Keyboard switches, Inbox, Menu, fps and load](docs/img/wrist-expanded.png) |
+| ![Watch: 21:37, battery rings for both controllers, and the song playing with a pause button](docs/img/wrist.png) ![Watch with a new Discord message from Alex](docs/img/wrist-message.png) ![Watch warning that the right controller is at 12 percent](docs/img/wrist-low.png) | ![Open watch: seek bar, play, skip, shuffle, share, volume slider, Show overlay and Keyboard switches, Add Window and Screen 2, Inbox, Menu, fps and load](docs/img/wrist-expanded.png) |
+
+| Music layout | Performance layout | Compact layout |
+|---|---|---|
+| ![Music layout: time, battery rings, and a two-line player with back, pause and next](docs/img/wrist-layout-music.png) | ![Performance layout: time, battery rings, 90 fps, CPU and GPU bars](docs/img/wrist-layout-performance.png) | ![Compact layout: one bar with the time, battery numbers and the song](docs/img/wrist-layout-compact.png) |
 
 ![Toolbar under a window: its name, lock, curve, size, opacity slider, Room / Hand / Head, reset, close](docs/img/toolbar.png)
 
@@ -95,13 +104,15 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Toolbar Reset** puts a panel back in front of you; **Menu > Reset layout** arranges all screens and windows
   in an arc in front of you.
 - **Watch**: look at your wrist to see it; its pause button works as is. Point at the time with the other hand
-  to open the player, volume and quick switches. It grows downward, so nothing moves under your laser.
+  to open the player, volume and quick switches. It grows downward, so nothing moves under your laser. Add >
+  Window lists your windows on the watch; pick one and it opens in front of you. Menu > Watch > Layout picks
+  what the glance shows.
 - **Keyboard**: use both hands at once. Shift / Ctrl / Alt light up and apply to the next key. The language
   key switches input language.
 - **Menu** (side rail): Panels (add a window or screen, recenter, reset layout, Overlay / Keyboard switches, and
-  everything open now with a close button), Keys (language, chat, key sounds, share songs), Watch (what it
-  shows), Inbox (recent messages; Discord / All apps / Off), Setup (laser hand, watch hand, vibration, steady
-  laser, start with SteamVR, updates, curved screens, quit).
+  everything open now with a close button), Keys (language, chat, key sounds, share songs), Watch (layout and
+  what it shows), Inbox (recent messages; Discord / All apps / Off), Setup (laser hand, watch hand, vibration,
+  steady laser, start with SteamVR, updates, curved screens, theme, quit).
 
 | Panels | Setup |
 |---|---|

@@ -1,0 +1,20 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Theme | Accent colour
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Warning red stays red in every theme
+Back "Back" "" ""
+Swatch "Lime" "" "" [on]
+Swatch "Mint" "" ""
+Swatch "Aqua" "" ""
+Swatch "Sky" "" ""
+Swatch "Violet" "" ""
+Swatch "Pink" "" ""
+Swatch "Amber" "" ""
+Swatch "White" "" ""

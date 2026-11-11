@@ -417,6 +417,31 @@ mod tests {
         (session, panels, screens)
     }
 
+    #[test]
+    fn theme_and_watch_layout_are_picked_in_the_menu() {
+        use dvr_core::state::{Accent, WatchLayout};
+        let strings = Strings::english().expect("strings");
+        let (mut session, mut panels, screens) = setup();
+        let click = |session: &mut Session, panels: &mut Vec<_>, label: &str| {
+            let m = session.model(panels, &screens, &strings, (0.0, 0.0));
+            let i = m.find(label).unwrap_or_else(|| panic!("{label} not on {}", m.title));
+            session.input(dvr_ui::MenuInput::Slot(i), panels, HEAD, &Default::default(), &screens)
+        };
+        session.page = Page::Tab(TAB_SETUP);
+        click(&mut session, &mut panels, "Theme");
+        assert_eq!(session.page, Page::Theme);
+        let fx = click(&mut session, &mut panels, "Aqua");
+        assert_eq!((session.state.accent, fx), (Accent::Aqua, vec![Effect::Accent]));
+        click(&mut session, &mut panels, "Back");
+        assert_eq!(session.page, Page::Tab(TAB_SETUP));
+        session.page = Page::Tab(TAB_WATCH);
+        click(&mut session, &mut panels, "Layout");
+        click(&mut session, &mut panels, "Performance");
+        assert_eq!((session.page, session.state.wrist_layout), (Page::WatchLayouts, WatchLayout::Performance));
+        let m = session.model(&panels, &screens, &strings, (0.0, 0.0));
+        assert_eq!(m.tab, TAB_WATCH, "a sub-page keeps its tab lit");
+    }
+
     /// One line per control: what a user reads and its state, without pixel positions.
     fn outline(m: &MenuModel) -> String {
         let mut out = format!("{} | {}\n", m.title, m.hint);
@@ -444,7 +469,7 @@ mod tests {
     fn menu_views_match_snapshots() {
         let strings = Strings::english().expect("strings");
         let (mut session, panels, screens) = setup();
-        let pages = [
+        let pages: [(&str, Page); 12] = [
             ("first_hand", Page::FirstHand),
             ("first_monitor", Page::FirstMonitor),
             ("first_keyboard", Page::FirstKeyboard),
@@ -455,6 +480,8 @@ mod tests {
             ("tab_inbox", Page::Tab(TAB_INBOX)),
             ("tab_setup", Page::Tab(TAB_SETUP)),
             ("windows", Page::Windows(0)),
+            ("watch_layouts", Page::WatchLayouts),
+            ("theme", Page::Theme),
         ];
         for (name, page) in pages {
             session.page = page;
@@ -495,6 +522,8 @@ mod tests {
             ("menu-inbox", Page::Tab(TAB_INBOX)),
             ("menu-settings", Page::Tab(TAB_SETUP)),
             ("menu-windows", Page::Windows(0)),
+            ("menu-watch-layout", Page::WatchLayouts),
+            ("menu-theme", Page::Theme),
             ("first-run", Page::FirstHand),
         ] {
             session.page = page;
@@ -534,7 +563,13 @@ mod tests {
             day: 9,
             month: 11,
             controllers: [Some(0.8), Some(0.65)],
-            load: Some(WristLoad { game_fps: Some(90.0), cpu: Some(0.23), gpu: Some(0.67), own_gpu_ms: 0.012 }),
+            load: Some(WristLoad {
+                game_fps: Some(90.0),
+                target_fps: Some(90.0),
+                cpu: Some(0.23),
+                gpu: Some(0.67),
+                own_gpu_ms: 0.012,
+            }),
             volume: Some((0.62, false)),
             unread: 3,
             keyboard: true,
@@ -558,8 +593,9 @@ mod tests {
                 Box::new(|i| {
                     i.media = Some(song.clone());
                     i.expanded = true;
+                    i.add.screen = Some(2);
                 }),
-                760,
+                840,
             ),
         ];
         for (name, change, height) in shots {
@@ -569,6 +605,23 @@ mod tests {
             let px = wrist.render().expect("wrist render").to_vec();
             save(name, dvr_ui::WRIST_SIZE, &px, height);
         }
+        // Every closed layout with a song playing, and the open watch's Add list.
+        for layout in dvr_ui::WatchLayout::ALL {
+            let shot = WristInfo { layout, media: Some(song.clone()), lowest_tracker: Some(0.9), ..info.clone() };
+            wrist.set(&shot);
+            let px = wrist.render().expect("wrist render").to_vec();
+            let name = format!("wrist-layout-{}", strings.get(layout.ids().0, &[]).to_lowercase().replace(' ', "-"));
+            save(&name, dvr_ui::WRIST_SIZE, &px, 240);
+        }
+        let windows = ["Steam", "notes.txt - Notepad", "Vesktop"]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| dvr_ui::WristWindow { id: i as u64, title: (*t).into(), shown: i == 2 })
+            .collect();
+        let add = dvr_ui::WristAdd { adding: true, screen: Some(2), windows };
+        wrist.set(&WristInfo { expanded: true, add, ..info.clone() });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist-add", dvr_ui::WRIST_SIZE, &px, 520);
         info.expanded = false;
         let mut kb = Keyboard::new().expect("keyboard");
         let faces: Vec<KeyFace> = dvr_core::keyboard::ROWS

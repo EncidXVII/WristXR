@@ -15,6 +15,8 @@ pub const CLASS_CONTROLLER: i32 = 2;
 pub const CLASS_GENERIC_TRACKER: i32 = 3;
 pub const PROP_IS_CHARGING: i32 = 1011;
 pub const PROP_BATTERY_PERCENT: i32 = 1012;
+/// Prop_DisplayFrequency_Float (HMD refresh rate, Hz).
+pub const PROP_DISPLAY_FREQUENCY: i32 = 2002;
 
 pub const SYSTEM_VERSION: &CStr = c"FnTable:IVRSystem_026";
 pub const OVERLAY_VERSION: &CStr = c"FnTable:IVROverlay_028";

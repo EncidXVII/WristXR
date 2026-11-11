@@ -10,8 +10,8 @@ use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHI
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
-use dvr_core::state::NotifyFrom;
 use dvr_core::state::State;
+use dvr_core::state::{NotifyFrom, WatchLayout};
 use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
@@ -19,7 +19,7 @@ use dvr_osc::{Chatbox, VRCHAT_ADDR};
 use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
 use dvr_ui::{
     KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, WRIST_SIZE, Wrist,
-    WristInfo, WristInput, WristLoad, WristMedia,
+    WristAdd, WristInfo, WristInput, WristLoad, WristMedia, WristWindow,
 };
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
@@ -138,19 +138,23 @@ fn wrist_info(
     let (weekday, day, month) = dvr_sys::local_date();
     let stats = vr.stats();
     let battery = state.wrist_battery;
+    let layout = state.wrist_layout;
     WristInfo {
         hour,
         minute,
         weekday,
         day,
         month,
+        layout,
         controllers: stats.controllers.map(|b| b.level.filter(|_| battery)),
         controllers_on: stats.controllers.map(|b| b.on && battery),
         charging: stats.controllers.map(|b| b.charging),
         lowest_tracker: stats.lowest_tracker.filter(|_| battery),
         expanded,
-        load: state.wrist_load.then_some(WristLoad {
+        // The Performance layout shows the load whatever the FPS and load switch says.
+        load: (state.wrist_load || layout == WatchLayout::Performance).then_some(WristLoad {
             game_fps: stats.game_fps,
+            target_fps: stats.display_hz,
             cpu: load.cpu,
             gpu: load.gpu,
             own_gpu_ms,
@@ -168,6 +172,23 @@ fn wrist_info(
         }),
         ..WristInfo::default()
     }
+}
+
+/// Windows the user can add, front to back.
+fn list_windows() -> Vec<(u64, String)> {
+    dvr_capture_win::windows().into_iter().map(|(h, title)| (h as u64, title)).collect()
+}
+
+/// The watch's Add list: the first windows, marked when already shown.
+fn wrist_windows(windows: &[(u64, String)], panels: &[Panel]) -> Vec<WristWindow> {
+    windows
+        .iter()
+        .map(|(h, title)| WristWindow {
+            id: *h,
+            title: title.clone(),
+            shown: panels.iter().any(|p| p.source == Source::Window(*h)),
+        })
+        .collect()
 }
 
 /// "Title – Artist" for the VRChat chatbox.
@@ -231,7 +252,7 @@ pub fn run() -> Result<(), String> {
     session.persist(&panels);
     session.state.save(&state_path).map_err(err)?;
 
-    let cursor = gpu.image(&raster::cursor(64)).map_err(err)?;
+    let mut cursor = gpu.image(&raster::cursor(64, session.state.accent.rgb())).map_err(err)?;
     for hand in Hand::BOTH {
         vr.set_texture_d3d11(cursor_key(hand), raw(&cursor))?;
     }
@@ -282,6 +303,13 @@ pub fn run() -> Result<(), String> {
     // Windows notifications from other apps; started only when wanted (Windows may ask for access once).
     let mut app_toasts = (session.state.notify_from != NotifyFrom::Off).then(AppToasts::start);
     let mut keyboard = Keyboard::new()?;
+    let accent = session.state.accent.rgb();
+    wrist.set_accent(accent);
+    menu.set_accent(accent);
+    toolbar.set_accent(accent);
+    keyboard.set_accent(accent);
+    // The open watch's Add list is showing (closes with the watch).
+    let mut wrist_adding = false;
     let mut faces: Vec<KeyFace> = Vec::with_capacity(80);
     let mut held: Vec<u16> = Vec::with_capacity(8);
     let mut labels = layout_labels(false, dvr_input_win::caps_lock());
@@ -399,6 +427,10 @@ pub fn run() -> Result<(), String> {
         let expanded = wrist_seen.is_some_and(|t| now.saturating_sub(t) <= WRIST_LINGER_MS);
         let mut refresh_wrist = expanded != wrist_expanded;
         wrist_expanded = expanded;
+        if !expanded {
+            wrist_adding = false;
+        }
+        let mut wrist_effects: Vec<Effect> = Vec::new();
         let mut menu_dirty = tray_open_menu;
         let mut redraw_keyboard = false;
         for input in wrist.take_inputs() {
@@ -427,6 +459,27 @@ pub fn run() -> Result<(), String> {
                     if let Some(m) = &now_playing {
                         media.send(MediaCommand::Seek(f * m.duration));
                     }
+                }
+                WristInput::OpenAdd => {
+                    session.windows = list_windows();
+                    wrist_adding = true;
+                }
+                WristInput::AddBack => wrist_adding = false,
+                WristInput::AddScreen => {
+                    wrist_effects.extend(session.add_next_screen(&mut engine.panels, head_now, &screens));
+                    wrist_adding = false;
+                    dirty = Some(Instant::now());
+                }
+                WristInput::AddWindow(h) => {
+                    wrist_effects.extend(session.add_window(h, &mut engine.panels, head_now, &screens));
+                    wrist_adding = false;
+                    dirty = Some(Instant::now());
+                }
+                WristInput::AddMore => {
+                    session.windows = list_windows();
+                    session.open_menu_at(Page::Windows(0), &mut engine.panels, head_now);
+                    wrist_adding = false;
+                    menu_dirty = true;
                 }
                 WristInput::Share => {
                     if let Some(m) = media.info() {
@@ -531,11 +584,13 @@ pub fn run() -> Result<(), String> {
             dirty = Some(Instant::now());
         }
 
-        let mut effects: Vec<Effect> = Vec::new();
+        let mut effects: Vec<Effect> = wrist_effects;
         for click in menu.take_inputs() {
             effects.extend(session.input(click, &mut engine.panels, head_now, &poses, &screens));
             dirty = Some(Instant::now());
             menu_dirty = true;
+            // Watch settings (layout, what it shows) show on the watch at once.
+            refresh_wrist = true;
         }
         let mut toolbar_dirty = session.toolbar_target() != toolbar_for;
         for click in toolbar.take_inputs() {
@@ -556,9 +611,20 @@ pub fn run() -> Result<(), String> {
                 }
                 Effect::RedrawKeyboard => redraw_keyboard = true,
                 Effect::Quit => break 'frames,
-                Effect::ListWindows => {
-                    session.windows =
-                        dvr_capture_win::windows().into_iter().map(|(h, title)| (h as u64, title)).collect();
+                Effect::ListWindows => session.windows = list_windows(),
+                Effect::Accent => {
+                    let accent = session.state.accent.rgb();
+                    wrist.set_accent(accent);
+                    menu.set_accent(accent);
+                    toolbar.set_accent(accent);
+                    keyboard.set_accent(accent);
+                    cursor = gpu.image(&raster::cursor(64, accent)).map_err(err)?;
+                    for hand in Hand::BOTH {
+                        vr.set_texture_d3d11(cursor_key(hand), raw(&cursor))?;
+                    }
+                    redraw_keyboard = true;
+                    toolbar_dirty = true;
+                    refresh_wrist = true;
                 }
                 Effect::AddWindow(h) => {
                     let id = crate::session::next_id(&engine.panels);
@@ -690,7 +756,12 @@ pub fn run() -> Result<(), String> {
             );
             let volume = media.volume().filter(|_| wrist_expanded);
             let unread = session.unread();
-            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, ..info });
+            let add = WristAdd {
+                adding: wrist_adding,
+                screen: Session::next_screen(&engine.panels, &screens),
+                windows: if wrist_adding { wrist_windows(&session.windows, &engine.panels) } else { Vec::new() },
+            };
+            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, add, ..info });
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {

@@ -56,15 +56,16 @@ impl Image {
     }
 }
 
-/// Laser dot: accent disc with a dark rim, transparent outside.
-pub fn cursor(size: u32) -> Image {
+/// Laser dot: accent (0xRRGGBB) disc with a dark rim, transparent outside.
+pub fn cursor(size: u32, accent: u32) -> Image {
+    let accent = rgb(accent);
     let mut img = Image::new(size, size, [0; 4]);
     let c = (size as f32 - 1.0) / 2.0;
     for y in 0..size {
         for x in 0..size {
             let d = ((x as f32 - c).powi(2) + (y as f32 - c).powi(2)).sqrt() / c;
             let color = if d <= 0.7 {
-                ACCENT
+                accent
             } else if d <= 1.0 {
                 BG
             } else {

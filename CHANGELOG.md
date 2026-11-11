@@ -8,6 +8,15 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Added
+- Watch layouts (Menu > Watch > Layout): Standard, Clock (time and date), No batteries (time, date, song),
+  Batteries (every battery as a number, with L / R / T under it), Music (a two-line player with back, play and
+  next on the closed watch), Performance (fps, red under 90 % of the headset's rate, and CPU / GPU bars, red
+  above 90 %) and Compact (one slim bar). Messages and low batteries show in every layout; the top row never
+  moves when the watch opens, and the open watch is the same in all of them.
+- Add from the watch: the open watch has an Add row with Window and the next screen. Window lists your windows
+  on the watch (front to back, shown ones marked); picking one opens it in front of you, without the menu.
+- Themes (Setup > Theme): Lime, Mint, Aqua, Sky, Violet, Pink, Amber or White as the accent, on the menu, watch,
+  keyboard, toolbar and laser dot. Warning red stays red; dark text on every accent is at least 7:1.
 - New look ("Night Lime"): side-rail menu with grouped lists, switches and Left / Right choices; Open now list
   to find and close any panel; Inbox page with unread dots and a count on the rail.
 - Watch: date and battery rings at a glance, one line for the song (with a pause button that works without

@@ -27,12 +27,15 @@ slint::slint! {
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";
+    // Accent from Setup > Theme (lime by default).
+    export global Theme { in property <color> accent: #C6FF1A; }
     // Night Lime (graphite), as in the menu. The watch grows only downward: nothing moves under the laser when it
     // opens. Everything outside the card is transparent.
     // Motion: the card grows from the time and shrinks back along the same path (critically damped, no bounce);
     // what it reveals fades in with it. Presses answer on trigger-down. `motion` off (Windows "Animation
     // effects" off) makes every change instant.
-    export struct RingView { arc: string, label: string, low: bool, dim: bool }
+    export struct RingView { arc: string, label: string, low: bool, dim: bool, tag: string }
+    export struct AddRowView { label: string, tile: string, tile-color: color, value: string, on: bool, screen: bool, enabled: bool }
 
     component Round inherits Rectangle {
         in property <string> icon;
@@ -75,7 +78,7 @@ slint::slint! {
         }
         if root.switch : Rectangle {
             x: parent.width - 76px; y: 14px; width: 58px; height: 34px; border-radius: 17px;
-            background: root.on ? #C6FF1A : #2A2A2E;
+            background: root.on ? Theme.accent : #2A2A2E;
             animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
             Rectangle {
                 x: root.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
@@ -86,21 +89,103 @@ slint::slint! {
         touch := TouchArea { clicked => { root.clicked(); } }
     }
 
+    component Pill inherits Rectangle {
+        in property <string> label;
+        callback clicked;
+        height: 44px;
+        border-radius: 22px;
+        background: touch.pressed ? #444449 : touch.has-hover ? #38383D : #2A2A2E;
+        Path {
+            x: 12px; y: 11px; width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
+            commands: "M12 5v14 M5 12h14"; stroke: #F5F5F7; stroke-width: 2.4px; fill: transparent;
+        }
+        Text {
+            x: 38px; width: parent.width - 50px; height: parent.height; text: root.label; font-size: 24px;
+            font-weight: 600; color: #F5F5F7; vertical-alignment: center; overflow: elide;
+        }
+        touch := TouchArea { clicked => { root.clicked(); } }
+    }
+
+    // One line of the on-watch Add list: a screen (icon tile) or a window (letter tile).
+    component AddItem inherits Rectangle {
+        in property <AddRowView> item;
+        in property <bool> divider;
+        callback clicked;
+        height: 62px;
+        border-radius: 20px;
+        background: !root.item.enabled ? transparent : touch.pressed ? #36363B : touch.has-hover ? #2A2A2E : transparent;
+        if root.divider : Rectangle { x: 18px; y: 0px; width: parent.width - 36px; height: 1px; background: #2A2A2E; }
+        Rectangle {
+            x: 18px; y: 11px; width: 40px; height: 40px; border-radius: 11px;
+            background: root.item.screen ? #2A2A2E : root.item.tile-color;
+            if root.item.screen : Path {
+                width: 24px; height: 24px; viewbox-width: 24; viewbox-height: 24;
+                commands: "M3 5h18v11H3z M8 20h8 M12 16v4"; stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
+            }
+            if !root.item.screen : Text { text: root.item.tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
+        }
+        Text {
+            x: 72px; width: parent.width - 180px; height: parent.height; text: root.item.label; font-size: 26px;
+            color: #F5F5F7; vertical-alignment: center; overflow: elide;
+        }
+        Text {
+            x: parent.width - self.width - 18px; height: parent.height; text: root.item.value;
+            font-size: root.item.value == "+" ? 30px : 24px; color: root.item.on ? Theme.accent : #A8A8AF;
+            vertical-alignment: center;
+        }
+        touch := TouchArea { enabled: root.item.enabled; clicked => { root.clicked(); } }
+    }
+
+    // Load meter for the Performance strip: label, bar, percent.
+    component Meter inherits Rectangle {
+        in property <string> label;
+        in property <float> level;
+        in property <string> value;
+        in property <bool> high;
+        height: 68px;
+        Text { x: 0px; height: parent.height; text: root.label; font-size: 24px; color: #A8A8AF; vertical-alignment: center; }
+        Rectangle {
+            x: 52px; y: 30px; width: parent.width - 52px - 64px; height: 8px; border-radius: 4px; background: #2A2A2E;
+            Rectangle {
+                x: 0px; width: parent.width * clamp(root.level, 0, 1); height: 8px; border-radius: 4px;
+                background: root.high ? #FF5A3C : Theme.accent;
+            }
+        }
+        Text {
+            x: parent.width - 58px; width: 58px; height: parent.height; text: root.value; font-size: 24px;
+            color: root.high ? #FF8A6E : #F5F5F7; horizontal-alignment: right; vertical-alignment: center;
+        }
+    }
+
     export component WristView inherits Window {
         default-font-family: "Barlow";
         in property <string> time;
         in property <string> date;
+        // Date beside the time (Clock and No batteries layouts): weekday over day and month.
+        in property <string> weekday;
+        in property <string> day-month;
         in property <[RingView]> rings;
         in property <string> ring-track;
         in property <bool> expanded;
         in property <int> card-height;
-        // 0 none, 1 music, 2 message, 3 low battery
+        // WatchLayout: 0 Standard, 1 Clock, 2 No batteries, 3 Batteries, 4 Music, 5 Performance, 6 Compact.
+        in property <int> layout;
+        // 0 none, 1 music, 2 message, 3 low battery, 4 performance
         in property <int> strip;
         in property <string> strip-title;
         in property <string> strip-text;
         in property <string> strip-tile;
         in property <color> strip-tile-color;
         in property <string> strip-time;
+        in property <string> fps-text;
+        in property <bool> fps-low;
+        in property <float> cpu;
+        in property <float> gpu;
+        in property <string> cpu-text;
+        in property <string> gpu-text;
+        in property <string> cpu-label;
+        in property <string> gpu-label;
+        in property <string> fps-label;
         in property <bool> playing;
         in property <bool> has-media;
         in property <string> media-title;
@@ -114,6 +199,8 @@ slint::slint! {
         in property <float> volume;
         in property <bool> muted;
         in property <string> volume-text;
+        // Top of what opens below the top row (the player, else the list).
+        in property <int> body-y;
         in property <int> list-y;
         in property <string> keyboard-label;
         in property <string> screens-label;
@@ -121,17 +208,29 @@ slint::slint! {
         in property <string> inbox-value;
         in property <string> menu-label;
         in property <string> open-value;
+        in property <string> add-label;
+        in property <string> add-window-label;
+        // Empty when every screen is shown.
+        in property <string> add-screen-label;
         in property <bool> keyboard-on;
         in property <bool> screens-on;
+        // The Add list replaces the player and the switches.
+        in property <bool> adding;
+        in property <[AddRowView]> add-rows;
         in property <string> footer;
         in property <bool> motion;
         callback action(int);
         callback seek(float);
         callback set-volume(float);
+        callback add-picked(int);
         width: 560px;
-        height: 760px;
+        height: 840px;
         background: transparent;
 
+        property <bool> compact: root.layout == 6;
+        property <bool> big: root.layout == 4;
+        property <bool> tagged: root.layout == 3;
+        property <bool> date-right: root.layout == 1 || root.layout == 2;
         // 0 closed .. 1 open; content shown while it is above 0, so closing fades it out instead of cutting it.
         property <float> open: root.expanded ? 1 : 0;
         animate open { duration: root.motion ? 200ms : 0ms; easing: ease-out; }
@@ -140,42 +239,112 @@ slint::slint! {
         animate date-t { duration: root.motion ? 150ms : 0ms; easing: ease-out; }
         property <length> card-h: root.card-height * 1px;
         animate card-h { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
+        // Compact bar: where its content starts, after the time and the battery numbers.
+        property <length> bar-x: (168 + root.rings.length * 58 + (root.rings.length > 0 ? 18 : 0)) * 1px;
+        // The glance strip leaves three times faster than the card arrives, so the two never read as one.
+        // Clickable as soon as the watch closes, even while the media card is still fading over it.
+        property <bool> strip-shown: (!root.expanded || root.open < 0.34) && root.strip > 0 && !root.compact;
 
         Rectangle {
             x: 0px; y: 0px; width: 560px; height: root.card-h; border-radius: 28px; background: #0B0B0C; clip: true;
             Text {
                 // Moves only when a strip comes or goes (in step with the card), never when the watch opens.
-                x: 26px; y: root.strip == 0 ? 14px : 22px; height: 88px;
+                x: root.compact ? 22px : 26px;
+                y: root.compact ? 0px : root.strip == 0 ? 14px : 22px;
+                height: root.compact ? 84px : 88px;
                 animate y { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
-                text: root.time; font-family: "Anton"; font-size: 88px; color: #F5F5F7;
+                text: root.time; font-family: "Anton"; font-size: root.compact ? 60px : 88px; color: #F5F5F7;
                 vertical-alignment: center;
             }
-            if root.date-t > 0 && root.date != "" : Text {
+            if root.date-t > 0 && root.date != "" && !root.compact && !root.date-right && !root.tagged : Text {
                 x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #A8A8AF; opacity: root.date-t;
             }
+            if root.date-right && !root.compact && root.open < 1 : Rectangle {
+                x: 234px; y: 24px; width: 300px; height: 84px; opacity: 1 - root.open;
+                Text {
+                    x: 0px; y: 0px; width: parent.width; height: 30px; text: root.weekday; font-size: 24px;
+                    font-weight: 600; color: #A8A8AF; horizontal-alignment: right; letter-spacing: 1.5px;
+                }
+                Text {
+                    x: 0px; y: 28px; width: parent.width; height: 56px; text: root.day-month; font-family: "Anton";
+                    font-size: 46px; color: #F5F5F7; horizontal-alignment: right; vertical-alignment: center;
+                }
+            }
             for r[i] in root.rings : Rectangle {
-                x: (534 - (root.rings.length - i) * 92 + 12) * 1px; y: 26px; width: 80px; height: 80px;
+                x: root.compact ? (168 + i * 58) * 1px : (534 - (root.rings.length - i) * 92 + 12) * 1px;
+                y: root.compact ? 16px : root.tagged ? 10px : 26px;
+                width: root.compact ? 52px : 80px; height: self.width;
+                opacity: root.date-right ? root.open : 1;
                 Path {
-                    width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
-                    commands: root.ring-track; stroke: #2A2A2E; stroke-width: 8px; fill: transparent;
+                    width: parent.width; height: parent.height; viewbox-width: 80; viewbox-height: 80;
+                    commands: root.ring-track; stroke: #2A2A2E; stroke-width: root.compact ? 5px : 8px; fill: transparent;
                 }
                 Path {
-                    width: 80px; height: 80px; viewbox-width: 80; viewbox-height: 80;
-                    commands: r.arc; stroke: r.low ? #FF5A3C : #C6FF1A; stroke-width: 8px; fill: transparent;
+                    width: parent.width; height: parent.height; viewbox-width: 80; viewbox-height: 80;
+                    commands: r.arc; stroke: r.low ? #FF5A3C : Theme.accent; stroke-width: root.compact ? 5px : 8px;
+                    fill: transparent;
                 }
                 Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : r.dim ? #88888F : #F5F5F7; }
+                if r.tag != "" : Text {
+                    x: 0px; y: 82px; width: parent.width; height: 28px; text: r.tag; font-size: 24px; color: #88888F;
+                    horizontal-alignment: center;
+                }
             }
 
-            // Glance strip: one line under the time (music, a new message or a low battery).
-            // The glance strip leaves three times faster than the card arrives, so the two never read as one.
-            // Clickable as soon as the watch closes, even while the media card is still fading over it.
-            if (!root.expanded || root.open < 0.34) && root.strip > 0 : Rectangle {
+            // Compact: the bar's right part carries the song, a message, a warning or the date.
+            if root.compact && root.rings.length > 0 : Rectangle {
+                x: root.bar-x - 13px; y: 22px; width: 1px; height: 40px; background: #2A2A2E;
+            }
+            if root.compact && root.strip == 0 : Text {
+                x: root.bar-x; y: 0px; height: 84px; width: 534px - self.x; text: root.date; font-size: 24px;
+                color: #A8A8AF; vertical-alignment: center; overflow: elide;
+            }
+            if root.compact && root.strip == 1 : Rectangle {
+                x: root.bar-x; y: 0px; width: 548px - self.x; height: 84px;
+                if root.playing : Rectangle { x: 0px; y: 40px; width: 5px; height: 14px; border-radius: 2px; background: Theme.accent; }
+                if root.playing : Rectangle { x: 8px; y: 30px; width: 5px; height: 24px; border-radius: 2px; background: Theme.accent; }
+                if root.playing : Rectangle { x: 16px; y: 44px; width: 5px; height: 10px; border-radius: 2px; background: Theme.accent; }
+                if root.playing : Rectangle { x: 24px; y: 36px; width: 5px; height: 18px; border-radius: 2px; background: Theme.accent; }
+                Text {
+                    x: root.playing ? 40px : 0px; width: parent.width - self.x - 64px; height: parent.height;
+                    text: root.strip-title; font-size: 24px; color: #F5F5F7; vertical-alignment: center; overflow: elide;
+                }
+                Round {
+                    x: parent.width - 52px; y: 16px; width: 52px; height: 52px;
+                    icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
+                    tint: #0B0B0C; fill-color: #F5F5F7; lit: true;
+                    clicked => { root.action(5); }
+                }
+            }
+            if root.compact && root.strip == 2 : Rectangle {
+                x: root.bar-x; y: 0px; width: 534px - self.x; height: 84px;
+                Rectangle {
+                    x: 0px; y: 22px; width: 40px; height: 40px; border-radius: 11px; background: root.strip-tile-color;
+                    Text { text: root.strip-tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
+                }
+                HorizontalLayout {
+                    x: 52px; width: parent.width - 52px; height: parent.height; spacing: 8px;
+                    Text { text: root.strip-title; font-size: 24px; font-weight: 700; color: #F5F5F7; vertical-alignment: center; overflow: elide; max-width: 160px; }
+                    Text { text: root.strip-text; font-size: 24px; color: #A8A8AF; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; }
+                }
+            }
+            if root.compact && root.strip == 3 : Text {
+                x: root.bar-x; y: 0px; height: 84px; width: 534px - self.x; text: root.strip-title; font-size: 24px;
+                color: #FF8A6E; vertical-alignment: center; overflow: elide;
+            }
+            if root.compact && root.strip == 4 : Text {
+                x: root.bar-x; y: 0px; height: 84px; width: 534px - self.x; text: root.fps-text + " " + root.fps-label;
+                font-size: 24px; color: root.fps-low ? #FF8A6E : #F5F5F7; vertical-alignment: center; overflow: elide;
+            }
+
+            // Glance strip: one line under the time (music, a message, a low battery or the game's load).
+            if root.strip-shown && !root.big : Rectangle {
                 x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px; opacity: max(0, 1 - root.open * 3);
                 background: root.strip == 3 ? #2B1712 : #1D1D20;
-                if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: #C6FF1A; }
-                if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: #C6FF1A; }
-                if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: #C6FF1A; }
-                if root.strip == 1 && root.playing : Rectangle { x: 42px; y: 32px; width: 5px; height: 18px; border-radius: 2px; background: #C6FF1A; }
+                if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: Theme.accent; }
+                if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: Theme.accent; }
+                if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: Theme.accent; }
+                if root.strip == 1 && root.playing : Rectangle { x: 42px; y: 32px; width: 5px; height: 18px; border-radius: 2px; background: Theme.accent; }
                 if root.strip == 2 && root.strip-tile != "" : Rectangle {
                     x: 18px; y: 14px; width: 40px; height: 40px; border-radius: 11px; background: root.strip-tile-color;
                     Text { text: root.strip-tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
@@ -184,7 +353,7 @@ slint::slint! {
                     x: 18px; y: 21px; width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
                     commands: "M12 3l10 18H2z M12 10v5 M12 18v1"; stroke: #FF8A6E; stroke-width: 2.2px; fill: transparent;
                 }
-                HorizontalLayout {
+                if root.strip != 4 : HorizontalLayout {
                     y: 0px; height: parent.height;
                     x: root.strip == 1 && !root.playing ? 18px : root.strip == 2 ? 72px : 60px;
                     width: parent.width - self.x - (root.strip == 1 ? 76px : root.strip == 2 ? 84px : 18px);
@@ -208,11 +377,83 @@ slint::slint! {
                     tint: #0B0B0C; fill-color: #F5F5F7; lit: true;
                     clicked => { root.action(5); }
                 }
+                // Performance: fps as a number, then CPU and GPU as bars.
+                if root.strip == 4 : HorizontalLayout {
+                    x: 18px; width: 118px; height: parent.height; spacing: 6px; alignment: start;
+                    Text {
+                        text: root.fps-text; font-family: "Anton"; font-size: 40px; color: root.fps-low ? #FF5A3C : #F5F5F7;
+                        vertical-alignment: center;
+                    }
+                    Text { text: root.fps-label; font-size: 24px; color: #A8A8AF; vertical-alignment: center; }
+                }
+                if root.strip == 4 : Rectangle { x: 140px; y: 16px; width: 1px; height: 36px; background: #2A2A2E; }
+                if root.strip == 4 : Meter {
+                    x: 156px; y: 0px; width: 172px; label: root.cpu-label; level: root.cpu; value: root.cpu-text; high: root.cpu > 0.9;
+                }
+                if root.strip == 4 : Meter {
+                    x: 346px; y: 0px; width: 172px; label: root.gpu-label; level: root.gpu; value: root.gpu-text; high: root.gpu > 0.9;
+                }
             }
 
-            // Pointed at: player, volume and quick switches below the time.
-            if root.open > 0 && root.has-media : Rectangle {
-                x: 12px; y: 132px; width: 536px; height: 306px; border-radius: 20px; background: #1D1D20; opacity: root.open;
+            // Music layout: a two-line card under the time, with back, play and next.
+            if root.strip-shown && root.big : Rectangle {
+                x: 12px; y: 132px; width: 536px; height: 96px; border-radius: 20px; opacity: max(0, 1 - root.open * 3);
+                background: root.strip == 3 ? #2B1712 : #1D1D20; clip: true;
+                if root.strip == 1 : Rectangle {
+                    x: 14px; y: 16px; width: 64px; height: 64px; border-radius: 14px; background: #36363B;
+                    Path {
+                        width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
+                        commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
+                        stroke: #F5F5F7; stroke-width: 2px; fill: transparent;
+                    }
+                }
+                if root.strip == 2 : Rectangle {
+                    x: 18px; y: 20px; width: 56px; height: 56px; border-radius: 14px; background: root.strip-tile-color;
+                    Text { text: root.strip-tile; font-size: 26px; font-weight: 700; color: #FFFFFF; }
+                }
+                if root.strip == 3 : Path {
+                    x: 22px; y: 35px; width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
+                    commands: "M12 3l10 18H2z M12 10v5 M12 18v1"; stroke: #FF8A6E; stroke-width: 2.2px; fill: transparent;
+                }
+                if root.strip != 3 : Text {
+                    x: root.strip == 1 ? 92px : 88px; y: 14px; height: 34px;
+                    width: (root.strip == 1 ? 338px : 520px) - self.x - (root.strip == 2 ? 70px : 0px);
+                    text: root.strip-title; font-size: 26px; font-weight: 700; color: #F5F5F7; overflow: elide;
+                    vertical-alignment: center;
+                }
+                if root.strip != 3 : Text {
+                    x: root.strip == 1 ? 92px : 88px; y: 48px; height: 32px; width: (root.strip == 1 ? 338px : 520px) - self.x;
+                    text: root.strip-text; font-size: 24px; color: #A8A8AF; overflow: elide; vertical-alignment: center;
+                }
+                if root.strip == 3 : Text {
+                    x: 60px; width: parent.width - 78px; height: parent.height; text: root.strip-title; font-size: 24px;
+                    color: #FF8A6E; vertical-alignment: center; overflow: elide;
+                }
+                if root.strip == 2 : Text {
+                    x: parent.width - self.width - 18px; y: 14px; height: 34px; text: root.strip-time; font-size: 24px;
+                    color: #88888F; vertical-alignment: center;
+                }
+                if root.strip == 1 : Round {
+                    x: 344px; y: 22px; width: 52px; height: 52px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true;
+                    tint: #A8A8AF; clicked => { root.action(4); }
+                }
+                if root.strip == 1 : Round {
+                    x: 404px; y: 18px; width: 60px; height: 60px;
+                    icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
+                    tint: #0B0B0C; fill-color: #F5F5F7; lit: true; clicked => { root.action(5); }
+                }
+                if root.strip == 1 : Round {
+                    x: 472px; y: 22px; width: 52px; height: 52px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true;
+                    tint: #A8A8AF; clicked => { root.action(6); }
+                }
+                if root.strip == 1 && root.can-seek : Rectangle {
+                    x: 0px; y: 92px; width: parent.width * clamp(root.progress, 0, 1); height: 4px; background: Theme.accent;
+                }
+            }
+
+            // Pointed at: player, volume and quick switches below the top row.
+            if root.open > 0 && root.has-media && !root.adding : Rectangle {
+                x: 12px; y: root.body-y * 1px; width: 536px; height: 306px; border-radius: 20px; background: #1D1D20; opacity: root.open;
                 Rectangle {
                     x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #36363B;
                     Path {
@@ -248,7 +489,7 @@ slint::slint! {
                 }
                 Round {
                     x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
-                    tint: root.shuffle ? #C6FF1A : #A8A8AF; clicked => { root.action(7); }
+                    tint: root.shuffle ? Theme.accent : #A8A8AF; clicked => { root.action(7); }
                 }
                 Round {
                     x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true; press-color: #444449;
@@ -257,7 +498,7 @@ slint::slint! {
                 Round {
                     x: 228px; y: 144px; width: 80px; height: 80px;
                     icon: root.playing ? "M7 5h3v14H7z M14 5h3v14h-3z" : "M8 5v14l11-7z"; filled: true;
-                    tint: #0B0B0C; fill-color: #C6FF1A; lit: true; clicked => { root.action(5); }
+                    tint: #0B0B0C; fill-color: Theme.accent; lit: true; clicked => { root.action(5); }
                 }
                 Round {
                     x: 336px; y: 152px; width: 64px; height: 64px; icon: "M16 5h2v14h-2z M5 5v14l10-7z"; filled: true; press-color: #444449;
@@ -283,7 +524,7 @@ slint::slint! {
                     opacity: root.has-volume ? 1.0 : 0.4;
                     Rectangle {
                         x: 0px; width: parent.width * clamp(root.volume, 0, 1); height: 12px; border-radius: 6px;
-                        background: root.muted ? #88888F : #C6FF1A;
+                        background: root.muted ? #88888F : Theme.accent;
                     }
                     Rectangle {
                         x: parent.width * clamp(root.volume, 0, 1) - 14px; y: -8px; width: 28px; height: 28px;
@@ -300,17 +541,55 @@ slint::slint! {
                     horizontal-alignment: right; vertical-alignment: center;
                 }
             }
-            if root.open > 0 : Rectangle {
-                x: 12px; y: root.list-y * 1px; width: 536px; height: 248px; border-radius: 20px; background: #1D1D20;
+            if root.open > 0 && !root.adding : Rectangle {
+                x: 12px; y: root.list-y * 1px; width: 536px; height: 310px; border-radius: 20px; background: #1D1D20;
                 opacity: root.open;
                 // One switch for everything (screens, windows, keyboard), then the keyboard alone.
                 Row { x: 0px; y: 0px; width: parent.width; label: root.screens-label; switch: true; on: root.screens-on; motion: root.motion; clicked => { root.action(2); } }
                 Row { x: 0px; y: 62px; width: parent.width; label: root.keyboard-label; switch: true; on: root.keyboard-on; motion: root.motion; divider: true; clicked => { root.action(1); } }
-                Row { x: 0px; y: 124px; width: parent.width; label: root.inbox-label; value: root.inbox-value; divider: true; clicked => { root.action(3); } }
-                Row { x: 0px; y: 186px; width: parent.width; label: root.menu-label; value: root.open-value; divider: true; clicked => { root.action(0); } }
+                // Add: a window (opens the list here) or the next screen, without opening the menu.
+                Rectangle {
+                    x: 0px; y: 124px; width: parent.width; height: 62px;
+                    Rectangle { x: 18px; y: 0px; width: parent.width - 36px; height: 1px; background: #2A2A2E; }
+                    Text { x: 18px; height: parent.height; text: root.add-label; font-size: 26px; color: #F5F5F7; vertical-alignment: center; }
+                    if root.add-screen-label != "" : Pill {
+                        x: parent.width - 18px - 170px; y: 9px; width: 170px; label: root.add-screen-label;
+                        clicked => { root.action(11); }
+                    }
+                    Pill {
+                        x: parent.width - 18px - (root.add-screen-label != "" ? 170px + 10px : 0px) - 150px; y: 9px; width: 150px;
+                        label: root.add-window-label; clicked => { root.action(10); }
+                    }
+                }
+                Row { x: 0px; y: 186px; width: parent.width; label: root.inbox-label; value: root.inbox-value; divider: true; clicked => { root.action(3); } }
+                Row { x: 0px; y: 248px; width: parent.width; label: root.menu-label; value: root.open-value; divider: true; clicked => { root.action(0); } }
+            }
+            if root.open > 0 && root.adding : Rectangle {
+                x: 12px; y: root.body-y * 1px; width: 536px; height: (62 + root.add-rows.length * 62) * 1px;
+                border-radius: 20px; background: #1D1D20; opacity: root.open;
+                Rectangle {
+                    x: 0px; y: 0px; width: parent.width; height: 62px; border-radius: 20px;
+                    background: back-touch.pressed ? #36363B : back-touch.has-hover ? #2A2A2E : transparent;
+                    Rectangle {
+                        x: 14px; y: 9px; width: 44px; height: 44px; border-radius: 22px; background: #2A2A2E;
+                        Path {
+                            width: 24px; height: 24px; viewbox-width: 24; viewbox-height: 24;
+                            commands: "M15 6l-6 6 6 6"; stroke: #F5F5F7; stroke-width: 2.4px; fill: transparent;
+                        }
+                    }
+                    Text {
+                        x: 72px; height: parent.height; text: root.add-label; font-family: "Anton"; font-size: 30px;
+                        color: #F5F5F7; vertical-alignment: center;
+                    }
+                    back-touch := TouchArea { clicked => { root.action(12); } }
+                }
+                for item[i] in root.add-rows : AddItem {
+                    x: 0px; y: (62 + i * 62) * 1px; width: parent.width; item: item; divider: true;
+                    clicked => { root.add-picked(i); }
+                }
             }
             if root.open > 0 && root.footer != "" : Text {
-                x: 26px; y: (root.list-y + 248 + 12) * 1px; width: 508px; height: 30px; opacity: root.open;
+                x: 26px; y: (root.card-height - 42) * 1px; width: 508px; height: 30px; opacity: root.open;
                 text: root.footer; font-size: 24px; color: #88888F; overflow: elide;
             }
         }
@@ -320,12 +599,24 @@ slint::slint! {
 /// Battery level (0..1) below which the watch warns.
 pub const LOW_BATTERY: f32 = 0.2;
 
-pub const WRIST_SIZE: (u32, u32) = (560, 760);
-/// Height of the time row; the compact watch is this tall without a strip.
+pub const WRIST_SIZE: (u32, u32) = (560, 840);
+/// Height of the time row; the closed watch is this tall without a strip.
 const HEADER_H: f32 = 132.0;
+/// The Compact layout's one bar.
+const COMPACT_H: f32 = 84.0;
 const STRIP_END: f32 = 212.0;
-const MEDIA_END: f32 = 448.0;
-const LIST_H: f32 = 248.0;
+/// The Music layout's two-line card.
+const BIG_END: f32 = 240.0;
+/// Player card plus the gap under it.
+const MEDIA_H: f32 = 316.0;
+const LIST_H: f32 = 310.0;
+const ROW: f32 = 62.0;
+/// Windows listed on the watch's Add list; the rest are one press away in the menu.
+pub const WRIST_ADD_WINDOWS: usize = 4;
+/// Share of the headset's rate under which the Performance layout shows fps in red (a bar turns red above 90 %).
+const LOW_FPS: f32 = 0.9;
+
+pub use dvr_core::state::WatchLayout;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WristInput {
@@ -345,30 +636,16 @@ pub enum WristInput {
     Seek(f32),
     /// Windows volume, 0..1.
     Volume(f32),
-}
-
-/// Where a watch control sits (wrist pixels) for the given state; `None` when it is not drawn.
-pub fn wrist_center(input: WristInput, expanded: bool, media: bool) -> Option<(f32, f32)> {
-    use WristInput::*;
-    let list = if media { MEDIA_END } else { HEADER_H };
-    let row = |k: f32| Some((280.0, list + k * 62.0 + 31.0));
-    let card = |x: f32, y: f32| (expanded && media).then_some((12.0 + x, HEADER_H + y));
-    match input {
-        PlayPause if !expanded => media.then_some((514.0, 166.0)),
-        _ if !expanded => None,
-        HideAll => row(0.0),
-        Keyboard => row(1.0),
-        Inbox => row(2.0),
-        Menu => row(3.0),
-        Shuffle => card(82.0, 184.0),
-        Previous => card(168.0, 184.0),
-        PlayPause => card(268.0, 184.0),
-        Next => card(368.0, 184.0),
-        Share => card(454.0, 184.0),
-        Mute => card(44.0, 264.0),
-        Seek(f) => card(94.0 + 348.0 * f, 116.0),
-        Volume(f) => card(82.0 + 348.0 * f, 264.0),
-    }
+    /// Add > Window: list the windows on the watch.
+    OpenAdd,
+    /// Back from that list.
+    AddBack,
+    /// Add the next screen not shown yet.
+    AddScreen,
+    /// Show this window (handle) in front of you.
+    AddWindow(u64),
+    /// More windows than the watch lists: open the menu's Add window page.
+    AddMore,
 }
 
 thread_local! {
@@ -478,6 +755,8 @@ pub struct WristInfo {
     pub day: u16,
     /// 1..=12.
     pub month: u16,
+    /// What the closed watch shows.
+    pub layout: WatchLayout,
     /// 0..1 per hand, left then right.
     pub controllers: [Option<f32>; 2],
     /// The controller is connected: its ring shows even when it reports no level (an empty ring, dim label), so the
@@ -501,6 +780,26 @@ pub struct WristInfo {
     pub volume: Option<(f32, bool)>,
     /// Unread messages in the Inbox.
     pub unread: usize,
+    pub add: WristAdd,
+}
+
+/// The open watch's Add row and list.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct WristAdd {
+    /// The Add list is open (it replaces the player and the switches).
+    pub adding: bool,
+    /// Number (1-based) of the next screen not shown yet; `None` when all are.
+    pub screen: Option<u32>,
+    /// Windows you can add, front to back (at most `WRIST_ADD_WINDOWS` are listed).
+    pub windows: Vec<WristWindow>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct WristWindow {
+    pub id: u64,
+    pub title: String,
+    /// Already shown as a panel.
+    pub shown: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -519,9 +818,26 @@ pub struct WristMedia {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WristLoad {
     pub game_fps: Option<f32>,
+    /// Headset refresh rate: fps under 90 % of it shows red on the Performance layout.
+    pub target_fps: Option<f32>,
     pub cpu: Option<f32>,
     pub gpu: Option<f32>,
     pub own_gpu_ms: f32,
+}
+
+/// Where things were drawn by the last `set`, for hit tests.
+#[derive(Clone, Debug, Default)]
+struct Shown {
+    layout: WatchLayout,
+    expanded: bool,
+    media: bool,
+    strip: i32,
+    body_y: f32,
+    list_y: f32,
+    adding: bool,
+    screen: bool,
+    /// What each Add list row does.
+    targets: Vec<WristInput>,
 }
 
 pub struct Wrist {
@@ -529,8 +845,10 @@ pub struct Wrist {
     canvas: Canvas,
     strings: Strings,
     inputs: Rc<RefCell<Vec<WristInput>>>,
+    targets: Rc<RefCell<Vec<WristInput>>>,
     /// Bottom of the card (pixels), where the laser stops counting as "on the watch".
     card: f32,
+    shown: Shown,
 }
 
 fn percent(v: Option<f32>) -> String {
@@ -555,7 +873,7 @@ fn ring_arc(level: f32) -> String {
 
 const RING_TRACK: &str = "M40 6a34 34 0 1 1 0 68a34 34 0 1 1 0-68";
 
-fn rgb(c: u32) -> Color {
+pub(crate) fn rgb(c: u32) -> Color {
     Color::from_rgb_u8((c >> 16) as u8, (c >> 8) as u8, c as u8)
 }
 
@@ -569,15 +887,22 @@ impl Wrist {
         let q = inputs.clone();
         view.on_action(move |i| {
             use WristInput::*;
-            let input = [Menu, Keyboard, HideAll, Inbox, Previous, PlayPause, Next, Shuffle, Share, Mute]
-                .get(i.max(0) as usize)
-                .copied();
-            q.borrow_mut().extend(input);
+            let all = [
+                Menu, Keyboard, HideAll, Inbox, Previous, PlayPause, Next, Shuffle, Share, Mute, OpenAdd, AddScreen,
+                AddBack,
+            ];
+            q.borrow_mut().extend(all.get(i.max(0) as usize).copied());
         });
         let q = inputs.clone();
         view.on_seek(move |f| q.borrow_mut().push(WristInput::Seek(f.clamp(0.0, 1.0))));
         let q = inputs.clone();
         view.on_set_volume(move |f| q.borrow_mut().push(WristInput::Volume(f.clamp(0.0, 1.0))));
+        let targets: Rc<RefCell<Vec<WristInput>>> = Rc::default();
+        let (q, t) = (inputs.clone(), targets.clone());
+        view.on_add_picked(move |i| {
+            let picked = t.borrow().get(i.max(0) as usize).copied();
+            q.borrow_mut().extend(picked);
+        });
         let strings = Strings::english()?;
         let t = |id: &str| strings.get(id, &[]).into();
         view.set_keyboard_label(t("wrist-keyboard"));
@@ -585,37 +910,66 @@ impl Wrist {
         view.set_inbox_label(t("wrist-inbox"));
         view.set_menu_label(t("wrist-menu"));
         view.set_open_value(t("wrist-open"));
+        view.set_add_label(t("wrist-add"));
+        view.set_add_window_label(t("wrist-add-window"));
+        view.set_fps_label(t("wrist-fps"));
+        view.set_cpu_label(t("wrist-cpu"));
+        view.set_gpu_label(t("wrist-gpu"));
         view.set_ring_track(RING_TRACK.into());
         view.set_motion(motion());
-        Ok(Self { view, canvas, strings, inputs, card: HEADER_H })
+        Ok(Self { view, canvas, strings, inputs, targets, card: HEADER_H, shown: Shown::default() })
+    }
+
+    /// Accent colour (0xRRGGBB), from Setup > Theme.
+    pub fn set_accent(&self, rgb: u32) {
+        self.view.global::<Theme>().set_accent(crate::rgb(rgb));
     }
 
     pub fn set(&mut self, w: &WristInfo) {
+        use WatchLayout as L;
         let s = &self.strings;
         let v = &self.view;
+        let layout = w.layout;
+        let compact = layout == L::Compact;
+        let big = layout == L::Music;
+        v.set_layout(L::ALL.iter().position(|l| *l == layout).unwrap_or(0) as i32);
         v.set_time(format!("{:02}:{:02}", w.hour, w.minute).into());
 
-        // Battery rings: L / R (numbers when open), plus the lowest tracker.
+        // Battery rings: L / R (numbers when open), plus the lowest tracker. Clock and No batteries show them only
+        // open; Batteries and Compact always with numbers.
         // (level, connected, charging, short label, warning name)
         let devices = [
             (w.controllers[0], w.controllers_on[0], w.charging[0], "L", "wrist-left-controller"),
             (w.controllers[1], w.controllers_on[1], w.charging[1], "R", "wrist-right-controller"),
             (w.lowest_tracker, false, false, "T", "wrist-tracker"),
         ];
+        let show_rings = w.expanded || !matches!(layout, L::Clock | L::NoBatteries);
+        let numbers = w.expanded || matches!(layout, L::Batteries | L::Compact);
+        let tag = |short: &str| if layout == L::Batteries { short.into() } else { Default::default() };
         let rings: Vec<RingView> = devices
             .iter()
+            // The compact bar has room for the two controllers.
+            .take(if compact { 2 } else { 3 })
+            .filter(|_| show_rings)
             .filter_map(|&(level, on, charging, short, _)| match level {
                 Some(level) => {
-                    let label = if w.expanded { format!("{:.0}", level * 100.0) } else { short.to_owned() };
+                    let label = if numbers { format!("{:.0}", level * 100.0) } else { short.to_owned() };
                     let low = level < LOW_BATTERY && !charging;
-                    Some(RingView { arc: ring_arc(level).into(), label: label.into(), low, dim: false })
+                    Some(RingView {
+                        arc: ring_arc(level).into(),
+                        label: label.into(),
+                        low,
+                        dim: false,
+                        tag: tag(short),
+                    })
                 }
                 // Connected, level unknown: the empty track and a dim label.
                 None if on => Some(RingView {
                     arc: "".into(),
-                    label: if w.expanded { "–".into() } else { short.into() },
+                    label: if numbers { "–".into() } else { short.into() },
                     low: false,
                     dim: true,
+                    tag: tag(short),
                 }),
                 None => None,
             })
@@ -628,16 +982,24 @@ impl Wrist {
             })
             .min_by(|a, b| a.0.total_cmp(&b.0));
 
-        // One glance strip: a new message, else a low battery, else the song.
+        // One line under the time: a new message, else a low battery, else what the layout is about.
+        let artist = |m: &WristMedia, dot: bool| match (m.artist.is_empty(), dot) {
+            (true, _) => String::new(),
+            (false, true) => format!("· {}", m.artist),
+            (false, false) => m.artist.clone(),
+        };
         let (strip, title, text) = match (&w.toast, low, &w.media) {
             (Some((_, title, body)), _, _) => (2, title.clone(), body.clone()),
             (None, Some((level, device)), _) => {
                 let args = [("device", s.get(device, &[])), ("level", percent(Some(level)))];
                 (3, s.get("wrist-low", &args), String::new())
             }
-            (None, None, Some(m)) => {
-                (1, m.title.clone(), if m.artist.is_empty() { String::new() } else { format!("· {}", m.artist) })
-            }
+            _ if matches!(layout, L::Clock | L::Batteries) => (0, String::new(), String::new()),
+            _ if layout == L::Performance => match &w.load {
+                Some(_) => (4, String::new(), String::new()),
+                None => (0, String::new(), String::new()),
+            },
+            (None, None, Some(m)) => (1, m.title.clone(), artist(m, !big)),
             _ => (0, String::new(), String::new()),
         };
         v.set_strip(strip);
@@ -647,12 +1009,22 @@ impl Wrist {
         v.set_strip_tile(tile.as_ref().map_or_else(Default::default, |t| t.tile.as_str().into()));
         v.set_strip_tile_color(rgb(tile.map_or(0, |t| t.tile_color)));
         v.set_strip_time(s.get("wrist-now", &[]).into());
+        let load = w.load.clone().unwrap_or_default();
+        v.set_fps_text(load.game_fps.map_or_else(|| "–".to_owned(), |f| format!("{f:.0}")).into());
+        v.set_fps_low(matches!((load.game_fps, load.target_fps), (Some(f), Some(t)) if f < LOW_FPS * t));
+        v.set_cpu(load.cpu.unwrap_or(0.0));
+        v.set_gpu(load.gpu.unwrap_or(0.0));
+        v.set_cpu_text(percent(load.cpu).into());
+        v.set_gpu_text(percent(load.gpu).into());
         let weekday = s.get(&format!("day-{}", w.weekday % 7), &[]);
         let month = s.get(&format!("month-{}", w.month.clamp(1, 12)), &[]);
-        let date = s.get("wrist-date", &[("weekday", weekday), ("day", w.day.to_string()), ("month", month)]);
+        let day_month = s.get("wrist-day-month", &[("day", w.day.to_string()), ("month", month.clone())]);
+        let date = s.get("wrist-date", &[("weekday", weekday.clone()), ("day", w.day.to_string()), ("month", month)]);
         v.set_date(date.into());
+        v.set_weekday(weekday.to_uppercase().into());
+        v.set_day_month(day_month.into());
 
-        // Open: player, volume, quick switches, load.
+        // Open: player, volume, quick switches, load; or the Add list in their place.
         v.set_expanded(w.expanded);
         let media = w.media.clone().unwrap_or_default();
         v.set_has_media(w.media.is_some());
@@ -683,34 +1055,145 @@ impl Wrist {
             s.get("wrist-open", &[])
         };
         v.set_inbox_value(inbox.into());
-        let footer = w.load.as_ref().map_or_else(String::new, |l| {
-            let fps = l.game_fps.map_or_else(|| s.get("wrist-no-game", &[]), |f| format!("{f:.0}"));
-            let args = [
-                ("fps", fps),
-                ("cpu", percent(l.cpu)),
-                ("gpu", percent(l.gpu)),
-                ("own", format!("{:.2}", l.own_gpu_ms)),
-            ];
-            s.get("wrist-load", &args)
-        });
-        let list_y = if w.media.is_some() { MEDIA_END } else { HEADER_H };
-        v.set_list_y(list_y as i32);
+
+        let adding = w.expanded && w.add.adding;
+        let screen_label = w.add.screen.map(|n| s.get("wrist-add-screen", &[("n", n.to_string())]));
+        v.set_add_screen_label(screen_label.clone().unwrap_or_default().into());
+        let mut rows = Vec::new();
+        let mut targets = Vec::new();
+        if let Some(label) = screen_label {
+            rows.push(AddRowView {
+                label: label.into(),
+                tile: Default::default(),
+                tile_color: rgb(0),
+                value: "+".into(),
+                on: true,
+                screen: true,
+                enabled: true,
+            });
+            targets.push(WristInput::AddScreen);
+        }
+        for win in w.add.windows.iter().take(WRIST_ADD_WINDOWS) {
+            let t = Slot::default().tile(&win.title);
+            rows.push(AddRowView {
+                label: win.title.as_str().into(),
+                tile: t.tile.as_str().into(),
+                tile_color: rgb(t.tile_color),
+                value: if win.shown { s.get("wrist-add-shown", &[]).into() } else { "+".into() },
+                on: win.shown,
+                screen: false,
+                enabled: !win.shown,
+            });
+            targets.push(WristInput::AddWindow(win.id));
+        }
+        if w.add.windows.len() > WRIST_ADD_WINDOWS {
+            rows.push(AddRowView {
+                label: s.get("wrist-add-more", &[]).into(),
+                tile: "…".into(),
+                tile_color: rgb(0x2A2A2E),
+                value: "›".into(),
+                on: false,
+                screen: false,
+                enabled: true,
+            });
+            targets.push(WristInput::AddMore);
+        }
+        let add_rows = rows.len();
+        v.set_add_rows(ModelRc::new(VecModel::from(rows)));
+        v.set_adding(adding);
+
+        let footer = if adding {
+            s.get("wrist-add-hint", &[])
+        } else {
+            w.load.as_ref().map_or_else(String::new, |l| {
+                let fps = l.game_fps.map_or_else(|| s.get("wrist-no-game", &[]), |f| format!("{f:.0}"));
+                let args = [
+                    ("fps", fps),
+                    ("cpu", percent(l.cpu)),
+                    ("gpu", percent(l.gpu)),
+                    ("own", format!("{:.2}", l.own_gpu_ms)),
+                ];
+                s.get("wrist-load", &args)
+            })
+        };
         v.set_footer(footer.as_str().into());
-        self.card = if w.expanded {
-            list_y + LIST_H + if footer.is_empty() { 12.0 } else { 60.0 }
+        let body_y = if compact { COMPACT_H + 12.0 } else { HEADER_H };
+        let list_y = if w.media.is_some() { body_y + MEDIA_H } else { body_y };
+        v.set_body_y(body_y as i32);
+        v.set_list_y(list_y as i32);
+        let below = if footer.is_empty() { 12.0 } else { 60.0 };
+        self.card = if adding {
+            body_y + ROW * (1 + add_rows) as f32 + below
+        } else if w.expanded {
+            list_y + LIST_H + below
+        } else if compact {
+            COMPACT_H
         } else if strip > 0 {
-            STRIP_END
+            if big { BIG_END } else { STRIP_END }
         } else {
             HEADER_H
         };
         v.set_card_height(self.card as i32);
+        *self.targets.borrow_mut() = targets.clone();
+        self.shown = Shown {
+            layout,
+            expanded: w.expanded,
+            media: w.media.is_some(),
+            strip,
+            body_y,
+            list_y,
+            adding,
+            screen: w.add.screen.is_some(),
+            targets,
+        };
     }
 
-    /// The laser at `uv` holds the watch open: on the card when open, on the time row when closed (so the
-    /// glance strip's pause button works without opening it).
+    /// The laser at `uv` holds the watch open: on the card when open, on the top row when closed (so the glance
+    /// strip's buttons work without opening it).
     pub fn opens_at(&self, uv: [f32; 2], expanded: bool) -> bool {
         let y = uv[1] * WRIST_SIZE.1 as f32;
-        y < if expanded { self.card } else { HEADER_H }
+        let top = if self.shown.layout == WatchLayout::Compact { COMPACT_H } else { HEADER_H };
+        y < if expanded { self.card } else { top }
+    }
+
+    /// Where a control sits (wrist pixels) as last drawn; `None` when it is not drawn.
+    pub fn center(&self, input: WristInput) -> Option<(f32, f32)> {
+        use WristInput::*;
+        let g = &self.shown;
+        let row = |k: f32| (g.expanded && !g.adding).then_some((280.0, g.list_y + k * ROW + ROW / 2.0));
+        let card = |x: f32, y: f32| (g.expanded && g.media && !g.adding).then_some((12.0 + x, g.body_y + y));
+        let listed = |i: usize| (280.0, g.body_y + ROW * (1 + i) as f32 + ROW / 2.0);
+        let pick = |want: WristInput| g.adding.then(|| g.targets.iter().position(|t| *t == want).map(listed)).flatten();
+        let add_y = g.list_y + 2.0 * ROW + ROW / 2.0;
+        let closed_song = !g.expanded && g.strip == 1;
+        match input {
+            PlayPause if closed_song => Some(match g.layout {
+                WatchLayout::Compact => (522.0, COMPACT_H / 2.0),
+                WatchLayout::Music => (12.0 + 434.0, HEADER_H + 48.0),
+                _ => (514.0, 166.0),
+            }),
+            Previous if closed_song && g.layout == WatchLayout::Music => Some((12.0 + 370.0, HEADER_H + 48.0)),
+            Next if closed_song && g.layout == WatchLayout::Music => Some((12.0 + 498.0, HEADER_H + 48.0)),
+            _ if !g.expanded => None,
+            AddBack => g.adding.then_some((280.0, g.body_y + ROW / 2.0)),
+            AddScreen if g.adding => pick(AddScreen),
+            AddWindow(_) | AddMore => pick(input),
+            _ if g.adding => None,
+            HideAll => row(0.0),
+            Keyboard => row(1.0),
+            OpenAdd => Some((if g.screen { 12.0 + 188.0 + 75.0 } else { 12.0 + 368.0 + 75.0 }, add_y)),
+            AddScreen => g.screen.then_some((12.0 + 348.0 + 85.0, add_y)),
+            Inbox => row(3.0),
+            Menu => row(4.0),
+            Shuffle => card(82.0, 184.0),
+            Previous => card(168.0, 184.0),
+            PlayPause => card(268.0, 184.0),
+            Next => card(368.0, 184.0),
+            Share => card(454.0, 184.0),
+            Mute => card(44.0, 264.0),
+            Seek(f) => card(94.0 + 348.0 * f, 116.0),
+            Volume(f) => card(82.0 + 348.0 * f, 264.0),
+        }
     }
 
     pub fn pointer_move(&self, uv: [f32; 2]) {
@@ -775,12 +1258,13 @@ mod tests {
         let mut wrist = Wrist::new().expect("wrist");
         let uv = |(x, y): (f32, f32)| [x / WRIST_SIZE.0 as f32, y / WRIST_SIZE.1 as f32];
         let press = |wrist: &mut Wrist, input, expanded| {
-            let at = uv(wrist_center(input, expanded, true).expect("drawn"));
+            let _ = expanded;
+            let at = uv(wrist.center(input).expect("drawn"));
             wrist.pointer_move(at);
             wrist.pointer_button(at, true);
             wrist.pointer_button(at, false);
         };
-        let open = [Keyboard, HideAll, Inbox, Menu, Shuffle, Previous, PlayPause, Next, Share, Mute];
+        let open = [Keyboard, HideAll, OpenAdd, Inbox, Menu, Shuffle, Previous, PlayPause, Next, Share, Mute];
         wrist.set(&WristInfo { media: Some(song()), volume: Some((0.5, false)), ..WristInfo::default() });
         assert!(wrist.render().is_some());
         press(&mut wrist, PlayPause, false);
@@ -870,7 +1354,7 @@ mod tests {
         }
         wrist.set(&closed);
         wrist.render();
-        let (x, y) = wrist_center(WristInput::PlayPause, false, true).expect("drawn");
+        let (x, y) = wrist.center(WristInput::PlayPause).expect("drawn");
         let uv = [x / WRIST_SIZE.0 as f32, y / WRIST_SIZE.1 as f32];
         wrist.pointer_move(uv);
         wrist.pointer_button(uv, true);
@@ -894,6 +1378,144 @@ mod tests {
         assert!(rings[1].dim && rings[1].arc.is_empty() && rings[1].label == "R");
         wrist.set(&WristInfo::default());
         assert_eq!(wrist.view.get_rings().row_count(), 0, "nothing connected, nothing shown");
+    }
+
+    fn press(wrist: &mut Wrist, input: WristInput) {
+        let (x, y) = wrist.center(input).unwrap_or_else(|| panic!("{input:?} not drawn"));
+        let uv = [x / WRIST_SIZE.0 as f32, y / WRIST_SIZE.1 as f32];
+        wrist.pointer_move(uv);
+        wrist.pointer_button(uv, true);
+        wrist.pointer_button(uv, false);
+    }
+
+    fn base(layout: WatchLayout) -> WristInfo {
+        WristInfo {
+            hour: 21,
+            minute: 37,
+            weekday: 2,
+            day: 11,
+            month: 11,
+            layout,
+            controllers: [Some(0.8), Some(0.65)],
+            lowest_tracker: Some(0.9),
+            media: Some(song()),
+            load: Some(WristLoad {
+                game_fps: Some(70.0),
+                target_fps: Some(90.0),
+                cpu: Some(0.23),
+                gpu: Some(0.95),
+                own_gpu_ms: 0.01,
+            }),
+            ..WristInfo::default()
+        }
+    }
+
+    #[test]
+    fn each_layout_shows_its_own_glance() {
+        use WatchLayout as L;
+        use slint::Model;
+        let mut wrist = Wrist::new().expect("wrist");
+        // (layout, rings closed, strip with a song playing, closed card height)
+        let want = [
+            (L::Standard, 3, 1, STRIP_END),
+            (L::Clock, 0, 0, HEADER_H),
+            (L::NoBatteries, 0, 1, STRIP_END),
+            (L::Batteries, 3, 0, HEADER_H),
+            (L::Music, 3, 1, BIG_END),
+            (L::Performance, 3, 4, STRIP_END),
+            (L::Compact, 2, 1, COMPACT_H),
+        ];
+        for (layout, rings, strip, height) in want {
+            wrist.set(&base(layout));
+            assert!(wrist.render().is_some(), "{layout:?} draws");
+            assert_eq!(wrist.view.get_rings().row_count(), rings, "{layout:?} rings");
+            assert_eq!(wrist.view.get_strip(), strip, "{layout:?} strip");
+            assert_eq!(wrist.view.get_card_height(), height as i32, "{layout:?} height");
+            // A message comes through in every layout.
+            let toast = Some(("Vesktop".into(), "Alex".into(), "on in 5?".into()));
+            wrist.set(&WristInfo { toast, ..base(layout) });
+            assert_eq!(wrist.view.get_strip(), 2, "{layout:?} shows messages");
+            // Opening shows every battery with its number.
+            wrist.set(&WristInfo { expanded: true, ..base(layout) });
+            let rings: Vec<RingView> = wrist.view.get_rings().iter().collect();
+            assert!(rings.len() >= 2 && rings[0].label == "80", "{layout:?} open rings: {rings:?}");
+        }
+        wrist.set(&base(L::Batteries));
+        let tags: Vec<String> = wrist.view.get_rings().iter().map(|r| format!("{} {}", r.label, r.tag)).collect();
+        assert_eq!(tags, ["80 L", "65 R", "90 T"]);
+        wrist.set(&base(L::Performance));
+        assert!(wrist.view.get_fps_low(), "70 fps on a 90 Hz headset is low");
+        // A low battery still warns where batteries are hidden.
+        wrist.set(&WristInfo { controllers: [Some(0.1), Some(0.65)], ..base(L::Clock) });
+        assert_eq!(wrist.view.get_strip(), 3);
+    }
+
+    #[test]
+    fn glance_buttons_work_in_music_and_compact() {
+        use WristInput::*;
+        let mut wrist = Wrist::new().expect("wrist");
+        wrist.set(&base(WatchLayout::Music));
+        wrist.render();
+        for input in [Previous, PlayPause, Next] {
+            press(&mut wrist, input);
+        }
+        assert_eq!(wrist.take_inputs(), vec![Previous, PlayPause, Next]);
+        wrist.set(&base(WatchLayout::Compact));
+        wrist.render();
+        press(&mut wrist, PlayPause);
+        assert_eq!(wrist.take_inputs(), vec![PlayPause]);
+        let uv = |y: f32| [0.1, y / WRIST_SIZE.1 as f32];
+        assert!(wrist.opens_at(uv(60.0), false) && !wrist.opens_at(uv(100.0), false), "the bar is the time row");
+    }
+
+    #[test]
+    fn the_top_row_stays_put_when_opening_in_every_layout() {
+        fn clock_top(px: &[u8]) -> Option<usize> {
+            (0..132).find(|&y| (22..150).any(|x| px[(y * WRIST_SIZE.0 as usize + x) * 4 + 1] > 0xC0))
+        }
+        let mut wrist = Wrist::new().expect("wrist");
+        for layout in WatchLayout::ALL {
+            let closed = WristInfo { media: None, ..base(layout) };
+            wrist.set(&closed);
+            let shut = clock_top(wrist.render().expect("closed"));
+            wrist.set(&WristInfo { expanded: true, ..closed });
+            let open = clock_top(wrist.render().expect("open"));
+            assert!(shut.is_some() && shut == open, "{layout:?}: the clock moved {shut:?} -> {open:?}");
+        }
+    }
+
+    #[test]
+    fn add_works_from_the_open_watch() {
+        use WristInput::*;
+        let mut wrist = Wrist::new().expect("wrist");
+        let windows: Vec<WristWindow> =
+            (1..=6).map(|i| WristWindow { id: i, title: format!("Window {i}"), shown: i == 1 }).collect();
+        let open = WristInfo {
+            expanded: true,
+            add: WristAdd { screen: Some(2), ..WristAdd::default() },
+            ..base(WatchLayout::Standard)
+        };
+        wrist.set(&open);
+        wrist.render();
+        press(&mut wrist, OpenAdd);
+        press(&mut wrist, AddScreen);
+        assert_eq!(wrist.take_inputs(), vec![OpenAdd, AddScreen], "Add row: Window and Screen 2");
+        let adding = WristInfo { add: WristAdd { adding: true, screen: Some(2), windows }, ..open.clone() };
+        wrist.set(&adding);
+        wrist.render();
+        assert!(wrist.center(Menu).is_none(), "the list replaces the switches");
+        assert!(wrist.center(AddWindow(5)).is_none(), "the watch lists four windows");
+        for input in [AddScreen, AddWindow(2), AddWindow(1), AddMore, AddBack] {
+            press(&mut wrist, input);
+        }
+        assert_eq!(
+            wrist.take_inputs(),
+            vec![AddScreen, AddWindow(2), AddMore, AddBack],
+            "a shown window is not added again"
+        );
+        // Back, then all screens shown: only Window is offered.
+        wrist.set(&WristInfo { add: WristAdd::default(), ..open.clone() });
+        assert!(wrist.center(AddScreen).is_none() && wrist.center(OpenAdd).is_some());
     }
 
     #[test]
@@ -955,6 +1577,13 @@ mod a11y {
         for (fg, bg, what) in pairs {
             let c = contrast(fg, bg);
             assert!(c >= 4.5, "{what}: contrast {c:.2} < 4.5");
+        }
+        // Every theme accent works where lime does: as text on groups, rows and presses, and under dark text.
+        for a in dvr_core::state::Accent::ALL.map(dvr_core::state::Accent::rgb) {
+            for bg in [0x0B0B0C, 0x1D1D20, 0x2A2A2E, 0x36363B] {
+                assert!(contrast(a, bg) >= 4.5, "accent {a:06X} on {bg:06X}");
+            }
+            assert!(contrast(0x0B0B0C, a) >= 7.0, "dark text on accent {a:06X}");
         }
     }
 

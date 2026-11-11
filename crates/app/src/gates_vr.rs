@@ -94,7 +94,13 @@ fn run(manifest: &std::path::Path) -> GateResult {
                 minute,
                 // Worst case for the budget: expanded with the load line (redrawn every second).
                 expanded: true,
-                load: Some(WristLoad { game_fps: None, cpu: load.cpu, gpu: load.gpu, own_gpu_ms: timer.last_ms() }),
+                load: Some(WristLoad {
+                    game_fps: None,
+                    target_fps: None,
+                    cpu: load.cpu,
+                    gpu: load.gpu,
+                    own_gpu_ms: timer.last_ms(),
+                }),
                 ..WristInfo::default()
             });
         }
@@ -223,7 +229,13 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
                 minute,
                 // Worst case for the budget: expanded with the load line (redrawn every second).
                 expanded: true,
-                load: Some(WristLoad { game_fps: None, cpu: load.cpu, gpu: load.gpu, own_gpu_ms: timer.last_ms() }),
+                load: Some(WristLoad {
+                    game_fps: None,
+                    target_fps: None,
+                    cpu: load.cpu,
+                    gpu: load.gpu,
+                    own_gpu_ms: timer.last_ms(),
+                }),
                 ..WristInfo::default()
             });
             peak_ram = peak_ram.max(dvr_sys::working_set_bytes());

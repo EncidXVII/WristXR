@@ -47,6 +47,8 @@ pub struct VrStats {
     pub controllers: [Battery; 2],
     /// Lowest battery among trackers.
     pub lowest_tracker: Option<f32>,
+    /// Headset refresh rate (Hz), when SteamVR reports it.
+    pub display_hz: Option<f32>,
 }
 
 /// A controller's battery as SteamVR reports it.
@@ -386,7 +388,21 @@ impl OpenVr {
             game_fps: (ok != 0 && timing.presents > 0 && interval > 0.0).then(|| 1000.0 / interval),
             controllers: self.controller_devices().map(|d| self.controller_battery(d)),
             lowest_tracker,
+            display_hz: self.display_hz(),
         }
+    }
+
+    fn display_hz(&self) -> Option<f32> {
+        let mut e = 0i32;
+        let v = call!(
+            self.system,
+            system::GET_FLOAT_TRACKED_DEVICE_PROPERTY,
+            fn(u32, i32, *mut i32) -> f32,
+            0,
+            ffi::PROP_DISPLAY_FREQUENCY,
+            &mut e
+        );
+        (e == 0 && v.is_finite() && v > 1.0).then_some(v)
     }
 
     fn digital(&self, action: u64, device: u64) -> bool {

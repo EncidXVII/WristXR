@@ -11,6 +11,8 @@ slint::slint! {
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";
+    // Accent from Setup > Theme (lime by default).
+    export global Theme { in property <color> accent: #C6FF1A; }
     // kind: see ToolKind. Tokens as in the menu.
     export struct ToolView { x: int, y: int, w: int, h: int, kind: int, label: string, icon: string, on: bool, value: float }
     export struct BoxView { x: int, w: int }
@@ -35,7 +37,7 @@ slint::slint! {
         for t[i] in root.tools : Rectangle {
             x: t.x * 1px; y: t.y * 1px; width: t.w * 1px; height: t.h * 1px;
             border-radius: t.kind == 6 || t.kind == 7 || t.kind == 8 ? 14px : 10px;
-            background: t.kind == 1 && t.on ? #C6FF1A
+            background: t.kind == 1 && t.on ? Theme.accent
                 : t.kind == 5 && t.on ? #F5F5F7
                 : t.kind == 7 ? (touch.pressed ? #5A2A20 : touch.has-hover ? #45201A : #2B1712)
                 : touch.pressed && t.kind != 0 && t.kind != 3 && t.kind != 4 ? #36363B
@@ -69,7 +71,7 @@ slint::slint! {
                 background: #2A2A2E;
                 Rectangle {
                     x: 0px; width: parent.width * clamp(t.value, 0, 1); height: 8px; border-radius: 4px;
-                    background: #C6FF1A;
+                    background: Theme.accent;
                 }
                 Rectangle {
                     x: parent.width * clamp(t.value, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
@@ -269,6 +271,11 @@ impl Toolbar {
         let q = inputs.clone();
         view.on_slid(move |i, v| q.borrow_mut().push(ToolInput::Slide(i.max(0) as usize, v.clamp(0.0, 1.0))));
         Ok(Self { view, canvas, inputs, shown: ToolbarModel::default() })
+    }
+
+    /// Accent colour (0xRRGGBB), from Setup > Theme.
+    pub fn set_accent(&self, rgb: u32) {
+        self.view.global::<Theme>().set_accent(crate::rgb(rgb));
     }
 
     /// Updates the bar; a no-op when nothing changed.

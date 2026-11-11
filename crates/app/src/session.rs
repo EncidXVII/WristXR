@@ -8,7 +8,7 @@ use dvr_core::panel::{
     Anchor, Anchors, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect,
     Source, TOOLBAR_ID, TOOLBAR_WIDTH_M, yaw_frame,
 };
-use dvr_core::state::{NotifyFrom, State};
+use dvr_core::state::{Accent, NotifyFrom, State, WatchLayout};
 use dvr_ui::{
     Col, Layout, MENU_SIZE, Menu, MenuInput, MenuModel, ROW_H, Slot, SlotKind, Strings, TOOLBAR_SIZE, Tab, Tone,
     ToolButton, ToolInput, ToolKind, Toolbar, ToolbarLayout, ToolbarModel, WRIST_SIZE, icons,
@@ -68,6 +68,27 @@ pub enum Page {
     Tab(usize),
     /// "Add window" list, page n.
     Windows(usize),
+    /// Watch > Layout: what the closed watch shows.
+    WatchLayouts,
+    /// Setup > Theme: accent colours.
+    Theme,
+}
+
+impl Page {
+    /// Rail tab this page belongs to.
+    fn tab(self) -> usize {
+        match self {
+            Self::Tab(i) => i.min(TABS - 1),
+            Self::WatchLayouts => TAB_WATCH,
+            Self::Theme => TAB_SETUP,
+            _ => TAB_PANELS,
+        }
+    }
+
+    /// A sub-page that opens from a rail page (closing the menu goes back to that page).
+    fn sub(self) -> bool {
+        matches!(self, Self::Windows(_) | Self::WatchLayouts | Self::Theme)
+    }
 }
 
 /// What the platform layer must do after a menu, toolbar or wrist action.
@@ -87,6 +108,8 @@ pub enum Effect {
     AutoLaunch(bool),
     /// Where app notifications come from changed (start or stop listening).
     NotifyFrom(NotifyFrom),
+    /// The accent changed: recolour every view.
+    Accent,
 }
 
 /// What a menu slot does (kept for the slots last drawn, so a click acts on what the user saw).
@@ -119,6 +142,10 @@ pub enum Act {
     WristMedia,
     WristLoad,
     WristFade,
+    OpenLayouts,
+    Layout(WatchLayout),
+    OpenTheme,
+    Accent(Accent),
     LaserHand(Hand),
     WatchHand(Hand),
     AutoStart,
@@ -326,8 +353,8 @@ impl Session {
             if !open {
                 m.pose = Panel::menu_in_front(head, m.aspect).pose;
                 m.dim = self.appear();
-                if matches!(self.page, Page::Windows(_)) {
-                    self.page = Page::Tab(TAB_PANELS);
+                if self.page.sub() {
+                    self.page = Page::Tab(self.page.tab());
                 }
             } else {
                 self.leave_page();
@@ -690,6 +717,21 @@ impl Session {
         true
     }
 
+    /// Number (1-based) of the next screen the watch's Add row offers.
+    pub fn next_screen(panels: &[Panel], monitors: &[MonitorInfo]) -> Option<u32> {
+        Self::unshown_monitor(panels, monitors).map(|i| i + 1)
+    }
+
+    /// Watch > Add > Screen: the next screen, in front of you.
+    pub fn add_next_screen(&mut self, panels: &mut Vec<Panel>, head: Pose, monitors: &[MonitorInfo]) -> Vec<Effect> {
+        self.act(Act::AddScreen, panels, head, monitors)
+    }
+
+    /// Watch > Add > a window from `windows`, in front of you.
+    pub fn add_window(&mut self, h: u64, panels: &mut Vec<Panel>, head: Pose, monitors: &[MonitorInfo]) -> Vec<Effect> {
+        self.act(Act::AddWindow(h), panels, head, monitors)
+    }
+
     fn unshown_monitor(panels: &[Panel], monitors: &[MonitorInfo]) -> Option<u32> {
         (0..monitors.len() as u32).find(|i| !panels.iter().any(|p| p.source == Source::Monitor(*i)))
     }
@@ -888,6 +930,10 @@ impl Session {
             Page::Tab(TAB_WATCH) => {
                 let mut l = Layout::rail(t("menu-watch-title"));
                 l.hint(t(if self.notifications_ok { "menu-watch-hint" } else { "menu-notifications-blocked" }));
+                l.label(Col::Left, t("menu-watch-glance"));
+                let (name, _) = self.state.wrist_layout.ids();
+                let layout = row(t("menu-watch-layout")).value(format!("{} ›", t(name)));
+                l.rows(Col::Left, vec![add(&mut acts, Act::OpenLayouts, layout)], ROW_H);
                 l.label(Col::Left, t("menu-watch-shows"));
                 let rows = vec![
                     add(&mut acts, Act::WristBattery, toggle(t("menu-wrist-battery"), self.state.wrist_battery)),
@@ -898,6 +944,39 @@ impl Session {
                 l.label(Col::Right, t("menu-watch-behaves"));
                 let rows = vec![add(&mut acts, Act::WristFade, toggle(t("menu-wrist-fade"), self.state.wrist_fade))];
                 l.rows(Col::Right, rows, ROW_H);
+                l.finish()
+            }
+            Page::WatchLayouts => {
+                let mut l = Layout::rail(t("menu-layout-title"));
+                l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
+                l.hint(t("menu-layout-hint"));
+                let rows = WatchLayout::ALL
+                    .iter()
+                    .map(|&layout| {
+                        let (name, hint) = layout.ids();
+                        let choice =
+                            Slot::new(SlotKind::Choice, t(name)).value(t(hint)).on(layout == self.state.wrist_layout);
+                        add(&mut acts, Act::Layout(layout), choice)
+                    })
+                    .collect();
+                l.rows(Col::Full, rows, 56.0);
+                l.footer(t("layout-footer"), None);
+                l.finish()
+            }
+            Page::Theme => {
+                let mut l = Layout::rail(t("menu-theme"));
+                l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
+                l.hint(t("menu-theme-hint"));
+                let cards = Accent::ALL
+                    .iter()
+                    .map(|&a| {
+                        let card =
+                            Slot::new(SlotKind::Swatch, t(a.name_id())).color(a.rgb()).on(a == self.state.accent);
+                        add(&mut acts, Act::Accent(a), card)
+                    })
+                    .collect();
+                l.cards(Col::Full, cards, 4, 74.0);
+                l.footer(t("menu-theme-footer"), None);
                 l.finish()
             }
             Page::Tab(TAB_INBOX) => {
@@ -963,6 +1042,9 @@ impl Session {
                 let rows =
                     vec![add(&mut acts, Act::Curved, toggle(t("menu-curved-default"), self.state.default_curved))];
                 l.rows(Col::Right, rows, ROW_H);
+                l.label(Col::Right, t("menu-look"));
+                let theme = row(t("menu-theme")).value(format!("{} ›", t(self.state.accent.name_id())));
+                l.rows(Col::Right, vec![add(&mut acts, Act::OpenTheme, theme)], ROW_H);
                 let quit = Slot::new(SlotKind::Danger, t(if self.armed { "menu-confirm" } else { "menu-quit" }))
                     .on(self.armed);
                 l.footer("", Some(add(&mut acts, Act::Quit, quit)));
@@ -980,10 +1062,7 @@ impl Session {
                 ("menu-tab-setup", icons::SLIDERS, 0),
             ];
             model.tabs = tabs.iter().map(|(id, icon, badge)| Tab { label: t(id), icon, badge: *badge }).collect();
-            model.tab = match self.page {
-                Page::Tab(i) => i.min(TABS - 1),
-                _ => TAB_PANELS,
-            };
+            model.tab = self.page.tab();
         }
         debug_assert_eq!(acts.len(), model.slots.len(), "every slot needs its act");
         self.acts.replace(acts);
@@ -1061,11 +1140,11 @@ impl Session {
         monitors: &[MonitorInfo],
     ) -> Vec<Effect> {
         let _ = hands;
-        let mut fx = Vec::new();
+        let fx = Vec::new();
         let slot = match input {
             MenuInput::Tab(i) => {
                 self.armed = false;
-                if matches!(self.page, Page::Tab(_) | Page::Windows(_)) && i < TABS {
+                if (matches!(self.page, Page::Tab(_)) || self.page.sub()) && i < TABS {
                     self.leave_page();
                     self.page = Page::Tab(i);
                 }
@@ -1086,6 +1165,11 @@ impl Session {
             return fx;
         }
         self.armed = false;
+        self.act(act, panels, head, monitors)
+    }
+
+    fn act(&mut self, act: Act, panels: &mut Vec<Panel>, head: Pose, monitors: &[MonitorInfo]) -> Vec<Effect> {
+        let mut fx = Vec::new();
         match act {
             Act::None => {}
             Act::FirstHand(hand) => {
@@ -1155,7 +1239,7 @@ impl Session {
                     self.page = Page::Windows(page + 1);
                 }
             }
-            Act::Back => self.page = Page::Tab(TAB_PANELS),
+            Act::Back => self.page = Page::Tab(self.page.tab()),
             Act::NotifyFrom(from) => {
                 if from != self.state.notify_from {
                     self.state.notify_from = from;
@@ -1180,6 +1264,15 @@ impl Session {
             Act::WristMedia => self.state.wrist_media = !self.state.wrist_media,
             Act::WristLoad => self.state.wrist_load = !self.state.wrist_load,
             Act::WristFade => self.state.wrist_fade = !self.state.wrist_fade,
+            Act::OpenLayouts => self.page = Page::WatchLayouts,
+            Act::Layout(layout) => self.state.wrist_layout = layout,
+            Act::OpenTheme => self.page = Page::Theme,
+            Act::Accent(accent) => {
+                if accent != self.state.accent {
+                    self.state.accent = accent;
+                    fx.push(Effect::Accent);
+                }
+            }
             Act::LaserHand(hand) => {
                 if hand != self.state.dominant {
                     self.set_dominant(hand, panels);

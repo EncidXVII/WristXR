@@ -8,6 +8,8 @@ slint::slint! {
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";
+    // Accent from Setup > Theme (lime by default).
+    export global Theme { in property <color> accent: #C6FF1A; }
     export struct KeyView { label: string, x: length, y: length, w: length, lit: bool, hover: bool, small: bool }
 
     export component KeyboardView inherits Window {
@@ -24,9 +26,9 @@ slint::slint! {
             width: key.w - 12px;
             height: 88px;
             border-radius: 14px;
-            background: key.lit ? #C6FF1A : key.hover ? #2A2A2E : #1D1D20;
+            background: key.lit ? Theme.accent : key.hover ? #2A2A2E : #1D1D20;
             border-width: key.hover ? 4px : 0px;
-            border-color: #C6FF1A;
+            border-color: Theme.accent;
             Text {
                 text: key.label;
                 font-size: key.small ? 28px : 44px;
@@ -62,6 +64,11 @@ impl Keyboard {
         let canvas = Canvas::take(KEYBOARD_SIZE)?;
         view.show().map_err(|e| e.to_string())?;
         Ok(Self { view, canvas, shown: Vec::new() })
+    }
+
+    /// Accent colour (0xRRGGBB), from Setup > Theme.
+    pub fn set_accent(&self, rgb: u32) {
+        self.view.global::<Theme>().set_accent(crate::rgb(rgb));
     }
 
     /// Updates the faces (one per key, ROWS order); a no-op when nothing changed.

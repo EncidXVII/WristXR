@@ -10,6 +10,8 @@ slint::slint! {
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";
+    // Accent from Setup > Theme (lime by default).
+    export global Theme { in property <color> accent: #C6FF1A; }
     // Night Lime (graphite): bg #0B0B0C, rail #141416, surface #1D1D20, line/hover #2A2A2E, ink #F5F5F7,
     // secondary #A8A8AF, tertiary #88888F, accent #C6FF1A, danger #FF5A3C. Faces: Anton for headings and the time,
     // Barlow for everything else (both bundled, fonts/).
@@ -59,7 +61,7 @@ slint::slint! {
             background: i != root.tab && tab-touch.pressed ? #2A2A2E : i != root.tab && tab-touch.has-hover ? #1D1D20 : transparent;
             Rectangle {
                 x: 22px; y: 6px; width: 56px; height: 40px; border-radius: 20px;
-                background: i == root.tab ? #C6FF1A : transparent;
+                background: i == root.tab ? Theme.accent : transparent;
                 Path {
                     width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
                     commands: t.icon; fill: transparent; stroke-width: 2.2px;
@@ -115,25 +117,35 @@ slint::slint! {
             visible: s.kind != 10;
             opacity: s.enabled || s.kind == 4 || s.kind == 7 ? 1.0 : 0.4;
             border-radius: s.kind == 2 ? 9px : s.kind == 5 ? 12px : s.kind == 8 ? 14px : 16px;
-            border-width: s.kind == 3 && !s.on ? 2px : 0px;
-            border-color: #FF5A3C;
+            border-width: s.kind == 3 && !s.on ? 2px : s.kind == 12 && s.on ? 3px : 0px;
+            border-color: s.kind == 12 ? #F5F5F7 : #FF5A3C;
             background: s.kind == 2 && s.on ? #F5F5F7
                 : s.kind == 3 && s.on ? #FF5A3C
-                : s.kind == 6 && s.on ? #C6FF1A
+                : s.kind == 6 && s.on ? Theme.accent
                 // Pressed answers on trigger-down, before the click lands on release.
                 : touch.pressed && s.enabled ? (s.kind == 3 ? #45201A : #36363B)
                 : touch.has-hover && s.enabled ? #2A2A2E
-                : s.kind == 6 || s.kind == 7 || s.kind == 8 ? #1D1D20
+                : s.kind == 6 || s.kind == 7 || s.kind == 8 || s.kind == 12 ? #1D1D20
                 : transparent;
             if s.divider : Rectangle { x: 16px; y: 0px; width: parent.width - 32px; height: 1px; background: #2A2A2E; }
             // Open-now dot (lime when shown).
             if s.kind == 4 : Rectangle {
                 x: 16px; y: (parent.height - 12px) / 2; width: 12px; height: 12px; border-radius: 6px;
-                background: s.on ? #C6FF1A : #88888F;
+                background: s.on ? Theme.accent : #88888F;
             }
             // Unread dot.
             if s.kind == 9 && s.on : Rectangle {
-                x: 6px; y: 18px; width: 10px; height: 10px; border-radius: 5px; background: #C6FF1A;
+                x: 6px; y: 18px; width: 10px; height: 10px; border-radius: 5px; background: Theme.accent;
+            }
+            // Choice: a radio dot (accent when chosen).
+            if s.kind == 11 : Rectangle {
+                x: 16px; y: (parent.height - 26px) / 2; width: 26px; height: 26px; border-radius: 13px;
+                border-width: s.on ? 0px : 2px; border-color: #88888F; background: s.on ? Theme.accent : transparent;
+                if s.on : Rectangle { width: 10px; height: 10px; border-radius: 5px; background: #0B0B0C; }
+            }
+            // Swatch: the colour as a dot.
+            if s.kind == 12 : Rectangle {
+                x: 16px; y: (parent.height - 32px) / 2; width: 32px; height: 32px; border-radius: 16px; background: s.tile-color;
             }
             if s.tile != "" : Rectangle {
                 x: 20px; y: s.kind == 9 ? 14px : (parent.height - 40px) / 2;
@@ -141,10 +153,10 @@ slint::slint! {
                 Text { text: s.tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
             }
             // Row text: label (and detail on a second line for messages), value on the right.
-            if s.kind == 0 || s.kind == 1 || s.kind == 4 || s.kind == 7 : Text {
-                x: s.tile != "" ? 72px : s.kind == 4 ? 40px : 16px;
-                y: 0px; height: parent.height; width: parent.width - self.x - (s.kind == 1 ? 90px : 92px);
-                text: s.label; font-size: s.kind == 4 || s.kind == 7 ? 24px : 26px; color: #F5F5F7;
+            if s.kind == 0 || s.kind == 1 || s.kind == 4 || s.kind == 7 || s.kind == 11 || s.kind == 12 : Text {
+                x: s.tile != "" ? 72px : s.kind == 4 ? 40px : s.kind == 11 ? 56px : s.kind == 12 ? 58px : 16px;
+                y: 0px; height: parent.height; width: parent.width - self.x - (s.kind == 1 ? 90px : s.kind == 12 ? 12px : 92px);
+                text: s.label; font-size: s.kind == 4 || s.kind == 7 || s.kind == 12 ? 24px : 26px; color: #F5F5F7;
                 vertical-alignment: center; overflow: elide;
             }
             if s.kind == 9 : Text {
@@ -156,14 +168,14 @@ slint::slint! {
                 x: 72px; y: 34px; height: 30px; width: parent.width - 88px;
                 text: s.detail; font-size: 24px; color: #A8A8AF; vertical-alignment: center; overflow: elide;
             }
-            if s.kind == 0 || s.kind == 7 || s.kind == 9 : Text {
+            if s.kind == 0 || s.kind == 7 || s.kind == 9 || s.kind == 11 : Text {
                 x: parent.width - self.width - 16px; y: 0px; height: s.kind == 9 ? 42px : parent.height;
                 text: s.value; font-size: s.value == "+" ? 30px : 24px;
-                color: s.kind == 9 ? #88888F : s.on ? #C6FF1A : #A8A8AF; vertical-alignment: center;
+                color: s.kind == 9 || s.kind == 11 ? #88888F : s.on ? Theme.accent : #A8A8AF; vertical-alignment: center;
             }
             if s.kind == 1 : Rectangle {
                 x: parent.width - 74px; y: (parent.height - 34px) / 2; width: 58px; height: 34px; border-radius: 17px;
-                background: s.on ? #C6FF1A : #2A2A2E;
+                background: s.on ? Theme.accent : #2A2A2E;
                 animate background { duration: root.motion ? 160ms : 0ms; easing: ease-out; }
                 Rectangle {
                     x: s.on ? 28px : 4px; y: 4px; width: 26px; height: 26px; border-radius: 13px;
@@ -225,6 +237,10 @@ pub enum SlotKind {
     Message = 9,
     /// Placeholder (nothing drawn, not clickable).
     Hidden = 10,
+    /// One of a list of choices: radio dot, label, a short description on the right; `on` = chosen.
+    Choice = 11,
+    /// Standalone card with a colour dot (`tile_color`) and its name; `on` = chosen.
+    Swatch = 12,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -287,6 +303,11 @@ impl Slot {
         self.tile = letter.to_uppercase().collect();
         let hash = name.bytes().fold(0usize, |h, b| h.wrapping_mul(31).wrapping_add(usize::from(b)));
         self.tile_color = COLORS[hash % COLORS.len()];
+        self
+    }
+    /// Colour dot of a swatch (0xRRGGBB).
+    pub fn color(mut self, rgb: u32) -> Self {
+        self.tile_color = rgb;
         self
     }
     pub fn icon(mut self, icon: &'static str) -> Self {
@@ -610,6 +631,11 @@ impl Menu {
         let slots = Rc::new(VecModel::default());
         view.set_slots(ModelRc::from(slots.clone()));
         Ok(Self { view, canvas, inputs, shown: MenuModel::default(), slots })
+    }
+
+    /// Accent colour (0xRRGGBB), from Setup > Theme.
+    pub fn set_accent(&self, rgb: u32) {
+        self.view.global::<Theme>().set_accent(crate::rgb(rgb));
     }
 
     /// Updates the view; a no-op when nothing changed.
