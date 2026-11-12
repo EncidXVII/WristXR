@@ -106,6 +106,8 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Put a panel on a hand**: hold it, bring it to your other hand and let go: it sits above that hand like a
   tablet and moves with it. Grab it away and let go in the room to put it back. The toolbar's Hand does the same
   for the hand you are not pointing with.
+- **Move the watch**: grip it with your other hand and slide it along your wrist; it stays on that wrist and
+  keeps its spot. Menu > Reset layout puts it back.
 - **Toolbar size**: - and + step through round sizes (1.0, 1.2, 1.5, 2.0 m...) and ease there.
 - **Setup > Controls** lists all of this in VR.
 - **Point at a panel**: its toolbar appears underneath (name, lock, curve, size, opacity, Room / Hand / Head,

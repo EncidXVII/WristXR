@@ -278,9 +278,13 @@ impl Session {
             panels.push(Panel::on_wrist(next_id(panels), state.dominant.other(), wrist_aspect));
         }
         // A wrist saved by an older build has the old size and orientation; the watch is never hidden (it is the
-        // way into the menu).
+        // way into the menu). Where the user moved it on the wrist stays.
         if let Some(w) = find(panels, Source::Wrist) {
-            *w = Panel { visible: true, ..Panel::on_wrist(w.id, w.anchor_hand(), wrist_aspect) };
+            let mut fresh = Panel { visible: true, ..Panel::on_wrist(w.id, w.anchor_hand(), wrist_aspect) };
+            if state.wrist_moved {
+                fresh.pose.pos = w.pose.pos;
+            }
+            *w = fresh;
         }
         let mut menu = Panel::menu_in_front(head, MENU_SIZE.1 as f32 / MENU_SIZE.0 as f32);
         menu.visible = !state.onboarded;
@@ -511,6 +515,9 @@ impl Session {
                 Event::Mouse { panel: TOOLBAR_ID, uv, button: MouseButton::Left, down } => {
                     over_toolbar = true;
                     toolbar.pointer_button(uv, down);
+                }
+                Event::Moved { panel } if panels.iter().any(|p| p.id == panel && p.source == Source::Wrist) => {
+                    self.state.wrist_moved = true;
                 }
                 Event::Hover { panel, .. } | Event::Mouse { panel, .. } | Event::Moved { panel }
                     if panels.iter().any(|p| p.id == panel && has_toolbar(p.source))
@@ -1148,7 +1155,9 @@ impl Session {
         self.wear_wrist(hand.other(), panels);
     }
 
+    /// The watch at its default spot on `hand` (a hand change or Reset layout).
     fn wear_wrist(&mut self, hand: Hand, panels: &mut [Panel]) {
+        self.state.wrist_moved = false;
         if let Some(w) = find(panels, Source::Wrist) {
             *w = Panel { id: w.id, visible: w.visible, ..Panel::on_wrist(w.id, hand, w.aspect) };
         }
@@ -1276,7 +1285,11 @@ impl Session {
                 fx.push(Effect::ListWindows);
             }
             Act::Recenter => Self::recenter(panels, head),
-            Act::ResetLayout => Self::reset_layout(panels, head, monitors),
+            Act::ResetLayout => {
+                Self::reset_layout(panels, head, monitors);
+                let hand = panels.iter().find(|p| p.source == Source::Wrist).map_or(Hand::Left, Panel::anchor_hand);
+                self.wear_wrist(hand, panels);
+            }
             Act::Screens => self.toggle_hidden(panels, head),
             Act::Keyboard => Self::toggle_keyboard(panels, head),
             Act::ClosePanel(id) => {
@@ -1375,6 +1388,29 @@ fn size_step(from: f32, up: bool) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_moved_watch_keeps_its_spot_until_reset() {
+        let head = Pose::new(dvr_core::math::Vec3::new(0.0, 1.6, 0.0), dvr_core::math::Quat::IDENTITY);
+        let mut panels = Vec::new();
+        let s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, head);
+        let w = panels.iter_mut().find(|p| p.source == Source::Wrist).expect("watch");
+        let default = w.pose;
+        w.pose.pos = w.pose.pos + dvr_core::math::Vec3::new(0.0, 0.0, 0.05);
+        let moved = w.pose.pos;
+        // Restart: the moved spot stays (the turn is the build's own).
+        let state = State { wrist_moved: true, panels: panels.clone(), ..s.state };
+        let mut again = state.panels.clone();
+        let mut s = Session::new(state, &mut again, head);
+        let w = again.iter().find(|p| p.source == Source::Wrist).expect("watch");
+        assert_eq!(w.pose.pos, moved);
+        assert_eq!(w.pose.rot, default.rot);
+        // Reset layout puts it back.
+        s.act(Act::ResetLayout, &mut again, head, &[]);
+        let w = again.iter().find(|p| p.source == Source::Wrist).expect("watch");
+        assert_eq!(w.pose.pos, default.pos);
+        assert!(!s.state.wrist_moved);
+    }
 
     #[test]
     fn size_steps_are_round_and_stop_at_the_ends() {

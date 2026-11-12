@@ -19,7 +19,8 @@ First public early-access release (Windows).
 - The watch needs a quarter less turn of the wrist: its roll around the forearm must be within about 50 degrees
   of your eyes to show and 61 to stay. Where your arm and head are counts exactly as before (face within 66
   degrees of your eyes, stays to 81; watch within 45 degrees of where you look).
-- The watch can no longer be gripped off the wrist.
+- Grip the watch with your other hand to move it along your wrist: it stays on that wrist and keeps its turn
+  there, and the spot is kept after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
 - Right click on A / X (the lower half of the trackpad on Vive and WMR wands), held for right-drag. Holding the

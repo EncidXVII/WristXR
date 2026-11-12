@@ -1,7 +1,8 @@
 //! Per-frame interaction logic: laser pointer, keyboard typing, grab/scale.
 //! Rules: hover never clicks, trigger clicks, A/X right-clicks, grip only grabs, locked panels ignore grip.
 //! A held panel keeps the spot you grabbed under the laser and turns to face you, level; it never copies the
-//! twist of the wrist. Let go of it next to your other hand and it stays on that hand.
+//! twist of the wrist. Let go of it next to your other hand and it stays on that hand. The watch is the exception:
+//! the other hand can move it, but it stays on its wrist and keeps its turn there, so it still reads like a watch.
 //! `step` does not allocate as long as `out` has spare capacity (reserve ~64).
 use crate::keyboard::{self, Keyboard};
 use crate::math::{Pose, Quat, Vec3};
@@ -310,8 +311,7 @@ impl Engine {
         if cur.grip && !prev.grip && cur.tracked {
             let Some((i, uv)) = self.hit(hand, poses) else { return };
             let p = self.panels[i];
-            // The watch stays on its wrist.
-            if p.locked || p.source == Source::Wrist {
+            if p.locked {
                 return;
             }
             let world = p.world_pose(poses);
@@ -372,6 +372,9 @@ impl Engine {
     fn let_go(&mut self, hand: Hand, panel: u32, poses: &Anchors, out: &mut Vec<Event>) {
         let Some(i) = self.index_of(panel) else { return };
         let p = &mut self.panels[i];
+        if p.source == Source::Wrist {
+            return;
+        }
         let world = p.world_pose(poses);
         let near = |h: Hand| (world.pos - poses[h.index()].pos).length() < ATTACH_REACH_M;
         let other = hand.other();
@@ -419,16 +422,18 @@ impl Engine {
                     }
                 }
                 // Stick up/down pushes and pulls, left/right resizes: whichever way it leans further.
+                let watch = p.source == Source::Wrist;
                 let [x, y] = input.hands[hand.index()].stick;
                 if y.abs() > STICK_DEADZONE && y.abs() >= x.abs() {
                     *reach = (*reach + y * PUSH_PULL_M_PER_S * dt).max(MIN_GRAB_DISTANCE_M);
-                } else if x.abs() > STICK_DEADZONE {
+                } else if x.abs() > STICK_DEADZONE && !watch {
                     p.width_m = (p.width_m * (x * RESIZE_PER_S * dt).exp()).clamp(MIN_WIDTH_M, MAX_WIDTH_M);
                 }
                 let ray = rays[hand.index()].unwrap_or(poses[hand.index()]);
                 let spot = ray.pos + ray.forward() * *reach;
                 // Faces you from its middle (where it was last frame), so a grab near an edge never skews it.
-                let rot = turn_toward(world.rot, world.pos - eye, ease);
+                // The watch keeps its turn on the wrist instead.
+                let rot = if watch { world.rot } else { turn_toward(world.rot, world.pos - eye, ease) };
                 let center = spot - rot.rotate(p.local_point(*uv));
                 let other = hand.other();
                 let close = (center - poses[other.index()].pos).length() < ATTACH_REACH_M;
@@ -794,6 +799,32 @@ mod tests {
                 assert!(notches == 0 && left == 2, "drags: {notches} notches, {left} left");
             }
         }
+    }
+
+    #[test]
+    fn the_other_hand_moves_the_watch_along_its_wrist() {
+        let left = hand_at(Vec3::new(-0.2, 1.2, -0.3), Vec3::new(0.6, 1.2, -0.3));
+        let mut e = Engine::new(vec![Panel::on_wrist(1, Hand::Left, 0.5)]);
+        e.raw_laser = true;
+        let poses = [left.pose, Pose::IDENTITY, Pose::new(EYE, Quat::IDENTITY)];
+        let watch = e.panels[0].world_pose(&poses);
+        let turn = e.panels[0].pose.rot;
+        let mut out = Vec::new();
+        let mut r = hand_at(Vec3::new(0.0, 1.5, -0.1), watch.pos);
+        r.grip = true;
+        let t = run(&mut e, 0, 1, [left, r], &mut out);
+        assert_eq!(e.grabbed(), Some(1), "the other hand grips the watch");
+        // Slide it 5 cm and let go.
+        r.pose.pos = r.pose.pos + Vec3::new(0.05, 0.0, 0.0);
+        let t = run(&mut e, t, 20, [left, r], &mut out);
+        r.grip = false;
+        run(&mut e, t, 1, [left, r], &mut out);
+        let p = e.panels[0];
+        assert_eq!(p.anchor, Anchor::Hand(Hand::Left), "still on its wrist");
+        assert!((p.world_pose(&poses).pos - watch.pos).length() > 0.03, "moved");
+        let same_turn = p.pose.rot.rotate(Vec3::Z).dot(turn.rotate(Vec3::Z)) > 0.9999
+            && p.pose.rot.rotate(Vec3::X).dot(turn.rotate(Vec3::X)) > 0.9999;
+        assert!(same_turn, "keeps its turn on the wrist");
     }
 
     #[test]

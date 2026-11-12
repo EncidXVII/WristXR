@@ -168,6 +168,8 @@ pub struct State {
     pub hold_right_click: bool,
     /// Trigger-drag on a screen scrolls it (off: it drags, to select text).
     pub drag_scroll: bool,
+    /// The watch was moved on its wrist: keep where it is (its turn always comes from the current build).
+    pub wrist_moved: bool,
 }
 
 impl Default for State {
@@ -193,6 +195,7 @@ impl Default for State {
             smoothing: true,
             hold_right_click: true,
             drag_scroll: false,
+            wrist_moved: false,
         }
     }
 }
