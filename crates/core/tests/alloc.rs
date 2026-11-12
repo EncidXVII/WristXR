@@ -41,6 +41,7 @@ fn hot_loop_is_allocation_free() {
                 trigger: f % 7 < 3,
                 grip: f % 97 < 40,
                 menu: f % 13 == 0,
+                right_click: f % 31 < 5,
                 stick: [0.0, if f % 50 < 25 { 1.0 } else { 0.0 }],
             };
             out.clear();

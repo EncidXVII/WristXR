@@ -371,6 +371,10 @@ pub fn run() -> Result<(), String> {
         };
         session.update_dims(&mut engine.panels, watch, dt);
         engine.raw_laser = !session.state.smoothing;
+        engine.hold_right_click = session.state.hold_right_click;
+        engine.drag_scroll = session.state.drag_scroll;
+        let grabbed = engine.grabbed();
+        session.ease_sizes(&mut engine.panels, grabbed, dt);
         session.place_toolbar(&mut engine.panels, &poses);
         events.clear();
         engine.step(&input, &mut events);
@@ -397,6 +401,7 @@ pub fn run() -> Result<(), String> {
         let mut pop = None;
         let seen = PointerInput { events: &events, now, rays: engine.rays(), anchors: poses };
         session.pointer(seen, &engine.panels, &menu, &toolbar);
+        session.place_toolbar(&mut engine.panels, &poses);
         // The other hand's laser on the wrist drives its media buttons.
         let on_wrist = |id: u32| engine.panels.iter().any(|p| p.id == id && p.source == Source::Wrist);
         let mut over_wrist = false;

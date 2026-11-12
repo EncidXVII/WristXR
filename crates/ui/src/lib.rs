@@ -248,16 +248,15 @@ slint::slint! {
         Rectangle {
             x: 0px; y: 0px; width: 560px; height: root.card-h; border-radius: 28px; background: #0B0B0C; clip: true;
             Text {
-                // Moves only when a strip comes or goes (in step with the card), never when the watch opens.
+                // Never moves: not when the watch opens, not when a song starts or stops (the card grows instead).
                 x: root.compact ? 22px : 26px;
-                y: root.compact ? 0px : root.strip == 0 ? 14px : 22px;
+                y: root.compact ? 0px : 22px;
                 height: root.compact ? 84px : 88px;
-                animate y { duration: root.motion ? 280ms : 0ms; easing: cubic-bezier(0.23, 1, 0.32, 1); }
                 text: root.time; font-family: "Anton"; font-size: root.compact ? 60px : 88px; color: #F5F5F7;
                 vertical-alignment: center;
             }
             if root.date-t > 0 && root.date != "" && !root.compact && !root.date-right && !root.tagged : Text {
-                x: 28px; y: 96px; height: 30px; text: root.date; font-size: 24px; color: #A8A8AF; opacity: root.date-t;
+                x: 28px; y: 108px; height: 30px; text: root.date; font-size: 24px; color: #A8A8AF; opacity: root.date-t;
             }
             if root.date-right && !root.compact && root.open < 1 : Rectangle {
                 x: 234px; y: 24px; width: 300px; height: 84px; opacity: 1 - root.open;
@@ -605,6 +604,9 @@ const HEADER_H: f32 = 132.0;
 /// The Compact layout's one bar.
 const COMPACT_H: f32 = 84.0;
 const STRIP_END: f32 = 212.0;
+/// Closed with nothing on the strip, in the layouts that put the date under the time: a line for it, then the
+/// card's bottom margin below.
+const DATE_END: f32 = 152.0;
 /// The Music layout's two-line card.
 const BIG_END: f32 = 240.0;
 /// Player card plus the gap under it.
@@ -1130,6 +1132,8 @@ impl Wrist {
             COMPACT_H
         } else if strip > 0 {
             if big { BIG_END } else { STRIP_END }
+        } else if matches!(layout, WatchLayout::Standard | WatchLayout::Music) {
+            DATE_END
         } else {
             HEADER_H
         };
@@ -1439,6 +1443,12 @@ mod tests {
             wrist.set(&WristInfo { expanded: true, ..base(layout) });
             let rings: Vec<RingView> = wrist.view.get_rings().iter().collect();
             assert!(rings.len() >= 2 && rings[0].label == "80", "{layout:?} open rings: {rings:?}");
+        }
+        // Nothing playing: the date gets its own line under the time, which stays where it was.
+        for (layout, height) in [(L::Standard, DATE_END), (L::Music, DATE_END), (L::Clock, HEADER_H)] {
+            wrist.set(&WristInfo { media: None, ..base(layout) });
+            assert_eq!(wrist.view.get_strip(), 0, "{layout:?} quiet strip");
+            assert_eq!(wrist.view.get_card_height(), height as i32, "{layout:?} quiet height");
         }
         wrist.set(&base(L::Batteries));
         let tags: Vec<String> = wrist.view.get_rings().iter().map(|r| format!("{} {}", r.label, r.tag)).collect();

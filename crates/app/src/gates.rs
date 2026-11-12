@@ -442,7 +442,7 @@ fn controls() -> GateResult {
         .iter()
         .filter_map(|a| a["name"].as_str())
         .collect();
-    ensure!(actions.len() == 6, "expected 6 actions, got {}", actions.len());
+    ensure!(actions.len() == 7, "expected 7 actions, got {}", actions.len());
     let defaults = manifest["default_bindings"].as_array().ok_or("manifest has no default_bindings")?;
     for ctype in CONTROLLERS {
         let url = defaults
@@ -497,7 +497,9 @@ fn grab() -> GateResult {
     rig.frames(1);
     rig.hand(l).grip = true;
     rig.frames(1);
-    // Double the hand distance and roll 45°: width x2, panel X axis follows the hands.
+    // Where the second grip found it (the first hand's frame has begun turning it toward you).
+    let p0 = rig.panel(1)?.pose.pos;
+    // Double the hand distance and roll 45°: width x2, and the panel stays level (it never rolls with the hands).
     let v = Vec3::new(FRAC_1_SQRT_2, FRAC_1_SQRT_2, 0.0) * 0.8;
     let mid = Vec3::new(0.0, 1.4, -0.2);
     rig.hand(l).pose.pos = mid - v * 0.5;
@@ -505,8 +507,9 @@ fn grab() -> GateResult {
     rig.frames(1);
     let p = rig.panel(1)?;
     ensure!((p.width_m - 2.0).abs() < 1e-3, "two-hand scale {}", p.width_m);
-    ensure!((p.pose.rot.rotate(Vec3::X) - v.normalized()).length() < 1e-3, "two-hand rotation");
-    ensure!((p.pose.pos - Vec3::new(0.0, 1.4, -1.8)).length() < 1e-3, "two-hand position {:?}", p.pose.pos);
+    ensure!(p.pose.rot.rotate(Vec3::X).y.abs() < 1e-4, "two-hand: stays level, {:?}", p.pose.rot.rotate(Vec3::X));
+    let want = mid + (p0 - mid) * 2.0;
+    ensure!((p.pose.pos - want).length() < 1e-3, "two-hand position {:?}, want {want:?}", p.pose.pos);
     rig.hand(l).grip = false;
     rig.hand(r).grip = false;
     rig.frames(1);

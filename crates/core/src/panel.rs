@@ -257,19 +257,35 @@ pub struct Glance {
     held_s: f32,
 }
 
-/// Shows when the face is within about 66 degrees of the eyes and the watch within 45 degrees of where the head
-/// looks; stays until those pass about 81 and 63 degrees.
-const GLANCE_SHOW: (f32, f32) = (0.4, 0.7);
-const GLANCE_KEEP: (f32, f32) = (0.15, 0.45);
+/// Shows when the wrist is turned to within about 50 degrees of the eyes, the face within about 66 degrees of them
+/// and the watch within 45 degrees of where the head looks; stays until those pass about 61, 81 and 63 degrees.
+/// The wrist's turn is its roll around the forearm alone; the face and look angles are what they always were, so
+/// where the arm and head are counts as before and only the wrist has to turn less far.
+const GLANCE_SHOW: Gaze = Gaze { roll: 0.64, facing: 0.4, looking: 0.7 };
+const GLANCE_KEEP: Gaze = Gaze { roll: 0.48, facing: 0.15, looking: 0.45 };
 const GLANCE_HOLD_S: f32 = 0.3;
+
+/// Cosines, 1 = dead on: the wrist's roll toward the eyes, the face toward the eyes, the watch toward the middle of
+/// the view.
+#[derive(Clone, Copy, Debug)]
+struct Gaze {
+    roll: f32,
+    facing: f32,
+    looking: f32,
+}
+
+impl Gaze {
+    fn passes(self, at_least: Self) -> bool {
+        self.roll > at_least.roll && self.facing > at_least.facing && self.looking > at_least.looking
+    }
+}
 
 impl Glance {
     /// Steps by `dt` seconds; true while the watch should show.
     pub fn update(&mut self, head: Pose, watch: Pose, dt: f32) -> bool {
-        let (facing, looking) = gaze(head, watch);
+        let g = gaze(head, watch);
         self.held_s += dt;
-        let (f, l) = if self.shown { GLANCE_KEEP } else { GLANCE_SHOW };
-        let want = facing > f && looking > l;
+        let want = g.passes(if self.shown { GLANCE_KEEP } else { GLANCE_SHOW });
         if want != self.shown && (want || self.held_s >= GLANCE_HOLD_S) {
             self.shown = want;
             self.held_s = 0.0;
@@ -278,15 +294,20 @@ impl Glance {
     }
 }
 
-/// How squarely the watch face points at the eyes and how near the middle of the view it is (cosines, 1 = dead on).
-fn gaze(head: Pose, watch: Pose) -> (f32, f32) {
+/// The roll is measured around the forearm (the watch's text runs along it), so only rolling the wrist changes it.
+/// Looking straight down the forearm, the face angle stands in.
+fn gaze(head: Pose, watch: Pose) -> Gaze {
     let to_eye = head.pos - watch.pos;
     let d = to_eye.length();
     if d < 1e-4 {
-        return (1.0, 1.0);
+        return Gaze { roll: 1.0, facing: 1.0, looking: 1.0 };
     }
     let to_eye = to_eye * (1.0 / d);
-    (watch.rot.rotate(Vec3::Z).dot(to_eye), head.forward().dot(to_eye * -1.0))
+    let arm = watch.rot.rotate(Vec3::X);
+    let across = to_eye - arm * to_eye.dot(arm);
+    let toward = if across.length() > 0.2 { across.normalized() } else { to_eye };
+    let normal = watch.rot.rotate(Vec3::Z);
+    Gaze { roll: normal.dot(toward), facing: normal.dot(to_eye), looking: head.forward().dot(to_eye * -1.0) }
 }
 
 /// The head frame turned only about the vertical: where "in front of the user" is.
@@ -304,9 +325,85 @@ fn facing(forward: Vec3) -> Quat {
     Quat::from_arc(Vec3::Z, -forward)
 }
 
+/// Turn for a panel at `at` that faces the eyes at `eye` and stays level: turned about the vertical toward
+/// them, then tilted up or down toward them, never rolled. Held panels take this, so a twist of the wrist never
+/// tips a screen over.
+pub fn face_eyes(at: Vec3, eye: Vec3) -> Quat {
+    level_facing(at - eye)
+}
+
+/// Level turn for a panel seen along `away` (from the eyes toward the panel).
+pub fn level_facing(away: Vec3) -> Quat {
+    if away.length() < 1e-4 {
+        return Quat::IDENTITY;
+    }
+    let d = away.normalized();
+    let flat = Vec3::new(d.x, 0.0, d.z);
+    let flat = if flat.length() < 1e-3 { Vec3::FORWARD } else { flat.normalized() };
+    facing(flat) * Quat::from_axis_angle(Vec3::X, d.y.clamp(-1.0, 1.0).asin())
+}
+
+/// Widest a panel held in a hand gets (a tablet, not a wall).
+pub const IN_HAND_WIDTH_M: f32 = 0.5;
+/// A held panel let go this close to the other hand stays on that hand.
+pub const ATTACH_REACH_M: f32 = 0.25;
+
+impl Panel {
+    /// Puts the panel in `hand` like a tablet held up: its bottom edge a little above the controller, facing the
+    /// eyes, no wider than `IN_HAND_WIDTH_M`. From then on it moves with that hand.
+    pub fn hold_in(&mut self, hand: Hand, anchors: &Anchors) {
+        self.width_m = self.width_m.min(IN_HAND_WIDTH_M);
+        let at = anchors[hand.index()].pos + Vec3::new(0.0, 0.06 + self.height_m() * 0.5, 0.0);
+        self.anchor = Anchor::Hand(hand);
+        self.set_world_pose(Pose::new(at, face_eyes(at, anchors[HEAD].pos)), anchors);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_the_turn_of_the_wrist_decides_the_glance() {
+        let eye = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::from_axis_angle(Vec3::X, -0.9));
+        let at = Vec3::new(0.0, 1.2, -0.3);
+        // Forearm along X, face toward the eyes.
+        let base = Quat::from_arc(Vec3::Z, (eye.pos - at).normalized());
+        let shows = |rot: Quat| {
+            let mut g = Glance::default();
+            (0..30).fold(false, |_, _| g.update(eye, Pose::new(at, rot), 0.016))
+        };
+        assert!(shows(base), "facing");
+        assert!(shows(base * Quat::from_axis_angle(Vec3::X, 0.7)), "wrist turned 40 degrees");
+        assert!(!shows(base * Quat::from_axis_angle(Vec3::X, 0.96)), "wrist turned 55 degrees");
+        // The rest is as it always was: the face within 66 degrees of the eyes, whatever the wrist.
+        assert!(shows(base * Quat::from_axis_angle(Vec3::Y, 1.05)), "forearm tipped 60 degrees, wrist not turned");
+        assert!(!shows(base * Quat::from_axis_angle(Vec3::Y, 1.22)), "forearm tipped 70 degrees");
+    }
+
+    #[test]
+    fn a_held_panel_faces_the_eyes_level() {
+        let eye = Vec3::new(0.0, 1.6, 0.0);
+        for at in [Vec3::new(0.0, 1.6, -1.0), Vec3::new(1.0, 2.4, -1.0), Vec3::new(-0.5, 0.9, -0.6)] {
+            let rot = face_eyes(at, eye);
+            let normal = rot.rotate(Vec3::Z);
+            assert!(normal.dot((eye - at).normalized()) > 0.9999, "faces the eyes from {at:?}");
+            assert!(rot.rotate(Vec3::X).y.abs() < 1e-4, "never rolled at {at:?}");
+        }
+    }
+
+    #[test]
+    fn put_in_a_hand_it_sits_above_the_controller() {
+        let hand = Pose::new(Vec3::new(-0.2, 1.1, -0.4), Quat::from_axis_angle(Vec3::Z, 1.0));
+        let anchors = [hand, Pose::IDENTITY, Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY)];
+        let mut p = Panel::in_front_of(1, Source::Monitor(0), anchors[HEAD], 16.0 / 9.0);
+        p.hold_in(Hand::Left, &anchors);
+        assert_eq!(p.anchor, Anchor::Hand(Hand::Left));
+        assert!(p.width_m <= IN_HAND_WIDTH_M);
+        let w = p.world_pose(&anchors);
+        assert!(w.pos.y - p.height_m() * 0.5 > hand.pos.y, "above the hand");
+        assert!((w.pos.x - hand.pos.x).abs() < 1e-4);
+    }
 
     /// Left forearm raised across the chest, palm down: the hand points to the user's right (+X), the user looks
     /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z).

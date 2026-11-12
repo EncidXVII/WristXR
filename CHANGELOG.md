@@ -7,7 +7,29 @@ versions: [Semantic Versioning](https://semver.org/).
 
 First public early-access release (Windows).
 
+### Changed
+- A held panel keeps the spot you grabbed under the laser and turns to face you, level, easing there instead of
+  copying every twist of the wrist; two hands resize it without rolling it.
+- The toolbar's - and + step through round sizes (0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 2 m...) and ease to them,
+  instead of x1.25 jumps; the readout shows the size it is going to.
+- The toolbar's Hand puts the panel in your free hand, above it and facing you, instead of leaving it floating
+  where it was and following that hand from afar.
+- The toolbar rides with a head-locked panel and moves in the same frame as its panel, so it no longer trails it.
+- With nothing playing, the watch keeps the time where it is and gives the date its own line under it.
+- The watch needs a quarter less turn of the wrist: its roll around the forearm must be within about 50 degrees
+  of your eyes to show and 61 to stay. Where your arm and head are counts exactly as before (face within 66
+  degrees of your eyes, stays to 81; watch within 45 degrees of where you look).
+- The watch can no longer be gripped off the wrist.
+
 ### Added
+- Right click on A / X (the lower half of the trackpad on Vive and WMR wands), held for right-drag. Holding the
+  trigger still right-clicks; Setup > Controls can turn that off.
+- Setup > Controls: every control in one page, pointing and holding.
+- Drag to scroll (Setup > Controls, off by default): trigger-drag on a screen or window scrolls it like a
+  touchscreen, as in OVR Toolkit.
+- Grip + stick left / right resizes the held panel smoothly.
+- Bring a held panel to your other hand and let go: it sits above that hand and moves with it (the hand feels it
+  arrive). Let it go in the room to take it off.
 - Watch layouts (Menu > Watch > Layout): Standard, Clock (time and date), No batteries (time, date, song),
   Batteries (every battery as a number, with L / R / T under it), Music (a two-line player with back, play and
   next on the closed watch), Performance (fps, red under 90 % of the headset's rate, and CPU / GPU bars, red

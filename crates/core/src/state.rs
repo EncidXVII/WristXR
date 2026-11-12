@@ -164,6 +164,10 @@ pub struct State {
     pub notify_from: NotifyFrom,
     /// Laser smoothing (tremor filter).
     pub smoothing: bool,
+    /// Holding the trigger right-clicks too (A/X always does).
+    pub hold_right_click: bool,
+    /// Trigger-drag on a screen scrolls it (off: it drags, to select text).
+    pub drag_scroll: bool,
 }
 
 impl Default for State {
@@ -187,6 +191,8 @@ impl Default for State {
             accent: Accent::Lime,
             notify_from: NotifyFrom::Discord,
             smoothing: true,
+            hold_right_click: true,
+            drag_scroll: false,
         }
     }
 }

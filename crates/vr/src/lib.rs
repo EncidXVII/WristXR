@@ -68,6 +68,7 @@ struct Actions {
     grab: u64,
     stick: u64,
     menu: u64,
+    right_click: u64,
     haptic: u64,
     hands: [u64; 2],
 }
@@ -176,7 +177,17 @@ impl OpenVr {
             applications,
             exclusive: [false; 2],
             input_error: 0,
-            actions: Actions { set: 0, pointer: 0, click: 0, grab: 0, stick: 0, menu: 0, haptic: 0, hands: [0; 2] },
+            actions: Actions {
+                set: 0,
+                pointer: 0,
+                click: 0,
+                grab: 0,
+                stick: 0,
+                menu: 0,
+                right_click: 0,
+                haptic: 0,
+                hands: [0; 2],
+            },
             overlays: HashMap::new(),
         };
         vr.load_actions(manifest)?;
@@ -208,6 +219,7 @@ impl OpenVr {
             grab: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/grab")?,
             stick: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/stick")?,
             menu: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/menu")?,
+            right_click: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/rightclick")?,
             haptic: handle(input::GET_ACTION_HANDLE, c"/actions/main/out/haptic")?,
             hands: [
                 handle(input::GET_INPUT_SOURCE_HANDLE, c"/user/hand/left")?,
@@ -504,6 +516,7 @@ impl VrBackend for OpenVr {
             h.trigger = self.digital(self.actions.click, dev);
             h.grip = self.digital(self.actions.grab, dev);
             h.menu = self.digital(self.actions.menu, dev);
+            h.right_click = self.digital(self.actions.right_click, dev);
             h.stick = if stick.active != 0 { [stick.xyz[0], stick.xyz[1]] } else { [0.0; 2] };
         }
         if let Some(head) = self.head_pose() {

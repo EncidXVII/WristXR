@@ -1,0 +1,25 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: outline(&m)
+---
+Controls | Both hands · rebind in SteamVR
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Pointing at a screen
+  Also
+  Holding one (grip)
+Back "Back" "" ""
+Control "Trigger" "" "Click" [disabled]
+Control "A or X" "" "Right click" [disabled]
+Control "Stick" "" "Scroll" [disabled]
+Control "Left menu, twice" "" "Hide all" [disabled]
+Toggle "Hold to right-click" "" "" [on]
+Toggle "Drag to scroll" "" ""
+Control "Grip" "" "Move" [disabled]
+Control "Stick up, down" "" "Push, pull" [disabled]
+Control "Stick left, right" "" "Size" [disabled]
+Control "Both grips" "" "Size" [disabled]
+Control "To other hand" "" "Attach" [disabled]

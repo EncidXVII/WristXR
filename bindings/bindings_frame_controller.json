@@ -19,7 +19,9 @@
         { "path": "/user/hand/right/input/grip", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/grab" } } },
         { "path": "/user/hand/left/input/thumbstick", "mode": "joystick", "inputs": { "position": { "output": "/actions/main/in/stick" } } },
         { "path": "/user/hand/right/input/thumbstick", "mode": "joystick", "inputs": { "position": { "output": "/actions/main/in/stick" } } },
-        { "path": "/user/hand/left/input/menu", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/menu" } } }
+        { "path": "/user/hand/left/input/menu", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/menu" } } },
+        { "path": "/user/hand/left/input/a", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/rightclick" } } },
+        { "path": "/user/hand/right/input/a", "mode": "button", "inputs": { "click": { "output": "/actions/main/in/rightclick" } } }
       ]
     }
   }

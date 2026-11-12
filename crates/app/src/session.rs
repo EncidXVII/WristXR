@@ -26,8 +26,10 @@ pub const TAB_KEYS: usize = 1;
 pub const TAB_WATCH: usize = 2;
 pub const TAB_INBOX: usize = 3;
 pub const TAB_SETUP: usize = 4;
-/// Size buttons scale a panel by this factor.
-const SIZE_STEP: f32 = 1.25;
+/// Sizes the toolbar's - and + step through (metres wide), so the readout always shows a round number.
+const SIZES_M: [f32; 15] = [0.3, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0];
+/// A size change eases over about this long instead of jumping.
+const SIZE_EASE_S: f32 = 0.07;
 /// The toolbar stays this long after the laser leaves its panel (time to move down onto it).
 const TOOLBAR_LINGER_MS: u64 = 1500;
 /// Fade lengths (linear, seconds). Hiding is quicker than showing: going away should never feel sluggish. The
@@ -72,6 +74,8 @@ pub enum Page {
     WatchLayouts,
     /// Setup > Theme: accent colours.
     Theme,
+    /// Setup > Controls: what every button does.
+    Controls,
 }
 
 impl Page {
@@ -80,14 +84,14 @@ impl Page {
         match self {
             Self::Tab(i) => i.min(TABS - 1),
             Self::WatchLayouts => TAB_WATCH,
-            Self::Theme => TAB_SETUP,
+            Self::Theme | Self::Controls => TAB_SETUP,
             _ => TAB_PANELS,
         }
     }
 
     /// A sub-page that opens from a rail page (closing the menu goes back to that page).
     fn sub(self) -> bool {
-        matches!(self, Self::Windows(_) | Self::WatchLayouts | Self::Theme)
+        matches!(self, Self::Windows(_) | Self::WatchLayouts | Self::Theme | Self::Controls)
     }
 }
 
@@ -146,6 +150,9 @@ pub enum Act {
     Layout(WatchLayout),
     OpenTheme,
     Accent(Accent),
+    OpenControls,
+    HoldRightClick,
+    DragScroll,
     LaserHand(Hand),
     WatchHand(Hand),
     AutoStart,
@@ -233,6 +240,8 @@ pub struct Session {
     toolbar: Option<u32>,
     toolbar_seen: u64,
     toolbar_hovered: bool,
+    /// A panel easing to the size the toolbar's - or + asked for.
+    size_goal: Option<(u32, f32)>,
     /// What each slot / toolbar control last drawn does.
     acts: RefCell<Vec<Act>>,
     tools: RefCell<Vec<Tool>>,
@@ -310,6 +319,7 @@ impl Session {
             toolbar: None,
             toolbar_seen: 0,
             toolbar_hovered: false,
+            size_goal: None,
             acts: RefCell::new(Vec::new()),
             tools: RefCell::new(Vec::new()),
         }
@@ -555,7 +565,25 @@ impl Session {
         }
     }
 
-    /// Puts the toolbar under its panel (or hides it). Call every frame before stepping the engine.
+    /// Eases a panel toward the size the toolbar asked for. A panel in hand is the hand's to size.
+    pub fn ease_sizes(&mut self, panels: &mut [Panel], grabbed: Option<u32>, dt: f32) {
+        let Some((id, goal)) = self.size_goal else { return };
+        let p = panels.iter_mut().find(|p| p.id == id);
+        match p {
+            Some(p) if grabbed != Some(id) => {
+                p.width_m += (goal - p.width_m) * (1.0 - (-dt / SIZE_EASE_S).exp());
+                if (goal - p.width_m).abs() < 0.002 {
+                    p.width_m = goal;
+                    self.size_goal = None;
+                }
+            }
+            _ => self.size_goal = None,
+        }
+    }
+
+    /// Puts the toolbar under its panel (or hides it). Call every frame before stepping the engine (so the laser
+    /// finds it) and again after (so it shows where the panel went this frame). It takes its panel's anchor, so a
+    /// head-locked window's toolbar rides on the headset with it instead of trailing a frame behind.
     pub fn place_toolbar(&mut self, panels: &mut [Panel], hands: &Anchors) {
         let target = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id && p.shown()).copied());
         if target.is_none() {
@@ -564,7 +592,8 @@ impl Session {
         if let Some(bar) = panels.iter_mut().find(|p| p.id == TOOLBAR_ID) {
             bar.visible = target.is_some();
             if let Some(t) = target {
-                bar.pose = t.toolbar_pose(t.world_pose(hands), bar.aspect);
+                bar.anchor = t.anchor;
+                bar.set_world_pose(t.toolbar_pose(t.world_pose(hands), bar.aspect), hands);
             }
         }
     }
@@ -594,7 +623,8 @@ impl Session {
             tools.push(Tool::Curve);
         }
         l.group(lock);
-        let size = s.get("tool-size", &[("m", format!("{:.1}", p.width_m))]);
+        let width = self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1);
+        let size = s.get("tool-size", &[("m", format!("{width:.1}"))]);
         l.group(vec![
             (b(ToolKind::Step, "−".into(), ""), None),
             (b(ToolKind::Readout, size, ""), None),
@@ -667,21 +697,22 @@ impl Session {
             Tool::None => {}
             Tool::Lock => p.locked = !p.locked,
             Tool::Curve => p.curvature = if p.curvature > 0.0 { 0.0 } else { CURVATURE },
-            Tool::Smaller => p.width_m = (p.width_m / SIZE_STEP).max(MIN_WIDTH_M),
-            Tool::Bigger => p.width_m = (p.width_m * SIZE_STEP).min(MAX_WIDTH_M),
+            Tool::Smaller | Tool::Bigger => {
+                // From the size already asked for, so quick taps keep stepping while it eases.
+                let from = self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1);
+                self.size_goal = Some((p.id, size_step(from, tool == Tool::Bigger)));
+            }
             Tool::Opacity => {
                 if let Some(v) = value {
                     p.opacity = MIN_OPACITY + (1.0 - MIN_OPACITY) * v.clamp(0.0, 1.0);
                 }
             }
-            // The panel stays where it is when it changes anchor.
+            // Hand: into the hand that is not pointing, held up like a tablet (it moves with that hand). Room and
+            // head: the panel stays where it is and changes what it follows.
+            Tool::Pin(Pin::Hand) => p.hold_in(dominant.other(), hands),
             Tool::Pin(pin) => {
                 let world = p.world_pose(hands);
-                p.anchor = match pin {
-                    Pin::Room => Anchor::World,
-                    Pin::Hand => Anchor::Hand(dominant.other()),
-                    Pin::Head => Anchor::Head,
-                };
+                p.anchor = if pin == Pin::Head { Anchor::Head } else { Anchor::World };
                 p.set_world_pose(world, hands);
             }
             Tool::Language(l) => fx.push(Effect::Language(l)),
@@ -979,6 +1010,40 @@ impl Session {
                 l.footer(t("menu-theme-footer"), None);
                 l.finish()
             }
+            Page::Controls => {
+                let mut l = Layout::rail(t("menu-controls"));
+                l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
+                l.hint(t("menu-controls-hint"));
+                let control = |acts: &mut Vec<Act>, input: &str, does: &str| {
+                    add(acts, Act::None, Slot::new(SlotKind::Control, t(input)).value(t(does)).enabled(false))
+                };
+                l.label(Col::Left, t("menu-controls-point"));
+                let rows = vec![
+                    control(&mut acts, "ctl-trigger", "ctl-click"),
+                    control(&mut acts, "ctl-ax", "ctl-right-click"),
+                    control(&mut acts, "ctl-stick", "ctl-scroll"),
+                    control(&mut acts, "ctl-menu-twice", "ctl-hide"),
+                ];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Left, t("menu-controls-also"));
+                let hold = toggle(t("menu-hold-right"), self.state.hold_right_click);
+                let drag = toggle(t("menu-drag-scroll"), self.state.drag_scroll);
+                l.rows(
+                    Col::Left,
+                    vec![add(&mut acts, Act::HoldRightClick, hold), add(&mut acts, Act::DragScroll, drag)],
+                    ROW_H,
+                );
+                l.label(Col::Right, t("menu-controls-hold"));
+                let rows = vec![
+                    control(&mut acts, "ctl-grip", "ctl-move"),
+                    control(&mut acts, "ctl-stick-ud", "ctl-push"),
+                    control(&mut acts, "ctl-stick-lr", "ctl-size"),
+                    control(&mut acts, "ctl-both-grips", "ctl-size"),
+                    control(&mut acts, "ctl-to-hand", "ctl-attach"),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
+                l.finish()
+            }
             Page::Tab(TAB_INBOX) => {
                 let mut l = Layout::rail(t("menu-inbox-title"));
                 let from = self.state.notify_from;
@@ -1030,6 +1095,7 @@ impl Session {
                 let rows = vec![
                     add(&mut acts, Act::Haptics, toggle(t("menu-haptics"), self.state.haptics)),
                     add(&mut acts, Act::Smoothing, toggle(t("menu-smoothing"), self.state.smoothing)),
+                    add(&mut acts, Act::OpenControls, row(t("menu-controls")).value("›")),
                 ];
                 l.rows(Col::Left, rows, ROW_H);
                 l.label(Col::Right, t("menu-start"));
@@ -1267,6 +1333,9 @@ impl Session {
             Act::OpenLayouts => self.page = Page::WatchLayouts,
             Act::Layout(layout) => self.state.wrist_layout = layout,
             Act::OpenTheme => self.page = Page::Theme,
+            Act::OpenControls => self.page = Page::Controls,
+            Act::HoldRightClick => self.state.hold_right_click = !self.state.hold_right_click,
+            Act::DragScroll => self.state.drag_scroll = !self.state.drag_scroll,
             Act::Accent(accent) => {
                 if accent != self.state.accent {
                     self.state.accent = accent;
@@ -1293,9 +1362,30 @@ impl Session {
     }
 }
 
+/// The next round size up or down from `from` (metres), within the panel limits.
+fn size_step(from: f32, up: bool) -> f32 {
+    let next = if up {
+        SIZES_M.iter().copied().find(|&w| w > from + 0.005).unwrap_or(SIZES_M[SIZES_M.len() - 1])
+    } else {
+        SIZES_M.iter().rev().copied().find(|&w| w < from - 0.005).unwrap_or(SIZES_M[0])
+    };
+    next.clamp(MIN_WIDTH_M, MAX_WIDTH_M)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn size_steps_are_round_and_stop_at_the_ends() {
+        assert_eq!(size_step(1.2, true), 1.5);
+        assert_eq!(size_step(1.2, false), 1.0);
+        // An odd size (two-hand pinch) goes to the next round one either way.
+        assert_eq!(size_step(1.37, true), 1.5);
+        assert_eq!(size_step(1.37, false), 1.2);
+        assert_eq!(size_step(8.0, true), 8.0);
+        assert_eq!(size_step(0.3, false), 0.3);
+    }
 
     #[test]
     fn menu_fades_in_with_motion_and_appears_at_once_without() {

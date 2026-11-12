@@ -115,7 +115,7 @@ slint::slint! {
         for s[i] in root.slots : Rectangle {
             x: s.x * 1px; y: s.y * 1px; width: s.w * 1px; height: s.h * 1px;
             visible: s.kind != 10;
-            opacity: s.enabled || s.kind == 4 || s.kind == 7 ? 1.0 : 0.4;
+            opacity: s.enabled || s.kind == 4 || s.kind == 7 || s.kind == 13 ? 1.0 : 0.4;
             border-radius: s.kind == 2 ? 9px : s.kind == 5 ? 12px : s.kind == 8 ? 14px : 16px;
             border-width: s.kind == 3 && !s.on ? 2px : s.kind == 12 && s.on ? 3px : 0px;
             border-color: s.kind == 12 ? #F5F5F7 : #FF5A3C;
@@ -153,6 +153,15 @@ slint::slint! {
                 Text { text: s.tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
             }
             // Row text: label (and detail on a second line for messages), value on the right.
+            // Control: the control takes whatever the action's name leaves.
+            if s.kind == 13 : HorizontalLayout {
+                padding-left: 16px; padding-right: 16px; spacing: 12px;
+                Text {
+                    text: s.label; font-size: 24px; color: #F5F5F7; vertical-alignment: center; overflow: elide;
+                    horizontal-stretch: 1;
+                }
+                Text { text: s.value; font-size: 24px; color: #A8A8AF; vertical-alignment: center; horizontal-stretch: 0; }
+            }
             if s.kind == 0 || s.kind == 1 || s.kind == 4 || s.kind == 7 || s.kind == 11 || s.kind == 12 : Text {
                 x: s.tile != "" ? 72px : s.kind == 4 ? 40px : s.kind == 11 ? 56px : s.kind == 12 ? 58px : 16px;
                 y: 0px; height: parent.height; width: parent.width - self.x - (s.kind == 1 ? 90px : s.kind == 12 ? 12px : 92px);
@@ -241,6 +250,8 @@ pub enum SlotKind {
     Choice = 11,
     /// Standalone card with a colour dot (`tile_color`) and its name; `on` = chosen.
     Swatch = 12,
+    /// Read-only row: a control (label) and what it does (value).
+    Control = 13,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

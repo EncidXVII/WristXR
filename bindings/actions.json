@@ -12,6 +12,7 @@
     { "name": "/actions/main/in/grab", "type": "boolean" },
     { "name": "/actions/main/in/stick", "type": "vector2" },
     { "name": "/actions/main/in/menu", "type": "boolean" },
+    { "name": "/actions/main/in/rightclick", "type": "boolean" },
     { "name": "/actions/main/out/haptic", "type": "vibration" }
   ],
   "action_sets": [{ "name": "/actions/main", "usage": "leftright" }],
@@ -24,6 +25,7 @@
       "/actions/main/in/grab": "Grab panel",
       "/actions/main/in/stick": "Scroll / push-pull",
       "/actions/main/in/menu": "Menu (double-tap)",
+      "/actions/main/in/rightclick": "Right click",
       "/actions/main/out/haptic": "Haptic"
     }
   ]

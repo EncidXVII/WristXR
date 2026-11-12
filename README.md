@@ -31,7 +31,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Hide everything with one button**: double-tap the left menu button, like XSOverlay, to fade screens, windows
   and keyboard out; again, and they come back as arranged in front of where you face now. Hidden
   panels stop capturing, so they cost nothing.
-- **Laser pointer that doesn't misclick**: trigger to click, hold for right click, drag, thumbstick to scroll.
+- **Laser pointer that doesn't misclick**: trigger to click, A / X (or hold the trigger) for right click, drag,
+  thumbstick to scroll.
   Hovering never clicks, and hand tremor is smoothed out without making fast aiming lag.
 - **Two-hand VR keyboard** in your Windows layout, with a language key (EN, UK, DE, ... cycles your installed
   input languages), sticky Shift / Ctrl / Alt and typing sounds.
@@ -94,9 +95,19 @@ Run one overlay at a time: two overlays fight over the same controller input and
 
 ## Controls
 
-- **Trigger**: click. Hold ~0.6 s: right click. Hold and move: drag.
-- **Thumbstick** on a screen: scroll. While holding a panel: push / pull.
-- **Grip**: move a panel. Both hands: resize and turn. Locked panels ignore grip.
+- **Trigger**: click. Hold and move: drag. Hold ~0.6 s: right click (Setup > Controls can turn this off).
+- **A or X** (the lower half of the trackpad on Vive and WMR wands): right click where you point; hold and move
+  to right-drag.
+- **Thumbstick** on a screen: scroll. Or turn on **Drag to scroll** (Setup > Controls) and pull the page with the
+  trigger, like a touchscreen (handy on wands without a stick; drag-to-select text is off while it is on).
+- **Grip**: grab a panel. The spot you grabbed stays under the laser and the panel stays level, turned to face
+  you, so a twist of the wrist never tips it. While holding: stick up / down pushes and pulls, stick left / right
+  resizes. Both grips: resize by moving your hands apart. Locked panels ignore grip.
+- **Put a panel on a hand**: hold it, bring it to your other hand and let go: it sits above that hand like a
+  tablet and moves with it. Grab it away and let go in the room to put it back. The toolbar's Hand does the same
+  for the hand you are not pointing with.
+- **Toolbar size**: - and + step through round sizes (1.0, 1.2, 1.5, 2.0 m...) and ease there.
+- **Setup > Controls** lists all of this in VR.
 - **Point at a panel**: its toolbar appears underneath (name, lock, curve, size, opacity, Room / Hand / Head,
   reset, close). The keyboard's toolbar has your input languages and Put away.
 - **Left menu button**: double-tap to hide screens, windows and keyboard; again to bring them back, as arranged,

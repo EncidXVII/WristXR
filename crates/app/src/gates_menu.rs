@@ -221,12 +221,32 @@ pub fn first_run_and_menu() -> GateResult {
     let width = c.panel(Source::Monitor(0)).ok_or("screen missing")?.width_m;
     let home = c.panel(Source::Monitor(0)).ok_or("screen missing")?.pose;
     c.tool(Tool::Lock)?;
+    // + and - step through round sizes and ease there: 1.2 m, + twice, - once: 1.5 m.
     c.tool(Tool::Bigger)?;
+    c.tool(Tool::Bigger)?;
+    c.tool(Tool::Smaller)?;
+    let mid = c.panel(Source::Monitor(0)).ok_or("screen missing")?.width_m;
+    if (mid - width).abs() > 1e-4 {
+        return Err(format!("a size change must ease, not jump: {width} -> {mid} at once"));
+    }
+    for _ in 0..60 {
+        c.session.ease_sizes(&mut c.rig.engine.panels, None, 0.011);
+    }
     c.slide(0.5)?;
     let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
-    if !p.locked || p.width_m <= width || (p.opacity - 0.6).abs() > 0.03 {
+    if !p.locked || (p.width_m - 1.5).abs() > 1e-4 || (p.opacity - 0.6).abs() > 0.03 {
         return Err(format!("toolbar Lock / + / opacity: {} {} -> {} {}", p.locked, width, p.width_m, p.opacity));
     }
+    // Hand: into the hand that is not pointing, above it and facing you.
+    c.tool(Tool::Pin(Pin::Hand))?;
+    let off = c.session.state.dominant.other();
+    let anchors = [c.rig.hands[0].pose, c.rig.hands[1].pose, crate::gates::HEAD];
+    let p = c.panel(Source::Monitor(0)).ok_or("screen missing")?;
+    let held = p.world_pose(&anchors).pos - anchors[off.index()].pos;
+    if p.anchor != Anchor::Hand(off) || held.length() > 0.5 || held.y <= 0.0 {
+        return Err(format!("toolbar Hand must put the screen in the free hand: {:?} at {held:?}", p.anchor));
+    }
+    c.point_at(screen_id, [0.5, 0.9])?;
     c.tool(Tool::Pin(Pin::Head))?;
     if c.panel(Source::Monitor(0)).map(|p| p.anchor) != Some(Anchor::Head) {
         return Err("toolbar Head must pin the screen to the head".into());
@@ -469,7 +489,7 @@ mod tests {
     fn menu_views_match_snapshots() {
         let strings = Strings::english().expect("strings");
         let (mut session, panels, screens) = setup();
-        let pages: [(&str, Page); 12] = [
+        let pages: [(&str, Page); 13] = [
             ("first_hand", Page::FirstHand),
             ("first_monitor", Page::FirstMonitor),
             ("first_keyboard", Page::FirstKeyboard),
@@ -482,6 +502,7 @@ mod tests {
             ("windows", Page::Windows(0)),
             ("watch_layouts", Page::WatchLayouts),
             ("theme", Page::Theme),
+            ("controls", Page::Controls),
         ];
         for (name, page) in pages {
             session.page = page;
@@ -524,6 +545,7 @@ mod tests {
             ("menu-windows", Page::Windows(0)),
             ("menu-watch-layout", Page::WatchLayouts),
             ("menu-theme", Page::Theme),
+            ("menu-controls", Page::Controls),
             ("first-run", Page::FirstHand),
         ] {
             session.page = page;
@@ -577,7 +599,7 @@ mod tests {
         };
         type Change<'a> = Box<dyn Fn(&mut WristInfo) + 'a>;
         let shots: [(&str, Change, u32); 5] = [
-            ("wrist-idle", Box::new(|_| {}), 140),
+            ("wrist-idle", Box::new(|_| {}), 152),
             ("wrist", Box::new(|i| i.media = Some(song.clone())), 220),
             (
                 "wrist-message",
@@ -612,7 +634,14 @@ mod tests {
             let px = wrist.render().expect("wrist render").to_vec();
             let name = format!("wrist-layout-{}", strings.get(layout.ids().0, &[]).to_lowercase().replace(' ', "-"));
             save(&name, dvr_ui::WRIST_SIZE, &px, 240);
+            // And with nothing playing, the way the watch looks most of the time.
+            wrist.set(&WristInfo { media: None, ..shot });
+            let px = wrist.render().expect("wrist render").to_vec();
+            save(&format!("{name}-quiet"), dvr_ui::WRIST_SIZE, &px, 240);
         }
+        wrist.set(&WristInfo { expanded: true, ..info.clone() });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist-expanded-quiet", dvr_ui::WRIST_SIZE, &px, 840);
         let windows = ["Steam", "notes.txt - Notepad", "Vesktop"]
             .iter()
             .enumerate()
