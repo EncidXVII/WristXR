@@ -1,8 +1,14 @@
 //! Tray icon: open the menu in VR, hide or show everything, start with SteamVR, quit. Events arrive through the main thread's message pump.
+use std::time::{Duration, Instant};
+
 use dvr_core::raster::{ACCENT, BG, Image};
+use dvr_sys::light_taskbar;
 use dvr_ui::Strings;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+
+/// How often the tray checks whether the taskbar turned light or dark.
+const THEME_CHECK: Duration = Duration::from_secs(2);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
@@ -14,7 +20,9 @@ pub enum TrayCommand {
 }
 
 pub struct Tray {
-    _icon: TrayIcon,
+    icon: TrayIcon,
+    light: bool,
+    checked: Instant,
     menu: Menu,
     update: Option<MenuItem>,
     open: MenuItem,
@@ -23,12 +31,16 @@ pub struct Tray {
     quit: MenuItem,
 }
 
-/// 32x32 accent tile with a dark "D", drawn with the built-in font (RGBA for the tray API).
-fn icon() -> Result<Icon, String> {
-    let mut img = Image::new(32, 32, ACCENT);
-    img.text(16, 16, 3, "D", BG);
-    let rgba: Vec<u8> = img.bgra.as_chunks::<4>().0.iter().flat_map(|[b, g, r, a]| [*r, *g, *b, *a]).collect();
-    Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())
+/// The DesktopVR mark from the exe's icons (see build.rs) at the tray's size: lime on a dark taskbar, dark ink on
+/// a light one, where lime would be too faint. A build without the icons gets a drawn accent tile instead.
+fn icon(light: bool) -> Result<Icon, String> {
+    let size = dvr_sys::small_icon_px();
+    Icon::from_resource(if light { 3 } else { 2 }, Some((size, size))).or_else(|_| {
+        let mut img = Image::new(32, 32, ACCENT);
+        img.text(16, 16, 3, "D", BG);
+        let rgba: Vec<u8> = img.bgra.as_chunks::<4>().0.iter().flat_map(|[b, g, r, a]| [*r, *g, *b, *a]).collect();
+        Icon::from_rgba(rgba, 32, 32).map_err(|e| e.to_string())
+    })
 }
 
 impl Tray {
@@ -40,13 +52,29 @@ impl Tray {
         let menu = Menu::new();
         menu.append_items(&[&open, &hide, &autostart, &PredefinedMenuItem::separator(), &quit])
             .map_err(|e| e.to_string())?;
+        let light = light_taskbar();
         let icon = TrayIconBuilder::new()
             .with_menu(Box::new(menu.clone()))
             .with_tooltip(s.get("tray-tooltip", &[]))
-            .with_icon(icon()?)
+            .with_icon(icon(light)?)
             .build()
             .map_err(|e| e.to_string())?;
-        Ok(Self { _icon: icon, menu, update: None, open, hide, autostart, quit })
+        Ok(Self { icon, light, checked: Instant::now(), menu, update: None, open, hide, autostart, quit })
+    }
+
+    /// Swaps the icon when the taskbar turns light or dark (checked every couple of seconds).
+    pub fn follow_taskbar(&mut self) {
+        if self.checked.elapsed() < THEME_CHECK {
+            return;
+        }
+        self.checked = Instant::now();
+        let light = light_taskbar();
+        if light != self.light
+            && let Ok(icon) = icon(light)
+            && self.icon.set_icon(Some(icon)).is_ok()
+        {
+            self.light = light;
+        }
     }
 
     /// Adds the one-click "Download update" entry at the top (no silent install).

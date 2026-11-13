@@ -269,6 +269,33 @@ pub fn attach_parent_console() {
     let _ = unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
 }
 
+/// Whether Windows draws the taskbar light (Settings > Personalisation > Colours: "Choose your default Windows mode").
+pub fn light_taskbar() -> bool {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_DWORD, RegGetValueW};
+    let mut value = 0u32;
+    let mut len = 4u32;
+    // SAFETY: the value is a DWORD written into `value`, at most `len` bytes.
+    let read = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"),
+            w!("SystemUsesLightTheme"),
+            RRF_RT_REG_DWORD,
+            None,
+            Some((&raw mut value).cast()),
+            Some(&raw mut len),
+        )
+    };
+    read.is_ok() && value == 1
+}
+
+/// The size Windows draws small icons at (the tray), in pixels at the current display scale.
+pub fn small_icon_px() -> u32 {
+    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSMICON};
+    // SAFETY: plain read of a system value.
+    u32::try_from(unsafe { GetSystemMetrics(SM_CXSMICON) }).unwrap_or(16).max(16)
+}
+
 /// Blocking error dialog for failures the user must see (e.g. SteamVR missing).
 pub fn error_dialog(title: &str, message: &str) {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};

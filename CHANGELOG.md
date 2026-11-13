@@ -8,6 +8,10 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
+- New logo: a screen on a stand, leaning forward, in the same family as FitnessVR's and Parallax's. It is the app
+  icon (Explorer, taskbar), the tray icon (lime on a dark taskbar, dark on a light one, switching with Windows)
+  and the picture SteamVR shows next to DesktopVR. Every icon is drawn from one script,
+  packaging/brand/marks.py.
 - A held panel keeps the spot you grabbed under the laser and turns to face you, level, easing there instead of
   copying every twist of the wrist; two hands resize it without rolling it.
 - The toolbar's - and + step through round sizes (0.5, 0.6, 0.8, 1.0, 1.2, 1.5, 2 m...) and ease to them,

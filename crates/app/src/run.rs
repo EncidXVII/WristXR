@@ -335,6 +335,9 @@ pub fn run() -> Result<(), String> {
             }
             release = Some(r);
         }
+        if let Some(t) = tray.as_mut() {
+            t.follow_taskbar();
+        }
         let mut tray_open_menu = false;
         while let Some(cmd) = tray.as_ref().and_then(Tray::poll) {
             match cmd {

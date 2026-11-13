@@ -1,3 +1,5 @@
+<img src="packaging/brand/desktopvr-mark.svg" width="72" alt="DesktopVR logo">
+
 # DesktopVR: free, open-source desktop overlay for SteamVR
 
 [![CI](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml)

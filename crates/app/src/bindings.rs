@@ -30,20 +30,27 @@ pub fn install(dir: &Path) -> io::Result<PathBuf> {
 #[cfg(windows)]
 pub const APP_KEY: &str = "desktopvr.overlay";
 
-/// Writes the SteamVR application manifest pointing at `exe` into `dir`.
+/// The app icon SteamVR shows next to DesktopVR in its startup and overlay lists.
+#[cfg(windows)]
+const STEAMVR_IMAGE: &[u8] = include_bytes!("../../../packaging/brand/desktopvr-256.png");
+
+/// Writes the SteamVR application manifest pointing at `exe` into `dir`, with the app icon beside it.
 #[cfg(windows)]
 pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let image = dir.join("desktopvr.png");
+    std::fs::write(&image, STEAMVR_IMAGE)?;
     let manifest = serde_json::json!({
         "source": "builtin",
         "applications": [{
             "app_key": APP_KEY,
             "launch_type": "binary",
             "binary_path_windows": exe.to_string_lossy(),
+            "image_path": image.to_string_lossy(),
             "is_dashboard_overlay": true,
             "strings": { "en_us": { "name": "DesktopVR", "description": "Your desktop in VR" } }
         }]
     });
-    std::fs::create_dir_all(dir)?;
     let path = dir.join("desktopvr.vrmanifest");
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).map_err(io::Error::other)?)?;
     Ok(path)
