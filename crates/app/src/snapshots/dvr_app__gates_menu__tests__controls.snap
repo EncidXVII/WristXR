@@ -11,6 +11,7 @@ tab Setup (0)
   Pointing at a screen
   Also
   Holding one (grip)
+  Buttons
 Back "Back" "" ""
 Control "Trigger" "" "Click" [disabled]
 Control "A or X" "" "Right click" [disabled]
@@ -23,3 +24,4 @@ Control "Stick up, down" "" "Push, pull" [disabled]
 Control "Stick left, right" "" "Size" [disabled]
 Control "Both grips" "" "Size" [disabled]
 Control "To other hand" "" "Attach" [disabled]
+Action "Rebind buttons" "" ""

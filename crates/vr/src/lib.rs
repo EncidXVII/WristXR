@@ -292,6 +292,22 @@ impl OpenVr {
         })
     }
 
+    /// Opens SteamVR's controller binding screen for this app (in the headset), where every action can be put on
+    /// another button, per controller type.
+    pub fn open_bindings(&self, app_key: &str) -> Result<(), String> {
+        let k = cstring(app_key)?;
+        let e = call!(
+            self.input,
+            input::OPEN_BINDING_UI,
+            fn(*const c_char, u64, u64, bool) -> i32,
+            k.as_ptr(),
+            self.actions.set,
+            0,
+            false
+        );
+        if e != 0 { Err(format!("OpenBindingUI: EVRInputError {e}")) } else { Ok(()) }
+    }
+
     pub fn set_auto_launch(&self, app_key: &str, on: bool) -> Result<(), String> {
         let k = cstring(app_key)?;
         let e = call!(
@@ -384,6 +400,14 @@ impl OpenVr {
         ) != 0
             && e == 0;
         Battery { on: true, level: self.battery(d), charging }
+    }
+
+    /// Someone is wearing the headset: its proximity sensor (or, without one, its movement) reports use. A
+    /// headset lying on the desk while SteamVR starts does not count.
+    pub fn worn(&self) -> bool {
+        const USER_INTERACTION: i32 = 1;
+        call!(self.system, system::GET_TRACKED_DEVICE_ACTIVITY_LEVEL, fn(u32) -> i32, ffi::HMD_INDEX as u32)
+            == USER_INTERACTION
     }
 
     pub fn stats(&self) -> VrStats {

@@ -249,7 +249,7 @@ pub fn run() -> Result<(), String> {
         Err(e) => tracing::warn!(%e, "SteamVR app registration failed"),
     }
     session.auto_launch = vr.auto_launch(APP_KEY);
-    session.persist(&panels);
+    session.persist(&panels, None);
     session.state.save(&state_path).map_err(err)?;
 
     let mut cursor = gpu.image(&raster::cursor(64, session.state.accent.rgb())).map_err(err)?;
@@ -317,6 +317,9 @@ pub fn run() -> Result<(), String> {
     let mut battery_low = [false; 2];
     let mut stats_at = Instant::now() - STATS_PERIOD;
     let start = Instant::now();
+    // The head while the headset is worn (the layout is saved around it), and whether the saved layout has been
+    // brought to the wearer yet this run.
+    let mut worn_head: Option<Pose> = None;
 
     let updates =
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
@@ -366,6 +369,14 @@ pub fn run() -> Result<(), String> {
         last_ms = now;
         // The watch shows while you look at it (or point at it, or a notification is up).
         let head_now = head(&vr);
+        if vr.worn()
+            && let Some(h) = vr.head_pose()
+        {
+            if worn_head.is_none() {
+                session.arrive(&mut engine.panels, h);
+            }
+            worn_head = Some(h);
+        }
         let watch = match engine.panels.iter().find(|p| p.source == Source::Wrist) {
             Some(w) if session.state.wrist_fade && !wrist_expanded && toast.is_none() => {
                 f32::from(u8::from(glance.update(head_now, w.world_pose(&poses), dt)))
@@ -620,6 +631,11 @@ pub fn run() -> Result<(), String> {
                 Effect::RedrawKeyboard => redraw_keyboard = true,
                 Effect::Quit => break 'frames,
                 Effect::ListWindows => session.windows = list_windows(),
+                Effect::Rebind => {
+                    if let Err(e) = vr.open_bindings(APP_KEY) {
+                        tracing::warn!(%e, "binding screen not opened");
+                    }
+                }
                 Effect::Accent => {
                     let accent = session.state.accent.rgb();
                     wrist.set_accent(accent);
@@ -832,7 +848,10 @@ pub fn run() -> Result<(), String> {
             upload(px, Source::Keyboard, KEYBOARD_SIZE.0, &mut surfaces);
         }
         for p in &engine.panels {
-            vr.place_panel(p, p.world_pose(&poses));
+            let world = p.world_pose(&poses);
+            // Leaning into a screen fades it out rather than letting the near clip slice it.
+            let fade = p.near_fade(world, head_now.pos);
+            vr.place_panel(&Panel { opacity: p.opacity * fade, ..*p }, world);
             let Some(s) = surfaces.get_mut(&p.id) else { continue };
             // Hidden or faded-out panels stop capturing (no GPU or CPU cost while hidden).
             if p.shown() && s.capture.is_none() && !s.dead {
@@ -883,13 +902,13 @@ pub fn run() -> Result<(), String> {
         }
 
         if dirty.is_some_and(|t| t.elapsed() >= SAVE_DELAY) {
-            session.persist(&engine.panels);
+            session.persist(&engine.panels, worn_head);
             session.state.save(&state_path).map_err(err)?;
             dirty = None;
         }
         vr.wait_frame(20);
     }
     dvr_sys::exit_watchdog(EXIT_GRACE);
-    session.persist(&engine.panels);
+    session.persist(&engine.panels, worn_head);
     session.state.save(&state_path).map_err(err)
 }

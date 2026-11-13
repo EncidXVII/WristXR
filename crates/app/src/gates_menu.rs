@@ -402,7 +402,7 @@ pub fn first_run_and_menu() -> GateResult {
     if c.panel(Source::Monitor(0)).is_some() || !c.effects.contains(&Effect::Removed(screen_id)) {
         return Err("toolbar close must remove the screen".into());
     }
-    c.session.persist(&c.rig.engine.panels);
+    c.session.persist(&c.rig.engine.panels, None);
     if c.session.state.panels.iter().any(|p| p.id == MENU_ID || p.id == TOOLBAR_ID) {
         return Err("menu and toolbar must never be persisted".into());
     }

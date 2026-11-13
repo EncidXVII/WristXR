@@ -8,6 +8,16 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
+- The watch sits on the back of the wrist, facing out of it, where a real watch is. It was on the controller's top,
+  under the thumb, so it faced your chest when you turned the wrist to read it. A spot you had moved it to is
+  dropped once.
+- The watch shows from a wider look: within about 52 degrees of where you look (was 45), and stays to 70 (was
+  63). The wrist's turn is unchanged.
+- Holding the trigger no longer gets in the way of dragging: held still, a tick says a right click is ready and
+  letting go gives it; moving instead is an ordinary drag, as before the hold.
+- Pointing at a panel takes its toolbar even while your other laser rests on another one: the toolbar goes to the
+  panel a laser came onto last (a laser resting on the keyboard used to keep a screen's toolbar from showing, and
+  the other way round).
 - New logo: a screen on a stand, leaning forward, in the same family as FitnessVR's and Parallax's. It is the app
   icon (Explorer, taskbar), the tray icon (lime on a dark taskbar, dark on a light one, switching with Windows)
   and the picture SteamVR shows next to DesktopVR. Every icon is drawn from one script,
@@ -21,12 +31,19 @@ First public early-access release (Windows).
 - The toolbar rides with a head-locked panel and moves in the same frame as its panel, so it no longer trails it.
 - With nothing playing, the watch keeps the time where it is and gives the date its own line under it.
 - The watch needs a quarter less turn of the wrist: its roll around the forearm must be within about 50 degrees
-  of your eyes to show and 61 to stay. Where your arm and head are counts exactly as before (face within 66
-  degrees of your eyes, stays to 81; watch within 45 degrees of where you look).
+  of your eyes to show and 61 to stay. Where your arm is counts as before (face within 66 degrees of your eyes,
+  stays to 81).
 - Grip the watch with your other hand to move it along your wrist: it stays on that wrist and keeps its turn
   there, and the spot is kept after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- After a SteamVR restart, the layout comes to where you are when you put the headset on, as you arranged it
+  around you. Screens no longer appear across the room when a playspace mover had moved you.
+- Free angle (toolbar): a held screen or window turns with your hand and keeps the angle you leave it at, instead
+  of turning to face you, level.
+- Setup > Controls > Rebind buttons opens SteamVR's binding screen for DesktopVR.
+- Screens and windows fade out as you lean into them (from 30 cm, gone at 8 cm) instead of being cut off by the
+  headset's near clip.
 - Right click on A / X (the lower half of the trackpad on Vive and WMR wands), held for right-drag. Holding the
   trigger still right-clicks; Setup > Controls can turn that off.
 - Setup > Controls: every control in one page, pointing and holding.

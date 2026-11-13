@@ -68,6 +68,10 @@ pub enum Anchor {
 pub type Anchors = [Pose; 3];
 /// Index of the head in `Anchors`.
 pub const HEAD: usize = 2;
+/// Screens and windows start to fade out when the head is this close to them...
+pub const NEAR_FADE_M: f32 = 0.3;
+/// ...and are gone this close (the headset's near clip would cut them a little nearer).
+pub const NEAR_GONE_M: f32 = 0.08;
 
 /// A flat quad. `pose` is relative to `anchor`; local +Z faces the viewer, +X right, +Y up.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -83,6 +87,10 @@ pub struct Panel {
     pub opacity: f32,
     pub locked: bool,
     pub visible: bool,
+    /// Free angle (toolbar): held, it keeps the turn you give it with the controller instead of turning to face you,
+    /// level.
+    #[serde(default)]
+    pub free_turn: bool,
     /// Runtime fade (0 shown .. 1 hidden): hide-all and the wrist's look-to-show. Never persisted.
     #[serde(skip)]
     pub dim: f32,
@@ -117,6 +125,7 @@ impl Panel {
             opacity: 1.0,
             locked: false,
             visible: true,
+            free_turn: false,
             dim: 0.0,
         }
     }
@@ -152,16 +161,21 @@ impl Panel {
         Self::new(MENU_ID, Source::Menu, Pose::new(pos, facing(f)), MENU_WIDTH_M, aspect)
     }
 
-    /// Watch on the given hand: behind the pointer tip, facing up out of the controller. Like a real watch, text
-    /// runs along the forearm and its top points away from you when you raise the wrist across your chest.
+    /// Watch on the given hand: behind the pointer tip, on the back of the hand and facing out of it, where a real
+    /// watch sits. The controller's top (+Y, under the thumb) is a quarter turn around the forearm from there: a
+    /// watch on top faced your chest when you turned the wrist to read it. Like a real watch, text runs along the
+    /// forearm and its top points away from you when you raise the wrist across your chest, palm down.
     pub fn on_wrist(id: u32, hand: Hand, aspect: f32) -> Self {
         use std::f32::consts::FRAC_PI_2;
+        let turn = if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 };
         let face_up = Quat::from_axis_angle(Vec3::X, -FRAC_PI_2);
-        let along_arm = Quat::from_axis_angle(Vec3::Z, if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 });
-        let rot = face_up * along_arm;
+        let along_arm = Quat::from_axis_angle(Vec3::Z, turn);
+        // From the top of the controller round to the back of the hand (left: -X, right: +X).
+        let to_back = Quat::from_axis_angle(Vec3::Z, turn);
+        let rot = to_back * face_up * along_arm;
         // The top edge stays put whatever the height: the watch grows downward (toward the elbow) when it opens.
         let drop = WRIST_WIDTH_M * aspect * 0.5 - WRIST_TOP_M;
-        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
+        let pose = Pose::new(to_back.rotate(Vec3::new(0.0, 0.04, 0.16)) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
         let mut p = Self::new(id, Source::Wrist, pose, WRIST_WIDTH_M, aspect);
         p.anchor = Anchor::Hand(hand);
         p
@@ -214,6 +228,21 @@ impl Panel {
         Vec3::new((uv[0] - 0.5) * self.width_m, (0.5 - uv[1]) * self.height_m(), 0.0)
     }
 
+    /// How much of the panel shows with the eyes at `eye` (0..1): screens, windows and their toolbar fade out as
+    /// the head comes within `NEAR_FADE_M` of them, and are gone at `NEAR_GONE_M`, instead of being sliced off
+    /// by the headset's near clip as you lean into them.
+    pub fn near_fade(&self, world: Pose, eye: Vec3) -> f32 {
+        if !matches!(self.source, Source::Monitor(_) | Source::Window(_) | Source::Toolbar) {
+            return 1.0;
+        }
+        let local = world.inverse().transform_point(eye);
+        let (hw, hh) = (self.width_m * 0.5, self.height_m() * 0.5);
+        let nearest = Vec3::new(local.x.clamp(-hw, hw), local.y.clamp(-hh, hh), 0.0);
+        let t = ((local - nearest).length() - NEAR_GONE_M) / (NEAR_FADE_M - NEAR_GONE_M);
+        let t = t.clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+
     /// Ray along `ray.forward()`; returns distance and uv.
     pub fn hit(&self, world: Pose, ray: Pose) -> Option<(f32, [f32; 2])> {
         let (t, uv) = self.plane_hit(world, ray)?;
@@ -222,13 +251,14 @@ impl Panel {
     }
 
     /// The ray runs through the gap between this panel and its toolbar (`bar_aspect`: the toolbar's height / width),
-    /// or over either: the toolbar must stay while the laser travels from one to the other.
-    pub fn toolbar_bridge(&self, world: Pose, ray: Pose, bar_aspect: f32) -> bool {
-        let Some((_, [u, v])) = self.plane_hit(world, ray) else { return false };
+    /// or over either: the toolbar must stay while the laser travels from one to the other. Gives how far along the
+    /// ray that is.
+    pub fn toolbar_bridge(&self, world: Pose, ray: Pose, bar_aspect: f32) -> Option<f32> {
+        let (t, [u, v]) = self.plane_hit(world, ray)?;
         let half = TOOLBAR_WIDTH_M.max(self.width_m) * 0.5 / self.width_m + 0.03;
         let reach = (TOOLBAR_GAP_M + TOOLBAR_WIDTH_M * bar_aspect) / self.height_m() + 0.02;
         let along = if self.source == Source::Keyboard { -reach..=1.0 } else { 0.0..=1.0 + reach };
-        (u - 0.5).abs() <= half && along.contains(&v)
+        ((u - 0.5).abs() <= half && along.contains(&v)).then_some(t)
     }
 
     /// Where the ray meets the panel's plane: distance along the ray and UV (outside 0..1 off the panel).
@@ -258,11 +288,11 @@ pub struct Glance {
 }
 
 /// Shows when the wrist is turned to within about 50 degrees of the eyes, the face within about 66 degrees of them
-/// and the watch within 45 degrees of where the head looks; stays until those pass about 61, 81 and 63 degrees.
+/// and the watch within 52 degrees of where the head looks; stays until those pass about 61, 81 and 70 degrees.
 /// The wrist's turn is its roll around the forearm alone; the face and look angles are what they always were, so
 /// where the arm and head are counts as before and only the wrist has to turn less far.
-const GLANCE_SHOW: Gaze = Gaze { roll: 0.64, facing: 0.4, looking: 0.7 };
-const GLANCE_KEEP: Gaze = Gaze { roll: 0.48, facing: 0.15, looking: 0.45 };
+const GLANCE_SHOW: Gaze = Gaze { roll: 0.64, facing: 0.4, looking: 0.62 };
+const GLANCE_KEEP: Gaze = Gaze { roll: 0.48, facing: 0.15, looking: 0.34 };
 const GLANCE_HOLD_S: f32 = 0.3;
 
 /// Cosines, 1 = dead on: the wrist's roll toward the eyes, the face toward the eyes, the watch toward the middle of
@@ -406,12 +436,17 @@ mod tests {
     }
 
     /// Left forearm raised across the chest, palm down: the hand points to the user's right (+X), the user looks
-    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z).
+    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z), the face up
+    /// out of the back of the hand.
     #[test]
     fn watch_reads_like_a_watch_on_both_hands() {
-        for (hand, along) in [(Hand::Left, Vec3::X), (Hand::Right, Vec3::X * -1.0)] {
-            // Controller: -Z (laser) along the arm toward the fingers, +Y up out of the back of the hand.
-            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), Quat::from_arc(Vec3::FORWARD, along));
+        use std::f32::consts::FRAC_PI_2;
+        for (hand, along, roll) in [(Hand::Left, Vec3::X, -FRAC_PI_2), (Hand::Right, Vec3::X * -1.0, FRAC_PI_2)] {
+            // Controller as gripped: -Z (laser) along the arm toward the fingers, its top (+Y, under the thumb)
+            // toward the user; the back of the hand faces up.
+            let rot = Quat::from_arc(Vec3::FORWARD, along) * Quat::from_axis_angle(Vec3::Z, roll);
+            assert!(rot.rotate(Vec3::Y).dot(Vec3::Z) > 0.99, "{hand:?}: thumb toward the user");
+            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), rot);
             let w = Panel::on_wrist(1, hand, 0.5);
             let world = ctrl * w.pose;
             let text_dir = world.rot.rotate(Vec3::X);
@@ -460,10 +495,25 @@ mod tests {
         let screen = Panel::new(5, Source::Monitor(0), Pose::IDENTITY, 1.0, 0.5);
         let bar = 84.0 / 1180.0;
         let ray = |y: f32| Pose::new(Vec3::new(0.0, y, 1.0), Quat::default());
-        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.26), bar), "just below the screen, in the gap");
-        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.29), bar), "on the toolbar");
-        assert!(!screen.toolbar_bridge(Pose::IDENTITY, ray(-0.5), bar), "well below");
-        assert!(!screen.toolbar_bridge(Pose::IDENTITY, ray(0.3), bar), "above");
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.26), bar).is_some(), "just below the screen, in the gap");
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.29), bar).is_some(), "on the toolbar");
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.5), bar).is_none(), "well below");
+        assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(0.3), bar).is_none(), "above");
+    }
+
+    #[test]
+    fn a_screen_fades_as_the_head_leans_into_it() {
+        let screen = Panel::new(5, Source::Monitor(0), Pose::IDENTITY, 1.0, 0.5);
+        let at = |z: f32| screen.near_fade(Pose::IDENTITY, Vec3::new(0.1, 0.0, z));
+        assert_eq!(at(0.6), 1.0);
+        assert_eq!(at(NEAR_FADE_M), 1.0);
+        assert!(at(0.2) > 0.2 && at(0.2) < 0.8, "half way: {}", at(0.2));
+        assert!(at(0.15) < at(0.2), "fades on the way in");
+        assert_eq!(at(NEAR_GONE_M), 0.0);
+        // Beside it (past its edge) counts the distance to the edge.
+        assert_eq!(screen.near_fade(Pose::IDENTITY, Vec3::new(1.0, 0.0, 0.05)), 1.0);
+        let keys = Panel::new(6, Source::Keyboard, Pose::IDENTITY, 1.0, 0.5);
+        assert_eq!(keys.near_fade(Pose::IDENTITY, Vec3::new(0.0, 0.0, 0.05)), 1.0, "the keyboard stays");
     }
 
     #[test]

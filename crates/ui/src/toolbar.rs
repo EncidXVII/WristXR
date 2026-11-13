@@ -169,6 +169,7 @@ impl ToolbarModel {
 const PAD: f32 = 8.0;
 const ITEM: f32 = 60.0;
 const BIG: f32 = 68.0;
+const CHIP: f32 = 176.0;
 
 /// Packs controls left to right, then centres the bar in the toolbar.
 #[derive(Default)]
@@ -190,8 +191,8 @@ impl ToolbarLayout {
 
     /// The panel's name (fixed width; long names are cut).
     pub fn chip(&mut self, label: impl Into<String>, icon: &'static str) -> usize {
-        let i = self.push(ToolButton::new(ToolKind::Chip, label, icon), self.x, PAD, 200.0, BIG);
-        self.x += 200.0 + PAD;
+        let i = self.push(ToolButton::new(ToolKind::Chip, label, icon), self.x, PAD, CHIP, BIG);
+        self.x += CHIP + PAD;
         i
     }
 
@@ -203,7 +204,7 @@ impl ToolbarLayout {
             .into_iter()
             .map(|(t, w)| {
                 let w = w.unwrap_or(match t.kind {
-                    ToolKind::Slider => 170.0,
+                    ToolKind::Slider => 160.0,
                     ToolKind::Readout => 80.0,
                     _ => ITEM,
                 });

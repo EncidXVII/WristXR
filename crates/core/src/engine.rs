@@ -1,7 +1,7 @@
 //! Per-frame interaction logic: laser pointer, keyboard typing, grab/scale.
 //! Rules: hover never clicks, trigger clicks, A/X right-clicks, grip only grabs, locked panels ignore grip.
 //! A held panel keeps the spot you grabbed under the laser and turns to face you, level; it never copies the
-//! twist of the wrist. Let go of it next to your other hand and it stays on that hand. The watch is the exception:
+//! twist of the wrist, unless it is set to a free angle (then it turns with the laser as you grabbed it). Let go of it next to your other hand and it stays on that hand. The watch is the exception:
 //! the other hand can move it, but it stays on its wrist and keeps its turn there, so it still reads like a watch.
 //! `step` does not allocate as long as `out` has spare capacity (reserve ~64).
 use crate::keyboard::{self, Keyboard};
@@ -129,6 +129,9 @@ enum Press {
         t0: u64,
         /// Moving it scrolls instead of dragging (drag to scroll, on a screen or window).
         scrolls: bool,
+        /// Held still past the long press (with hold-to-right-click on): letting go right-clicks, moving still
+        /// drags.
+        long: bool,
     },
     /// Drag to scroll: the page follows the laser, the cursor stays where the press began.
     Scrolling {
@@ -141,8 +144,6 @@ enum Press {
         panel: u32,
         uv: [f32; 2],
     },
-    /// Long press fired a right click; wait for release.
-    Consumed,
     Key {
         sc: u16,
         mods: u8,
@@ -178,6 +179,8 @@ enum Grab {
         reach: f32,
         /// The panel is next to the other hand (letting go attaches it there).
         near: bool,
+        /// The panel's turn relative to the laser, which a free-angle panel keeps.
+        turn: Quat,
         popout: Option<PopOutWatch>,
     },
     Two {
@@ -251,8 +254,10 @@ impl Engine {
     /// Puts `panel` in `hand` as if just gripped (used after a pop-out creates a window panel).
     pub fn start_grab(&mut self, hand: Hand, panel: u32, poses: &Anchors) {
         if let Some(i) = self.index_of(panel) {
-            let reach = (self.panels[i].world_pose(poses).pos - poses[hand.index()].pos).length();
-            self.grab = Grab::One { hand, panel, uv: [0.5, 0.5], reach, near: false, popout: None };
+            let world = self.panels[i].world_pose(poses);
+            let reach = (world.pos - poses[hand.index()].pos).length();
+            let turn = self.ray(hand, poses).rot.conjugate() * world.rot;
+            self.grab = Grab::One { hand, panel, uv: [0.5, 0.5], reach, near: false, turn, popout: None };
         }
     }
 
@@ -326,8 +331,10 @@ impl Engine {
                         world0: world,
                     });
                     let spot = world.transform_point(p.local_point(uv));
-                    let reach = (spot - self.ray(hand, poses).pos).length().max(MIN_GRAB_DISTANCE_M);
-                    self.grab = Grab::One { hand, panel: p.id, uv, reach, near: false, popout };
+                    let laser = self.ray(hand, poses);
+                    let reach = (spot - laser.pos).length().max(MIN_GRAB_DISTANCE_M);
+                    let turn = laser.rot.conjugate() * world.rot;
+                    self.grab = Grab::One { hand, panel: p.id, uv, reach, near: false, turn, popout };
                 }
                 Grab::One { hand: other, panel, .. } if panel == p.id && other != hand => {
                     let (a, b) = (poses[0].pos, poses[1].pos);
@@ -351,14 +358,18 @@ impl Engine {
                 Grab::Two { panel, .. } => {
                     let other = hand.other();
                     self.grab = match self.index_of(panel) {
-                        Some(i) => Grab::One {
-                            hand: other,
-                            panel,
-                            uv: [0.5, 0.5],
-                            reach: (self.panels[i].world_pose(poses).pos - self.ray(other, poses).pos).length(),
-                            near: false,
-                            popout: None,
-                        },
+                        Some(i) => {
+                            let (world, laser) = (self.panels[i].world_pose(poses), self.ray(other, poses));
+                            Grab::One {
+                                hand: other,
+                                panel,
+                                uv: [0.5, 0.5],
+                                reach: (world.pos - laser.pos).length(),
+                                near: false,
+                                turn: laser.rot.conjugate() * world.rot,
+                                popout: None,
+                            }
+                        }
                         None => Grab::Idle,
                     };
                 }
@@ -404,7 +415,7 @@ impl Engine {
         let world = p.world_pose(poses);
         match &mut self.grab {
             Grab::Idle => return,
-            Grab::One { hand, uv, reach, near, popout, .. } => {
+            Grab::One { hand, uv, reach, near, turn, popout, .. } => {
                 if let Some(w) = *popout {
                     let d = poses[hand.index()].pos - w.hand0;
                     let along = d.dot(w.toward_user);
@@ -432,8 +443,14 @@ impl Engine {
                 let ray = rays[hand.index()].unwrap_or(poses[hand.index()]);
                 let spot = ray.pos + ray.forward() * *reach;
                 // Faces you from its middle (where it was last frame), so a grab near an edge never skews it.
-                // The watch keeps its turn on the wrist instead.
-                let rot = if watch { world.rot } else { turn_toward(world.rot, world.pos - eye, ease) };
+                // The watch keeps its turn on the wrist instead; a free-angle panel turns with the laser.
+                let rot = if watch {
+                    world.rot
+                } else if p.free_turn {
+                    (ray.rot * *turn).normalized()
+                } else {
+                    turn_toward(world.rot, world.pos - eye, ease)
+                };
                 let center = spot - rot.rotate(p.local_point(*uv));
                 let other = hand.other();
                 let close = (center - poses[other.index()].pos).length() < ATTACH_REACH_M;
@@ -448,7 +465,8 @@ impl Engine {
                 let s = (b - a).length().max(1e-3) / *len0;
                 let center = (a + b) * 0.5 + (*pos0 - *mid0) * s;
                 p.width_m = (*width0 * s).clamp(MIN_WIDTH_M, MAX_WIDTH_M);
-                p.set_world_pose(Pose::new(center, turn_toward(world.rot, center - eye, ease)), poses);
+                let rot = if p.free_turn { world.rot } else { turn_toward(world.rot, center - eye, ease) };
+                p.set_world_pose(Pose::new(center, rot), poses);
             }
         }
         out.push(Event::Moved { panel: id });
@@ -525,7 +543,7 @@ impl Engine {
                 Some((panel, source, uv)) if trigger_down => {
                     self.mouse_hand = hand;
                     let scrolls = self.drag_scroll && matches!(source, Source::Monitor(_) | Source::Window(_));
-                    Press::Pending { panel, uv, t0: now, scrolls }
+                    Press::Pending { panel, uv, t0: now, scrolls, long: false }
                 }
                 Some((panel, _, uv)) => {
                     out.push(Event::Hover { hand, panel, uv, cursor: self.mouse_hand == hand });
@@ -537,8 +555,14 @@ impl Engine {
                     Press::Idle
                 }
             },
-            Press::Pending { panel, uv: uv0, t0, scrolls } => {
-                if !cur.trigger {
+            Press::Pending { panel, uv: uv0, t0, scrolls, long } => {
+                if !cur.trigger && long {
+                    // Held still, then let go: a right click where the press began.
+                    click(panel, uv0, MouseButton::Right, out);
+                    out.push(Event::Haptic { hand });
+                    st.last_click = None;
+                    Press::Idle
+                } else if !cur.trigger {
                     let uv = match st.last_click {
                         Some((p, last, t))
                             if p == panel
@@ -553,15 +577,15 @@ impl Engine {
                     out.push(Event::Haptic { hand });
                     st.last_click = Some((panel, uv, now));
                     Press::Idle
-                } else if self.hold_right_click && now.saturating_sub(t0) >= LONG_PRESS_MS {
-                    click(panel, uv0, MouseButton::Right, out);
-                    out.push(Event::Haptic { hand });
-                    st.last_click = None;
-                    Press::Consumed
                 } else {
                     match hit {
                         Some((p, _, uv)) if p == panel && dist(uv, uv0) <= DRAG_UV => {
-                            Press::Pending { panel, uv: uv0, t0, scrolls }
+                            // A tick says a right click is ready; moving from here still drags.
+                            let ready = self.hold_right_click && now.saturating_sub(t0) >= LONG_PRESS_MS;
+                            if ready && !long {
+                                out.push(Event::Haptic { hand });
+                            }
+                            Press::Pending { panel, uv: uv0, t0, scrolls, long: long || ready }
                         }
                         _ if scrolls => Press::Scrolling { panel, at: uv0, v: uv0[1], acc: 0.0 },
                         _ => {
@@ -596,8 +620,6 @@ impl Engine {
                     Press::Idle
                 }
             }
-            Press::Consumed if cur.trigger => Press::Consumed,
-            Press::Consumed => Press::Idle,
             Press::Key { sc, mods, .. } if !cur.trigger || !cur.tracked => {
                 self.keyboard.release(sc, mods, out);
                 Press::Idle
@@ -722,6 +744,29 @@ mod tests {
     }
 
     #[test]
+    fn a_free_angle_screen_turns_with_the_laser() {
+        let mut e = screen();
+        e.panels[0].free_turn = true;
+        let mut out = Vec::new();
+        let rest = hand_at(Vec3::new(-0.3, 1.2, -0.2), Vec3::new(-0.3, 1.2, -1.0));
+        let mut r = hand_at(Vec3::new(0.2, 1.3, -0.2), Vec3::new(0.2, 1.4, -1.0));
+        r.grip = true;
+        let t = run(&mut e, 0, 2, [rest, r], &mut out);
+        let before = e.panels[0].pose.rot;
+        // Roll the wrist 60 degrees about the laser: the screen rolls with it, as grabbed.
+        let roll = Quat::from_axis_angle(r.pose.rot.rotate(Vec3::FORWARD), 1.0);
+        r.pose.rot = roll * r.pose.rot;
+        run(&mut e, t, 10, [rest, r], &mut out);
+        let p = e.panels[0];
+        let want = roll * before;
+        for axis in [Vec3::X, Vec3::Y, Vec3::Z] {
+            assert!(p.pose.rot.rotate(axis).dot(want.rotate(axis)) > 0.999, "turned with the laser");
+        }
+        let (_, uv) = p.hit(p.pose, r.pose).expect("laser on the screen");
+        assert!((uv[0] - 0.7).abs() < 0.02 && (uv[1] - 0.5).abs() < 0.02, "spot moved to {uv:?}");
+    }
+
+    #[test]
     fn grip_and_stick_sideways_resize_smoothly() {
         let mut e = screen();
         let mut out = Vec::new();
@@ -825,6 +870,42 @@ mod tests {
         let same_turn = p.pose.rot.rotate(Vec3::Z).dot(turn.rotate(Vec3::Z)) > 0.9999
             && p.pose.rot.rotate(Vec3::X).dot(turn.rotate(Vec3::X)) > 0.9999;
         assert!(same_turn, "keeps its turn on the wrist");
+    }
+
+    #[test]
+    fn a_long_hold_still_drags_when_moved_and_right_clicks_when_let_go() {
+        let mouse = |out: &[Event]| -> Vec<(MouseButton, bool)> {
+            out.iter()
+                .filter_map(|e| match *e {
+                    Event::Mouse { button, down, .. } => Some((button, down)),
+                    _ => None,
+                })
+                .collect()
+        };
+        let rest = hand_at(Vec3::new(-0.3, 1.2, -0.2), Vec3::new(-0.3, 1.2, -1.0));
+        let at = |x: f32| hand_at(Vec3::new(0.0, 1.4, -0.2), Vec3::new(x, 1.4, -1.0));
+        for moved in [true, false] {
+            let mut e = screen();
+            let mut out = Vec::new();
+            let mut r = at(0.0);
+            let t = run(&mut e, 0, 1, [rest, r], &mut out);
+            r.trigger = true;
+            // Held still well past the long press.
+            let t = run(&mut e, t, (LONG_PRESS_MS + 200) / 11, [rest, r], &mut out);
+            assert!(mouse(&out).is_empty(), "nothing yet: {out:?}");
+            if moved {
+                r = HandInput { trigger: true, ..at(0.2) };
+            }
+            let t = run(&mut e, t, 5, [rest, r], &mut out);
+            r.trigger = false;
+            run(&mut e, t, 1, [rest, r], &mut out);
+            let want = if moved {
+                vec![(MouseButton::Left, true), (MouseButton::Left, false)]
+            } else {
+                vec![(MouseButton::Right, true), (MouseButton::Right, false)]
+            };
+            assert_eq!(mouse(&out), want, "moved: {moved}");
+        }
     }
 
     #[test]

@@ -28,8 +28,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Any window as its own panel**: pick it from the window list, or grip a screen and yank the window under
   the pointer out of it.
 - **Panel toolbar**: point at a screen or window and a toolbar appears under it, starting with the panel's name:
-  lock, curve, size, an opacity slider, Room / Hand / Head (a head-locked HUD that follows your view), reset,
-  close.
+  lock, curve, free angle, size, an opacity slider, Room / Hand / Head (a head-locked HUD that follows your
+  view), reset, close.
 - **Hide everything with one button**: double-tap the left menu button, like XSOverlay, to fade screens, windows
   and keyboard out; again, and they come back as arranged in front of where you face now. Hidden
   panels stop capturing, so they cost nothing.
@@ -97,13 +97,15 @@ Run one overlay at a time: two overlays fight over the same controller input and
 
 ## Controls
 
-- **Trigger**: click. Hold and move: drag. Hold ~0.6 s: right click (Setup > Controls can turn this off).
+- **Trigger**: click. Hold and move: drag. Hold still ~0.6 s (a tick) and let go: right click; move instead and
+  it is still a drag (Setup > Controls can turn the right click off).
 - **A or X** (the lower half of the trackpad on Vive and WMR wands): right click where you point; hold and move
   to right-drag.
 - **Thumbstick** on a screen: scroll. Or turn on **Drag to scroll** (Setup > Controls) and pull the page with the
   trigger, like a touchscreen (handy on wands without a stick; drag-to-select text is off while it is on).
 - **Grip**: grab a panel. The spot you grabbed stays under the laser and the panel stays level, turned to face
-  you, so a twist of the wrist never tips it. While holding: stick up / down pushes and pulls, stick left / right
+  you, so a twist of the wrist never tips it (unless the toolbar's free angle is on: then it turns with your hand
+  and stays at the angle you leave it). While holding: stick up / down pushes and pulls, stick left / right
   resizes. Both grips: resize by moving your hands apart. Locked panels ignore grip.
 - **Put a panel on a hand**: hold it, bring it to your other hand and let go: it sits above that hand like a
   tablet and moves with it. Grab it away and let go in the room to put it back. The toolbar's Hand does the same
@@ -111,9 +113,10 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Move the watch**: grip it with your other hand and slide it along your wrist; it stays on that wrist and
   keeps its spot. Menu > Reset layout puts it back.
 - **Toolbar size**: - and + step through round sizes (1.0, 1.2, 1.5, 2.0 m...) and ease there.
-- **Setup > Controls** lists all of this in VR.
-- **Point at a panel**: its toolbar appears underneath (name, lock, curve, size, opacity, Room / Hand / Head,
-  reset, close). The keyboard's toolbar has your input languages and Put away.
+- **Setup > Controls** lists all of this in VR; Rebind buttons there opens SteamVR's binding screen for
+  DesktopVR, where every action can go on another button.
+- **Point at a panel**: its toolbar appears underneath (name, lock, curve, free angle, size, opacity, Room / Hand /
+  Head, reset, close). The keyboard's toolbar has your input languages and Put away.
 - **Left menu button**: double-tap to hide screens, windows and keyboard; again to bring them back, as arranged,
   in front of where you face now (handy after a playspace mover).
 - **Toolbar Reset** puts a panel back in front of you; **Menu > Reset layout** arranges all screens and windows

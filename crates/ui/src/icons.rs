@@ -13,6 +13,8 @@ pub const CLOSE: &str = "M6 6l12 12 M18 6L6 18";
 pub const BACK: &str = "M15 5l-7 7 7 7";
 pub const LOCK: &str = "M8 11V8a4 4 0 0 1 8 0v3 M6 11h12v9H6z";
 pub const CURVE: &str = "M3 6c6 4 12 4 18 0v12c-6-4-12-4-18 0z";
+/// A panel at a slant with a turn arrow: free angle.
+pub const FREE_TURN: &str = "M8 4l12 3-3 11-12-3z M3 19a9 9 0 0 0 6 3 M3 19v-3 M3 19h3";
 pub const OPACITY: &str = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 3v18 M12 8h6 M12 12h8 M12 16h6";
 pub const RESET: &str = "M4 12a8 8 0 1 0 2.5-5.8 M4 4v5h5";
 pub const WARNING: &str = "M12 3l10 18H2z M12 10v5 M12 18v1";

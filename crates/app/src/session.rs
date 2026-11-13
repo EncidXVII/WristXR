@@ -114,6 +114,8 @@ pub enum Effect {
     NotifyFrom(NotifyFrom),
     /// The accent changed: recolour every view.
     Accent,
+    /// Open SteamVR's binding screen for DesktopVR.
+    Rebind,
 }
 
 /// What a menu slot does (kept for the slots last drawn, so a click acts on what the user saw).
@@ -152,6 +154,8 @@ pub enum Act {
     Accent(Accent),
     OpenControls,
     HoldRightClick,
+    /// SteamVR's binding screen.
+    Rebind,
     DragScroll,
     LaserHand(Hand),
     WatchHand(Hand),
@@ -170,6 +174,8 @@ pub enum Tool {
     None,
     Lock,
     Curve,
+    /// Held, it keeps the turn you give it instead of facing you.
+    FreeTurn,
     Smaller,
     Bigger,
     Opacity,
@@ -239,6 +245,10 @@ pub struct Session {
     /// Panel whose toolbar is shown, and when the laser was last on it or its toolbar.
     toolbar: Option<u32>,
     toolbar_seen: u64,
+    /// When the toolbar last moved to its panel.
+    toolbar_at: u64,
+    /// The panel with a toolbar each hand's laser is on, and since when.
+    pointing: [Option<(u32, u64)>; 2],
     toolbar_hovered: bool,
     /// A panel easing to the size the toolbar's - or + asked for.
     size_goal: Option<(u32, f32)>,
@@ -261,6 +271,17 @@ pub fn next_id(panels: &[Panel]) -> u32 {
 
 fn aspect(m: &MonitorInfo) -> f32 {
     m.rect.h as f32 / m.rect.w as f32
+}
+
+/// Turns and moves the room-placed screens, windows and keyboard, as arranged, from around the head at `then` to
+/// around the head at `now` (turned only about the vertical).
+fn carry(panels: &mut [Panel], then: Pose, now: Pose) {
+    let carry = yaw_frame(now) * yaw_frame(then).inverse();
+    for p in panels.iter_mut().filter(|p| {
+        p.anchor == Anchor::World && matches!(p.source, Source::Monitor(_) | Source::Window(_) | Source::Keyboard)
+    }) {
+        p.pose = carry * p.pose;
+    }
 }
 
 fn find(panels: &mut [Panel], source: Source) -> Option<&mut Panel> {
@@ -322,6 +343,8 @@ impl Session {
             clock: 0,
             toolbar: None,
             toolbar_seen: 0,
+            toolbar_at: 0,
+            pointing: [None; 2],
             toolbar_hovered: false,
             size_goal: None,
             acts: RefCell::new(Vec::new()),
@@ -389,13 +412,7 @@ impl Session {
             return;
         }
         if let Some(then) = self.hidden_head.take() {
-            let carry = yaw_frame(head) * yaw_frame(then).inverse();
-            for p in panels.iter_mut().filter(|p| {
-                p.anchor == Anchor::World
-                    && matches!(p.source, Source::Monitor(_) | Source::Window(_) | Source::Keyboard)
-            }) {
-                p.pose = carry * p.pose;
-            }
+            carry(panels, then, head);
         }
         if let Some(k) = find(panels, Source::Keyboard)
             && !k.visible
@@ -476,9 +493,23 @@ impl Session {
         }
     }
 
-    /// Panels persisted in the layout (everything but the menu and toolbar).
-    pub fn persist(&mut self, panels: &[Panel]) {
+    /// Panels persisted in the layout (everything but the menu and toolbar), with where the head is now (`None`
+    /// while it is not tracked: the last known spot stays).
+    pub fn persist(&mut self, panels: &[Panel], head: Option<Pose>) {
         self.state.panels = panels.iter().filter(|p| p.id < TOOLBAR_ID).copied().collect();
+        if head.is_some() {
+            self.state.layout_head = head;
+        }
+    }
+
+    /// The first moment someone wears the headset after start: the saved layout comes to where they face, as it
+    /// was arranged around them when it was saved. After a playspace mover (whose offset SteamVR drops on a
+    /// restart) or a walk, the screens are in front again instead of somewhere across the room.
+    pub fn arrive(&mut self, panels: &mut [Panel], head: Pose) {
+        if let Some(then) = self.state.layout_head {
+            carry(panels, then, head);
+        }
+        self.state.layout_head = Some(head);
     }
 
     /// Routes laser events on the menu and toolbar to their views and decides which panel shows the toolbar.
@@ -489,15 +520,26 @@ impl Session {
         let mut over_menu = false;
         let mut over_toolbar = false;
         // A laser between the panel and its toolbar (the gap, or another panel seen through it) keeps the toolbar
-        // where it is.
+        // where it is for that hand. A panel in front of the gap is not seen through it: the laser is on that panel.
         let bar_aspect = TOOLBAR_SIZE.1 as f32 / TOOLBAR_SIZE.0 as f32;
-        let bridged = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id)).is_some_and(|p| {
-            let world = p.world_pose(&anchors);
-            rays.iter().flatten().any(|r| p.toolbar_bridge(world, *r, bar_aspect))
+        let owner = self.toolbar.and_then(|id| panels.iter().find(|p| p.id == id));
+        let bridged = rays.map(|ray| {
+            ray.zip(owner).is_some_and(|(r, p)| {
+                p.toolbar_bridge(p.world_pose(&anchors), r, bar_aspect).is_some_and(|t| {
+                    !panels.iter().any(|q| {
+                        q.id != p.id
+                            && has_toolbar(q.source)
+                            && q.shown()
+                            && q.hit(q.world_pose(&anchors), r).is_some_and(|(near, _)| near < t)
+                    })
+                })
+            })
         });
-        if bridged {
+        if bridged.iter().any(|b| *b) {
             self.toolbar_seen = now;
         }
+        let mut on = [None; 2];
+        let mut claim = None;
         for e in events {
             match *e {
                 Event::Hover { panel: MENU_ID, uv, .. } => {
@@ -519,15 +561,45 @@ impl Session {
                 Event::Moved { panel } if panels.iter().any(|p| p.id == panel && p.source == Source::Wrist) => {
                     self.state.wrist_moved = true;
                 }
-                Event::Hover { panel, .. } | Event::Mouse { panel, .. } | Event::Moved { panel }
-                    if panels.iter().any(|p| p.id == panel && has_toolbar(p.source))
-                        && !(bridged && Some(panel) != self.toolbar) =>
+                Event::Hover { hand, panel, .. } if panels.iter().any(|p| p.id == panel && has_toolbar(p.source)) => {
+                    on[hand.index()] = Some(panel);
+                }
+                // A click or a move is meant for that panel: its toolbar comes at once.
+                Event::Mouse { panel, .. } | Event::Moved { panel }
+                    if panels.iter().any(|p| p.id == panel && has_toolbar(p.source)) =>
                 {
-                    self.toolbar = Some(panel);
-                    self.toolbar_seen = now;
+                    claim = Some(panel);
                 }
                 _ => {}
             }
+        }
+        // Each hand's laser, the panel it is on and since when. The toolbar goes to the panel a laser came onto
+        // last, so a laser resting on the keyboard never keeps a screen the other hand points at from its toolbar
+        // (or the other way round), and two hands on two panels never make it flicker between them.
+        for (i, panel) in on.into_iter().enumerate() {
+            self.pointing[i] = match (panel, self.pointing[i]) {
+                (Some(p), Some((q, since))) if p == q => Some((q, since)),
+                (Some(p), _) => Some((p, now)),
+                (None, _) => None,
+            };
+        }
+        if claim.is_none() {
+            claim = (0..2)
+                .filter_map(|i| self.pointing[i].map(|(p, since)| (i, p, since)))
+                .filter(|&(i, p, since)| {
+                    Some(p) != self.toolbar && !bridged[i] && (self.toolbar.is_none() || since >= self.toolbar_at)
+                })
+                .max_by_key(|&(_, _, since)| since)
+                .map(|(_, p, _)| p);
+        }
+        if let Some(p) = claim {
+            if Some(p) != self.toolbar {
+                self.toolbar_at = now;
+            }
+            self.toolbar = Some(p);
+        }
+        if self.toolbar.is_some_and(|t| claim == Some(t) || on.contains(&Some(t))) {
+            self.toolbar_seen = now;
         }
         if over_toolbar {
             self.toolbar_seen = now;
@@ -627,7 +699,8 @@ impl Session {
         tools.push(Tool::Lock);
         if !keyboard {
             lock.push((b(ToolKind::Toggle, String::new(), icons::CURVE).on(p.curvature > 0.0), None));
-            tools.push(Tool::Curve);
+            lock.push((b(ToolKind::Toggle, String::new(), icons::FREE_TURN).on(p.free_turn), None));
+            tools.extend([Tool::Curve, Tool::FreeTurn]);
         }
         l.group(lock);
         let width = self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1);
@@ -666,7 +739,7 @@ impl Session {
                 pins.iter()
                     .map(|(pin, id)| {
                         tools.push(Tool::Pin(*pin));
-                        (b(ToolKind::Segment, t(id), "").on(*pin == now), Some(84.0))
+                        (b(ToolKind::Segment, t(id), "").on(*pin == now), Some(76.0))
                     })
                     .collect(),
             );
@@ -704,6 +777,7 @@ impl Session {
             Tool::None => {}
             Tool::Lock => p.locked = !p.locked,
             Tool::Curve => p.curvature = if p.curvature > 0.0 { 0.0 } else { CURVATURE },
+            Tool::FreeTurn => p.free_turn = !p.free_turn,
             Tool::Smaller | Tool::Bigger => {
                 // From the size already asked for, so quick taps keep stepping while it eases.
                 let from = self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1);
@@ -1049,6 +1123,9 @@ impl Session {
                     control(&mut acts, "ctl-to-hand", "ctl-attach"),
                 ];
                 l.rows(Col::Right, rows, ROW_H);
+                l.label(Col::Right, t("menu-controls-buttons"));
+                let rebind = row(t("menu-rebind"));
+                l.rows(Col::Right, vec![add(&mut acts, Act::Rebind, rebind)], ROW_H);
                 l.finish()
             }
             Page::Tab(TAB_INBOX) => {
@@ -1348,6 +1425,11 @@ impl Session {
             Act::OpenTheme => self.page = Page::Theme,
             Act::OpenControls => self.page = Page::Controls,
             Act::HoldRightClick => self.state.hold_right_click = !self.state.hold_right_click,
+            // The binding screen opens in the headset; the menu steps out of its way.
+            Act::Rebind => {
+                Self::close(panels);
+                fx.push(Effect::Rebind);
+            }
             Act::DragScroll => self.state.drag_scroll = !self.state.drag_scroll,
             Act::Accent(accent) => {
                 if accent != self.state.accent {
@@ -1457,5 +1539,49 @@ mod tests {
         let seen = head.inverse().transform_point(p.pos);
         assert!((seen - screen.pos).length() < 1e-4, "screen at {seen:?} from the head");
         assert!(!s.hidden);
+    }
+
+    #[test]
+    fn a_restart_brings_the_saved_layout_to_the_wearer() {
+        use dvr_core::math::{Quat, Vec3};
+        let mut panels = Vec::new();
+        let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
+        let screen = Pose::new(Vec3::new(0.3, 1.5, -1.2), Quat::default());
+        panels.push(Panel::new(50, Source::Monitor(0), screen, 1.0, 0.56));
+        s.persist(&panels, Some(Pose::IDENTITY));
+        // SteamVR came back with the playspace mover's offset gone: the wearer is somewhere else in its space.
+        let mut again = s.state.panels.clone();
+        let mut s = Session::new(s.state, &mut again, Pose::IDENTITY);
+        let head = Pose::new(Vec3::new(-1.5, 0.0, 2.0), Quat::from_axis_angle(Vec3::Y, 2.0));
+        s.arrive(&mut again, head);
+        let p = again.iter().find(|p| p.id == 50).expect("screen").pose;
+        assert!((head.inverse().transform_point(p.pos) - screen.pos).length() < 1e-4, "in front as arranged");
+        assert_eq!(s.state.layout_head, Some(head));
+    }
+
+    #[test]
+    fn the_toolbar_goes_to_the_panel_a_laser_came_onto_last() {
+        let mut panels = Vec::new();
+        let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
+        panels.push(Panel::new(50, Source::Monitor(0), Pose::IDENTITY, 1.0, 0.56));
+        let keys = panels.iter().find(|p| p.source == Source::Keyboard).expect("keyboard").id;
+        let (menu, bar) = (Menu::new().expect("menu"), Toolbar::new().expect("toolbar"));
+        let frame = |s: &mut Session, now: u64, on: &[(Hand, u32)]| {
+            let events: Vec<Event> =
+                on.iter().map(|&(hand, panel)| Event::Hover { hand, panel, uv: [0.5, 0.5], cursor: true }).collect();
+            let input = PointerInput { events: &events, now, rays: [None; 2], anchors: Default::default() };
+            s.pointer(input, &panels, &menu, &bar);
+            s.toolbar_target()
+        };
+        assert_eq!(frame(&mut s, 0, &[(Hand::Left, keys)]), Some(keys));
+        // The left laser stays on the keyboard; the right one comes onto the screen: the screen's toolbar shows,
+        // and stays while both rest where they are.
+        for now in 10..20 {
+            assert_eq!(frame(&mut s, now, &[(Hand::Left, keys), (Hand::Right, 50)]), Some(50), "frame {now}");
+        }
+        // The left laser leaves the keyboard and comes back: the keyboard's toolbar again.
+        frame(&mut s, 20, &[(Hand::Right, 50)]);
+        assert_eq!(frame(&mut s, 21, &[(Hand::Left, keys), (Hand::Right, 50)]), Some(keys));
+        assert_eq!(frame(&mut s, 22, &[(Hand::Left, keys), (Hand::Right, 50)]), Some(keys));
     }
 }

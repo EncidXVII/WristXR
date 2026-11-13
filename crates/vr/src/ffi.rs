@@ -28,6 +28,7 @@ pub const CLIENT_CORE_VERSION: &CStr = c"IVRClientCore_003";
 pub mod system {
     pub const GET_DXGI_OUTPUT_INFO: usize = 8;
     pub const GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE: usize = 12;
+    pub const GET_TRACKED_DEVICE_ACTIVITY_LEVEL: usize = 16;
     pub const GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE: usize = 18;
     pub const GET_CONTROLLER_ROLE_FOR_TRACKED_DEVICE_INDEX: usize = 19;
     pub const GET_TRACKED_DEVICE_CLASS: usize = 20;
@@ -70,6 +71,7 @@ pub mod input {
     pub const GET_ANALOG_ACTION_DATA: usize = 6;
     pub const GET_POSE_ACTION_DATA_FOR_NEXT_FRAME: usize = 8;
     pub const TRIGGER_HAPTIC_VIBRATION_ACTION: usize = 23;
+    pub const OPEN_BINDING_UI: usize = 32;
 }
 
 #[repr(C)]
@@ -269,6 +271,7 @@ mod tests {
             ("IVRSystem", "GetDXGIOutputInfo", system::GET_DXGI_OUTPUT_INFO),
             ("IVRSystem", "GetDeviceToAbsoluteTrackingPose", system::GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE),
             ("IVRSystem", "PollNextEvent", system::POLL_NEXT_EVENT),
+            ("IVRSystem", "GetTrackedDeviceActivityLevel", system::GET_TRACKED_DEVICE_ACTIVITY_LEVEL),
             (
                 "IVRSystem",
                 "GetTrackedDeviceIndexForControllerRole",
@@ -314,6 +317,7 @@ mod tests {
             ("IVRInput", "GetAnalogActionData", input::GET_ANALOG_ACTION_DATA),
             ("IVRInput", "GetPoseActionDataForNextFrame", input::GET_POSE_ACTION_DATA_FOR_NEXT_FRAME),
             ("IVRInput", "TriggerHapticVibrationAction", input::TRIGGER_HAPTIC_VIBRATION_ACTION),
+            ("IVRInput", "OpenBindingUI", input::OPEN_BINDING_UI),
         ];
         for (t, f, i) in checks {
             assert_eq!(table(t).get(*i).map(String::as_str), Some(*f), "{t}::{f}");

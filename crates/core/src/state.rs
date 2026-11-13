@@ -1,3 +1,4 @@
+use crate::math::Pose;
 use crate::panel::{Hand, Panel};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -168,8 +169,14 @@ pub struct State {
     pub hold_right_click: bool,
     /// Trigger-drag on a screen scrolls it (off: it drags, to select text).
     pub drag_scroll: bool,
-    /// The watch was moved on its wrist: keep where it is (its turn always comes from the current build).
+    /// The watch was moved on its wrist: keep where it is (its turn always comes from the current build). Saved
+    /// under a new name since the watch moved to the back of the hand, so a spot kept from the top of the
+    /// controller is dropped once.
+    #[serde(rename = "watch_moved")]
     pub wrist_moved: bool,
+    /// Where the head was when the layout was last saved. The next start brings the layout, as arranged, to where
+    /// you then face: SteamVR may come back with the playspace moved (a playspace mover's offset is gone).
+    pub layout_head: Option<Pose>,
 }
 
 impl Default for State {
@@ -196,6 +203,7 @@ impl Default for State {
             hold_right_click: true,
             drag_scroll: false,
             wrist_moved: false,
+            layout_head: None,
         }
     }
 }
