@@ -739,7 +739,7 @@ impl Session {
                 pins.iter()
                     .map(|(pin, id)| {
                         tools.push(Tool::Pin(*pin));
-                        (b(ToolKind::Segment, t(id), "").on(*pin == now), Some(76.0))
+                        (b(ToolKind::Segment, t(id), "").on(*pin == now), Some(92.0))
                     })
                     .collect(),
             );

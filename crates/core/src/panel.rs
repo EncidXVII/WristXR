@@ -50,7 +50,7 @@ pub const MENU_ID: u32 = u32::MAX - 1;
 pub const MENU_WIDTH_M: f32 = 0.5;
 /// Fixed id of the toolbar panel.
 pub const TOOLBAR_ID: u32 = u32::MAX - 2;
-pub const TOOLBAR_WIDTH_M: f32 = 0.59;
+pub const TOOLBAR_WIDTH_M: f32 = 0.63;
 /// Gap between a panel's bottom edge and its toolbar.
 const TOOLBAR_GAP_M: f32 = 0.02;
 /// A panel dimmed this far is hidden and ignores the laser.
@@ -232,7 +232,10 @@ impl Panel {
     /// the head comes within `NEAR_FADE_M` of them, and are gone at `NEAR_GONE_M`, instead of being sliced off
     /// by the headset's near clip as you lean into them.
     pub fn near_fade(&self, world: Pose, eye: Vec3) -> f32 {
-        if !matches!(self.source, Source::Monitor(_) | Source::Window(_) | Source::Toolbar) {
+        // A head-locked panel keeps its distance from the eyes: it is never leaned into.
+        if !matches!(self.source, Source::Monitor(_) | Source::Window(_) | Source::Toolbar)
+            || self.anchor == Anchor::Head
+        {
             return 1.0;
         }
         let local = world.inverse().transform_point(eye);
@@ -493,7 +496,7 @@ mod tests {
     #[test]
     fn toolbar_stays_while_the_laser_crosses_the_gap() {
         let screen = Panel::new(5, Source::Monitor(0), Pose::IDENTITY, 1.0, 0.5);
-        let bar = 84.0 / 1180.0;
+        let bar = 84.0 / 1260.0;
         let ray = |y: f32| Pose::new(Vec3::new(0.0, y, 1.0), Quat::default());
         assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.26), bar).is_some(), "just below the screen, in the gap");
         assert!(screen.toolbar_bridge(Pose::IDENTITY, ray(-0.29), bar).is_some(), "on the toolbar");
@@ -514,6 +517,8 @@ mod tests {
         assert_eq!(screen.near_fade(Pose::IDENTITY, Vec3::new(1.0, 0.0, 0.05)), 1.0);
         let keys = Panel::new(6, Source::Keyboard, Pose::IDENTITY, 1.0, 0.5);
         assert_eq!(keys.near_fade(Pose::IDENTITY, Vec3::new(0.0, 0.0, 0.05)), 1.0, "the keyboard stays");
+        let hud = Panel { anchor: Anchor::Head, ..screen };
+        assert_eq!(hud.near_fade(Pose::IDENTITY, Vec3::new(0.0, 0.0, 0.2)), 1.0, "a head-locked panel stays");
     }
 
     #[test]

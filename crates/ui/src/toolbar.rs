@@ -24,7 +24,7 @@ slint::slint! {
         in property <[ToolView]> tools;
         callback clicked(int);
         callback slid(int, float);
-        width: 1180px;
+        width: 1260px;
         height: 84px;
         background: transparent;
         Rectangle {
@@ -97,7 +97,7 @@ slint::slint! {
     }
 }
 
-pub const TOOLBAR_SIZE: (u32, u32) = (1180, 84);
+pub const TOOLBAR_SIZE: (u32, u32) = (1260, 84);
 
 /// How a toolbar control looks.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -169,7 +169,7 @@ impl ToolbarModel {
 const PAD: f32 = 8.0;
 const ITEM: f32 = 60.0;
 const BIG: f32 = 68.0;
-const CHIP: f32 = 176.0;
+const CHIP: f32 = 200.0;
 
 /// Packs controls left to right, then centres the bar in the toolbar.
 #[derive(Default)]
@@ -204,7 +204,7 @@ impl ToolbarLayout {
             .into_iter()
             .map(|(t, w)| {
                 let w = w.unwrap_or(match t.kind {
-                    ToolKind::Slider => 160.0,
+                    ToolKind::Slider => 170.0,
                     ToolKind::Readout => 80.0,
                     _ => ITEM,
                 });
