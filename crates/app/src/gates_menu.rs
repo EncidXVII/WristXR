@@ -568,6 +568,15 @@ mod tests {
             let px = toolbar.render().expect("toolbar render").to_vec();
             save(name, TOOLBAR_SIZE, &px, TOOLBAR_SIZE.1);
         }
+        let mut banner = dvr_ui::Banner::new().expect("banner");
+        banner.set(
+            "Discord",
+            "Alex",
+            "ok everyone is here, pull in 2 min. bring the fire resist pots and someone please mark the adds this time, last run we wiped twice on the second phase because nobody watched the timer",
+            "now",
+        );
+        let px = banner.render().expect("banner render").to_vec();
+        save("banner", dvr_ui::BANNER_SIZE, &px, dvr_ui::BANNER_SIZE.1);
         let mut wrist = Wrist::new().expect("wrist");
         let song = WristMedia {
             title: "Night Drive".into(),

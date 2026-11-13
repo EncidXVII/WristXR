@@ -5,13 +5,13 @@ use dvr_core::chat::ChatLine;
 use dvr_core::engine::{Event, MouseButton};
 use dvr_core::math::Pose;
 use dvr_core::panel::{
-    Anchor, Anchors, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel, PixelRect,
-    Source, TOOLBAR_ID, TOOLBAR_WIDTH_M, yaw_frame,
+    Anchor, Anchors, BANNER_ID, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel,
+    PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M, yaw_frame,
 };
 use dvr_core::state::{Accent, NotifyFrom, State, WatchLayout};
 use dvr_ui::{
-    Col, Layout, MENU_SIZE, Menu, MenuInput, MenuModel, ROW_H, Slot, SlotKind, Strings, TOOLBAR_SIZE, Tab, Tone,
-    ToolButton, ToolInput, ToolKind, Toolbar, ToolbarLayout, ToolbarModel, WRIST_SIZE, icons,
+    BANNER_SIZE, Col, Layout, MENU_SIZE, Menu, MenuInput, MenuModel, ROW_H, Slot, SlotKind, Strings, TOOLBAR_SIZE, Tab,
+    Tone, ToolButton, ToolInput, ToolKind, Toolbar, ToolbarLayout, ToolbarModel, WRIST_SIZE, icons,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -318,9 +318,10 @@ impl Session {
         );
         toolbar.locked = true;
         toolbar.visible = false;
-        panels.retain(|p| p.id != MENU_ID && p.id != TOOLBAR_ID);
+        panels.retain(|p| p.id != MENU_ID && p.id != TOOLBAR_ID && p.id != BANNER_ID);
         panels.push(menu);
         panels.push(toolbar);
+        panels.push(Panel::banner(BANNER_SIZE.1 as f32 / BANNER_SIZE.0 as f32, 0.0));
         let page = if state.onboarded { Page::Tab(TAB_PANELS) } else { Page::FirstHand };
         Self {
             state,
@@ -480,6 +481,8 @@ impl Session {
                 Source::Monitor(_) | Source::Window(_) | Source::Keyboard => f32::from(u8::from(self.hidden)),
                 Source::Wrist => 1.0 - watch,
                 Source::Menu | Source::Toolbar => 0.0,
+                // The banner's fade is the run loop's (it follows the notification).
+                Source::Banner => p.dim,
             };
             let hiding = target > p.dim;
             let length = match (p.source == Source::Wrist, hiding) {

@@ -8,9 +8,6 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
-- The watch sits on the back of the wrist, facing out of it, where a real watch is. It was on the controller's top,
-  under the thumb, so it faced your chest when you turned the wrist to read it. A spot you had moved it to is
-  dropped once.
 - The watch shows from a wider look: within about 52 degrees of where you look (was 45), and stays to 70 (was
   63). The wrist's turn is unchanged.
 - Holding the trigger no longer gets in the way of dragging: held still, a tick says a right click is ready and
@@ -37,6 +34,11 @@ First public early-access release (Windows).
   there, and the spot is kept after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- Notification banner: a message also shows low in your view (riding with your head), with the app, the sender and
+  up to three lines of text. It rises and fades in, goes back down the same way after about 6 seconds, and stays
+  while you point at it. Without Windows' animations it simply appears and goes.
+- The watch's playing mark moves while a song plays and you look at the watch: four bars rising and falling on slow
+  waves of their own. Paused, they rest.
 - After a SteamVR restart, the layout comes to where you are when you put the headset on, as you arranged it
   around you. Screens no longer appear across the room when a playspace mover had moved you.
 - Free angle (toolbar): a held screen or window turns with your hand and keeps the angle you leave it at, instead

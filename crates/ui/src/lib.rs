@@ -1,12 +1,14 @@
 //! VR UI: Slint components rendered offscreen with the software renderer, only when something changed.
 //! Strings come from Fluent (`locales/`), English shipped.
 
+mod banner;
 mod i18n;
 pub mod icons;
 mod keyboard;
 mod menu;
 mod toolbar;
 
+pub use banner::{BANNER_SIZE, Banner};
 pub use i18n::Strings;
 pub use keyboard::{KEYBOARD_SIZE, KeyFace, Keyboard};
 pub use menu::{
@@ -157,6 +159,28 @@ slint::slint! {
         }
     }
 
+    // Now playing: four bars standing on one line. While the song plays and the watch is seen they rise and fall
+    // on their own, each on two slow waves of its own (no two in step, nothing faster than about 2.3 a second),
+    // like a music app's playing mark; otherwise they hold their resting shape.
+    component Wave inherits Rectangle {
+        in property <float> t;
+        in property <bool> live;
+        property <[float]> rest: [0.58, 1.0, 0.42, 0.75];
+        property <[float]> fa: [1.275, 1.725, 0.975, 2.175];
+        property <[float]> fb: [2.325, 0.825, 1.95, 1.425];
+        property <[float]> pa: [0.0, 1.9, 3.7, 5.1];
+        property <[float]> pb: [2.4, 0.7, 4.4, 1.3];
+        width: 29px; height: 24px;
+        for i in 4 : Rectangle {
+            property <float> level: root.live
+                ? clamp(0.55 + 0.27 * sin((root.t * root.fa[i] * 6.2832 + root.pa[i]) * 1rad)
+                    + 0.18 * sin((root.t * root.fb[i] * 6.2832 + root.pb[i]) * 1rad), 0.2, 1.0)
+                : root.rest[i];
+            x: i * 8px; width: 5px; height: root.height * self.level; y: root.height - self.height;
+            border-radius: 2.5px; background: Theme.accent;
+        }
+    }
+
     export component WristView inherits Window {
         default-font-family: "Barlow";
         in property <string> time;
@@ -187,6 +211,9 @@ slint::slint! {
         in property <string> gpu-label;
         in property <string> fps-label;
         in property <bool> playing;
+        // Seconds on the playing mark's clock; it moves only while `beating` (playing, seen, motion on).
+        in property <float> beat;
+        in property <bool> beating;
         in property <bool> has-media;
         in property <string> media-title;
         in property <string> media-sub;
@@ -300,10 +327,7 @@ slint::slint! {
             }
             if root.compact && root.strip == 1 : Rectangle {
                 x: root.bar-x; y: 0px; width: 548px - self.x; height: 84px;
-                if root.playing : Rectangle { x: 0px; y: 40px; width: 5px; height: 14px; border-radius: 2px; background: Theme.accent; }
-                if root.playing : Rectangle { x: 8px; y: 30px; width: 5px; height: 24px; border-radius: 2px; background: Theme.accent; }
-                if root.playing : Rectangle { x: 16px; y: 44px; width: 5px; height: 10px; border-radius: 2px; background: Theme.accent; }
-                if root.playing : Rectangle { x: 24px; y: 36px; width: 5px; height: 18px; border-radius: 2px; background: Theme.accent; }
+                if root.playing : Wave { x: 0px; y: 30px; t: root.beat; live: root.beating; }
                 Text {
                     x: root.playing ? 40px : 0px; width: parent.width - self.x - 64px; height: parent.height;
                     text: root.strip-title; font-size: 24px; color: #F5F5F7; vertical-alignment: center; overflow: elide;
@@ -340,10 +364,7 @@ slint::slint! {
             if root.strip-shown && !root.big : Rectangle {
                 x: 12px; y: 132px; width: 536px; height: 68px; border-radius: 18px; opacity: max(0, 1 - root.open * 3);
                 background: root.strip == 3 ? #2B1712 : #1D1D20;
-                if root.strip == 1 && root.playing : Rectangle { x: 18px; y: 36px; width: 5px; height: 14px; border-radius: 2px; background: Theme.accent; }
-                if root.strip == 1 && root.playing : Rectangle { x: 26px; y: 26px; width: 5px; height: 24px; border-radius: 2px; background: Theme.accent; }
-                if root.strip == 1 && root.playing : Rectangle { x: 34px; y: 40px; width: 5px; height: 10px; border-radius: 2px; background: Theme.accent; }
-                if root.strip == 1 && root.playing : Rectangle { x: 42px; y: 32px; width: 5px; height: 18px; border-radius: 2px; background: Theme.accent; }
+                if root.strip == 1 && root.playing : Wave { x: 18px; y: 26px; t: root.beat; live: root.beating; }
                 if root.strip == 2 && root.strip-tile != "" : Rectangle {
                     x: 18px; y: 14px; width: 40px; height: 40px; border-radius: 11px; background: root.strip-tile-color;
                     Text { text: root.strip-tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
@@ -925,6 +946,15 @@ impl Wrist {
     /// Accent colour (0xRRGGBB), from Setup > Theme.
     pub fn set_accent(&self, rgb: u32) {
         self.view.global::<Theme>().set_accent(crate::rgb(rgb));
+    }
+
+    /// Steps the playing mark to `t` seconds (`None`: it rests). Call while the watch shows; it redraws only the
+    /// frames the bars move.
+    pub fn beat(&mut self, t: Option<f32>) {
+        self.view.set_beating(t.is_some());
+        if let Some(t) = t {
+            self.view.set_beat(t);
+        }
     }
 
     pub fn set(&mut self, w: &WristInfo) {

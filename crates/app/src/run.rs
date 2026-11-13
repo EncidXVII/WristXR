@@ -8,7 +8,7 @@ use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
 use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
+use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
 use dvr_core::state::State;
 use dvr_core::state::{NotifyFrom, WatchLayout};
@@ -18,8 +18,8 @@ use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
 use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
 use dvr_ui::{
-    KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE, Toolbar, WRIST_SIZE, Wrist,
-    WristAdd, WristInfo, WristInput, WristLoad, WristMedia, WristWindow,
+    BANNER_SIZE, Banner, KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE,
+    Toolbar, WRIST_SIZE, Wrist, WristAdd, WristInfo, WristInput, WristLoad, WristMedia, WristWindow,
 };
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
@@ -41,6 +41,13 @@ const SPACE_BAR_CHARS: usize = 24;
 const WRIST_LINGER_MS: u64 = 1500;
 /// How long a notification from another app (Discord, ...) stays on the watch.
 const APP_TOAST_S: f32 = 6.0;
+/// The banner comes in over about this long and goes in a little less (critically damped: no bounce).
+const BANNER_IN_S: f32 = 0.35;
+const BANNER_OUT_S: f32 = 0.25;
+/// Pointing at the banner keeps it; once the laser leaves, it stays at least this long.
+const BANNER_LINGER_S: f32 = 2.0;
+/// How often the watch's playing mark steps while it moves.
+const BEAT_STEP: Duration = Duration::from_millis(22);
 
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
 struct Surface {
@@ -120,6 +127,7 @@ fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, St
         Source::Wrist => return blank(WRIST_SIZE),
         Source::Menu => return blank(MENU_SIZE),
         Source::Toolbar => return blank(TOOLBAR_SIZE),
+        Source::Banner => return blank(BANNER_SIZE),
     };
     Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true, dead: false })
 }
@@ -320,6 +328,10 @@ pub fn run() -> Result<(), String> {
     // The head while the headset is worn (the layout is saved around it), and whether the saved layout has been
     // brought to the wearer yet this run.
     let mut worn_head: Option<Pose> = None;
+    let mut beat_at = Instant::now();
+    let mut banner = Banner::new()?;
+    // How far the banner has come in (0..1) and how fast it is moving.
+    let mut banner_shown = (0.0f32, 0.0f32);
 
     let updates =
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
@@ -737,6 +749,7 @@ pub fn run() -> Result<(), String> {
         if let Some(t) = notifications.as_mut().and_then(Listener::poll) {
             session.notified(&t.source_app, &t.title, &t.content);
             menu_dirty = true;
+            banner.set(&t.source_app, &t.title, &t.content, &strings.get("wrist-now", &[]));
             toast = Some((t, Instant::now()));
             if session.state.haptics {
                 vr.haptic(session.state.dominant.other());
@@ -755,6 +768,7 @@ pub fn run() -> Result<(), String> {
             if session.state.haptics {
                 vr.haptic(session.state.dominant.other());
             }
+            banner.set(&t.app, &title, &t.body, &strings.get("wrist-now", &[]));
             toast = Some((Toast { title, content: t.body, source_app: t.app, timeout_s: APP_TOAST_S }, Instant::now()));
             refresh_wrist = true;
         }
@@ -763,6 +777,13 @@ pub fn run() -> Result<(), String> {
         if blocked != session.notify_blocked {
             session.notify_blocked = blocked;
             menu_dirty = true;
+        }
+        // Pointing at the banner keeps it up; after the laser leaves it stays a little longer.
+        if events.iter().any(|e| matches!(e, Event::Hover { panel: BANNER_ID, .. }))
+            && let Some((t, at)) = toast.as_mut()
+        {
+            let keep = Duration::from_secs_f32((t.timeout_s - BANNER_LINGER_S).max(0.0));
+            *at = (*at).max(Instant::now().checked_sub(keep).unwrap_or_else(Instant::now));
         }
         if toast.as_ref().is_some_and(|(t, at)| at.elapsed().as_secs_f32() >= t.timeout_s) {
             toast = None;
@@ -792,6 +813,22 @@ pub fn run() -> Result<(), String> {
             menu.set(&session.model(&engine.panels, &screens, &strings, (timer.last_ms(), load.own_cpu_percent)));
         }
 
+        // The banner follows the notification on a critically damped spring: it rises and fades in, and goes
+        // back down the same way. Without animations it simply appears and goes.
+        let goal = f32::from(u8::from(toast.is_some()));
+        banner_shown = if motion {
+            let (x, v) = banner_shown;
+            let omega = std::f32::consts::TAU / if goal > x { BANNER_IN_S } else { BANNER_OUT_S };
+            let h = dt.min(0.05);
+            let v = v + (omega * omega * (goal - x) - 2.0 * omega * v) * h;
+            let x = (x + v * h).clamp(0.0, 1.0);
+            if (goal - x).abs() < 0.002 && v.abs() < 0.01 { (goal, 0.0) } else { (x, v) }
+        } else {
+            (goal, 0.0)
+        };
+        if let Some(b) = engine.panels.iter_mut().find(|p| p.id == BANNER_ID) {
+            *b = Panel::banner(b.aspect, banner_shown.0);
+        }
         // All GPU work back to back inside the timer; one flush; then hand textures to SteamVR.
         timer.begin(&gpu);
         let upload = |px: &[u8], source: Source, width: u32, surfaces: &mut HashMap<u32, Surface>| {
@@ -802,6 +839,15 @@ pub fn run() -> Result<(), String> {
                 }
             }
         };
+        // The playing mark moves while the song plays and the watch is seen, at 45 steps a second: smooth for its
+        // slow waves, and the watch is redrawn no more often than that.
+        let seen = engine.panels.iter().any(|p| p.source == Source::Wrist && p.shown());
+        let wave =
+            (motion && seen && now_playing.as_ref().is_some_and(|m| m.playing)).then(|| start.elapsed().as_secs_f32());
+        if wave.is_none() || beat_at.elapsed() >= BEAT_STEP {
+            beat_at = Instant::now();
+            wrist.beat(wave);
+        }
         if let Some(px) = wrist.render() {
             upload(px, Source::Wrist, WRIST_SIZE.0, &mut surfaces);
         }
@@ -846,6 +892,9 @@ pub fn run() -> Result<(), String> {
         }
         if let Some(px) = keyboard.render() {
             upload(px, Source::Keyboard, KEYBOARD_SIZE.0, &mut surfaces);
+        }
+        if let Some(px) = banner.render() {
+            upload(px, Source::Banner, BANNER_SIZE.0, &mut surfaces);
         }
         for p in &engine.panels {
             let world = p.world_pose(&poses);

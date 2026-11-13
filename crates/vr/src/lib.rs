@@ -584,7 +584,7 @@ impl VrBackend for OpenVr {
             Some(p) => p.handle,
             None => match self.overlay_handle(key, &format!("dvr.panel.{}", panel.id)) {
                 Ok(h) => {
-                    if matches!(panel.source, Source::Keyboard | Source::Toolbar) {
+                    if matches!(panel.source, Source::Keyboard | Source::Toolbar | Source::Banner) {
                         call!(self.overlay, overlay::SET_OVERLAY_SORT_ORDER, fn(u64, u32) -> i32, h, KEYBOARD_SORT);
                     }
                     h

@@ -43,6 +43,8 @@ pub enum Source {
     Menu,
     /// Per-panel toolbar shown under the panel being pointed at; never persisted.
     Toolbar,
+    /// Notification banner low in your view; never persisted.
+    Banner,
 }
 
 /// Fixed id of the menu panel (outside the range persisted layouts use).
@@ -50,6 +52,13 @@ pub const MENU_ID: u32 = u32::MAX - 1;
 pub const MENU_WIDTH_M: f32 = 0.5;
 /// Fixed id of the toolbar panel.
 pub const TOOLBAR_ID: u32 = u32::MAX - 2;
+/// Fixed id of the notification banner (above the toolbar's, so it is never persisted).
+pub const BANNER_ID: u32 = u32::MAX;
+/// The banner's width; its texture keeps the toolbar's 0.5 mm a pixel.
+pub const BANNER_WIDTH_M: f32 = 0.44;
+/// How far ahead of the eyes the banner rides, and how far below where you look (radians).
+const BANNER_DISTANCE_M: f32 = 0.9;
+const BANNER_DROP_RAD: f32 = 0.35;
 pub const TOOLBAR_WIDTH_M: f32 = 0.63;
 /// Gap between a panel's bottom edge and its toolbar.
 const TOOLBAR_GAP_M: f32 = 0.02;
@@ -161,23 +170,35 @@ impl Panel {
         Self::new(MENU_ID, Source::Menu, Pose::new(pos, facing(f)), MENU_WIDTH_M, aspect)
     }
 
-    /// Watch on the given hand: behind the pointer tip, on the back of the hand and facing out of it, where a real
-    /// watch sits. The controller's top (+Y, under the thumb) is a quarter turn around the forearm from there: a
-    /// watch on top faced your chest when you turned the wrist to read it. Like a real watch, text runs along the
-    /// forearm and its top points away from you when you raise the wrist across your chest, palm down.
+    /// Watch on the given hand: behind the pointer tip, facing up out of the controller. Like a real watch, text
+    /// runs along the forearm and its top points away from you when you raise the wrist across your chest.
     pub fn on_wrist(id: u32, hand: Hand, aspect: f32) -> Self {
         use std::f32::consts::FRAC_PI_2;
-        let turn = if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 };
         let face_up = Quat::from_axis_angle(Vec3::X, -FRAC_PI_2);
-        let along_arm = Quat::from_axis_angle(Vec3::Z, turn);
-        // From the top of the controller round to the back of the hand (left: -X, right: +X).
-        let to_back = Quat::from_axis_angle(Vec3::Z, turn);
-        let rot = to_back * face_up * along_arm;
+        let along_arm = Quat::from_axis_angle(Vec3::Z, if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 });
+        let rot = face_up * along_arm;
         // The top edge stays put whatever the height: the watch grows downward (toward the elbow) when it opens.
         let drop = WRIST_WIDTH_M * aspect * 0.5 - WRIST_TOP_M;
-        let pose = Pose::new(to_back.rotate(Vec3::new(0.0, 0.04, 0.16)) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
+        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
         let mut p = Self::new(id, Source::Wrist, pose, WRIST_WIDTH_M, aspect);
         p.anchor = Anchor::Hand(hand);
+        p
+    }
+
+    /// The notification banner: on the headset, 0.9 m ahead and about 20 degrees below where you look, tilted to
+    /// face the eyes. `shown` (0..1) is how far it has come in: on the way it rises a few centimetres and grows from
+    /// 96 % as it fades in, and goes back down the same way.
+    pub fn banner(aspect: f32, shown: f32) -> Self {
+        let rise = (1.0 - shown) * 0.03;
+        let (s, c) = BANNER_DROP_RAD.sin_cos();
+        let pos = Vec3::new(0.0, -BANNER_DISTANCE_M * s - rise, -BANNER_DISTANCE_M * c);
+        let rot = Quat::from_axis_angle(Vec3::X, -BANNER_DROP_RAD);
+        let mut p =
+            Self::new(BANNER_ID, Source::Banner, Pose::new(pos, rot), BANNER_WIDTH_M * (0.96 + 0.04 * shown), aspect);
+        p.anchor = Anchor::Head;
+        p.locked = true;
+        p.dim = 1.0 - shown;
+        p.visible = shown > 0.01;
         p
     }
 
@@ -439,17 +460,12 @@ mod tests {
     }
 
     /// Left forearm raised across the chest, palm down: the hand points to the user's right (+X), the user looks
-    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z), the face up
-    /// out of the back of the hand.
+    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z).
     #[test]
     fn watch_reads_like_a_watch_on_both_hands() {
-        use std::f32::consts::FRAC_PI_2;
-        for (hand, along, roll) in [(Hand::Left, Vec3::X, -FRAC_PI_2), (Hand::Right, Vec3::X * -1.0, FRAC_PI_2)] {
-            // Controller as gripped: -Z (laser) along the arm toward the fingers, its top (+Y, under the thumb)
-            // toward the user; the back of the hand faces up.
-            let rot = Quat::from_arc(Vec3::FORWARD, along) * Quat::from_axis_angle(Vec3::Z, roll);
-            assert!(rot.rotate(Vec3::Y).dot(Vec3::Z) > 0.99, "{hand:?}: thumb toward the user");
-            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), rot);
+        for (hand, along) in [(Hand::Left, Vec3::X), (Hand::Right, Vec3::X * -1.0)] {
+            // Controller: -Z (laser) along the arm toward the fingers, +Y up out of the back of the hand.
+            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), Quat::from_arc(Vec3::FORWARD, along));
             let w = Panel::on_wrist(1, hand, 0.5);
             let world = ctrl * w.pose;
             let text_dir = world.rot.rotate(Vec3::X);
@@ -519,6 +535,18 @@ mod tests {
         assert_eq!(keys.near_fade(Pose::IDENTITY, Vec3::new(0.0, 0.0, 0.05)), 1.0, "the keyboard stays");
         let hud = Panel { anchor: Anchor::Head, ..screen };
         assert_eq!(hud.near_fade(Pose::IDENTITY, Vec3::new(0.0, 0.0, 0.2)), 1.0, "a head-locked panel stays");
+    }
+
+    #[test]
+    fn the_banner_sits_low_in_view_and_faces_the_eyes() {
+        let b = Panel::banner(0.26, 1.0);
+        assert_eq!(b.anchor, Anchor::Head);
+        let to_eye = (Vec3::new(0.0, 0.0, 0.0) - b.pose.pos).normalized();
+        assert!(b.pose.rot.rotate(Vec3::Z).dot(to_eye) > 0.9999, "faces the eyes");
+        let below = (-b.pose.pos.y / -b.pose.pos.z).atan();
+        assert!((below - 0.35).abs() < 1e-3, "about 20 degrees down");
+        let coming = Panel::banner(0.26, 0.0);
+        assert!(!coming.visible && coming.pose.pos.y < b.pose.pos.y && coming.width_m < b.width_m);
     }
 
     #[test]
