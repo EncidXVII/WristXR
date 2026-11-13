@@ -5,7 +5,7 @@ use crate::tray::{Tray, TrayCommand};
 use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
-use dvr_core::engine::{Engine, Event, FrameInput, MouseButton};
+use dvr_core::engine::{Claims, Engine, Event, FrameInput, MouseButton};
 use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
@@ -280,6 +280,7 @@ pub fn run() -> Result<(), String> {
     let mut engine = Engine::new(panels);
     let mut injector = Injector::new();
     let mut input = FrameInput::default();
+    let mut claims = [Claims::default(); 2];
     let mut events = Vec::with_capacity(64);
     let mut dirty: Option<Instant> = None;
     let mut resized: Vec<(u32, u32, u32)> = Vec::with_capacity(8);
@@ -403,8 +404,11 @@ pub fn run() -> Result<(), String> {
         session.ease_sizes(&mut engine.panels, grabbed, dt);
         session.place_toolbar(&mut engine.panels, &poses);
         events.clear();
-        engine.step(&input, &mut events);
-        vr.set_exclusive(Hand::BOTH.map(|h| engine.engaged(h)));
+        // The engine sees only the controls this hand has taken from the game; the claims for the next frame
+        // follow what it now points at or holds, handed over only while those controls are let go.
+        engine.step(&input.claimed(claims), &mut events);
+        claims = Hand::BOTH.map(|h| claims[h.index()].settle(engine.wants(h), &input.hands[h.index()]));
+        vr.set_claims(claims);
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut key_hover: [Option<u16>; 2] = [None; 2];
         // Popped-out windows can move on the desktop; input maps through their current rectangle. A window that

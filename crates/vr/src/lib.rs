@@ -5,7 +5,7 @@
 mod ffi;
 
 use dvr_core::backend::VrBackend;
-use dvr_core::engine::FrameInput;
+use dvr_core::engine::{Claims, FrameInput};
 use dvr_core::math::Pose;
 use dvr_core::panel::{Anchor, Hand, Panel, Source};
 use ffi::{
@@ -62,7 +62,12 @@ pub struct Battery {
 }
 
 struct Actions {
+    /// Always shared with the game: the pointer pose, haptics and the menu button.
     set: u64,
+    /// Taken from the game per hand, each on its own (see `Claims`): trigger and grip, the stick, A/X.
+    point: u64,
+    scroll: u64,
+    right: u64,
     pointer: u64,
     click: u64,
     grab: u64,
@@ -87,7 +92,7 @@ pub struct OpenVr {
     compositor: Table,
     applications: Table,
     actions: Actions,
-    exclusive: [bool; 2],
+    claims: [Claims; 2],
     input_error: i32,
     overlays: HashMap<u64, Placed>,
 }
@@ -175,10 +180,13 @@ impl OpenVr {
             input,
             compositor,
             applications,
-            exclusive: [false; 2],
+            claims: [Claims::default(); 2],
             input_error: 0,
             actions: Actions {
                 set: 0,
+                point: 0,
+                scroll: 0,
+                right: 0,
                 pointer: 0,
                 click: 0,
                 grab: 0,
@@ -214,12 +222,15 @@ impl OpenVr {
         };
         self.actions = Actions {
             set: handle(input::GET_ACTION_SET_HANDLE, c"/actions/main")?,
+            point: handle(input::GET_ACTION_SET_HANDLE, c"/actions/point")?,
+            scroll: handle(input::GET_ACTION_SET_HANDLE, c"/actions/scroll")?,
+            right: handle(input::GET_ACTION_SET_HANDLE, c"/actions/right")?,
             pointer: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/pointer")?,
-            click: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/click")?,
-            grab: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/grab")?,
-            stick: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/stick")?,
+            click: handle(input::GET_ACTION_HANDLE, c"/actions/point/in/click")?,
+            grab: handle(input::GET_ACTION_HANDLE, c"/actions/point/in/grab")?,
+            stick: handle(input::GET_ACTION_HANDLE, c"/actions/scroll/in/stick")?,
             menu: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/menu")?,
-            right_click: handle(input::GET_ACTION_HANDLE, c"/actions/main/in/rightclick")?,
+            right_click: handle(input::GET_ACTION_HANDLE, c"/actions/right/in/rightclick")?,
             haptic: handle(input::GET_ACTION_HANDLE, c"/actions/main/out/haptic")?,
             hands: [
                 handle(input::GET_INPUT_SOURCE_HANDLE, c"/user/hand/left")?,
@@ -274,9 +285,9 @@ impl OpenVr {
         if e != 0 { Err(format!("IdentifyApplication: EVRApplicationError {e}")) } else { Ok(()) }
     }
 
-    /// Per hand: take that hand's input away from the game (while it points at, presses or holds a panel).
-    pub fn set_exclusive(&mut self, hands: [bool; 2]) {
-        self.exclusive = hands;
+    /// Per hand: the controls to take away from the game from the next poll on (see `Claims`).
+    pub fn set_claims(&mut self, claims: [Claims; 2]) {
+        self.claims = claims;
     }
 
     /// EVRInputError of the last action-state update (0 = fine).
@@ -494,20 +505,28 @@ impl VrBackend for OpenVr {
                 return false;
             }
         }
-        // One set per hand; a hand that is using a panel gets overlay priority, so the game stops seeing its input.
-        let mut sets = Hand::BOTH.map(|h| ActiveActionSet {
-            set: self.actions.set,
-            restricted_to_device: self.actions.hands[h.index()],
-            priority: if self.exclusive[h.index()] { OVERLAY_PRIORITY } else { 0 },
-            ..ActiveActionSet::default()
-        });
+        // Each set once per hand; a group of controls the overlay has taken gets overlay priority, so the game
+        // stops seeing just those.
+        let a = &self.actions;
+        let mut sets = Vec::with_capacity(8);
+        for h in Hand::BOTH {
+            let c = self.claims[h.index()];
+            for (set, taken) in [(a.set, false), (a.point, c.point), (a.scroll, c.stick), (a.right, c.right)] {
+                sets.push(ActiveActionSet {
+                    set,
+                    restricted_to_device: a.hands[h.index()],
+                    priority: if taken { OVERLAY_PRIORITY } else { 0 },
+                    ..ActiveActionSet::default()
+                });
+            }
+        }
         self.input_error = call!(
             self.input,
             input::UPDATE_ACTION_STATE,
             fn(*mut ActiveActionSet, u32, u32) -> i32,
             sets.as_mut_ptr(),
             size_of::<ActiveActionSet>() as u32,
-            2
+            sets.len() as u32
         );
         for hand in Hand::BOTH {
             let dev = self.actions.hands[hand.index()];

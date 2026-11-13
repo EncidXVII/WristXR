@@ -53,8 +53,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   pop up with a buzz as a banner low in your view (who, the app, and up to three lines of the message; point at
   it to keep it) and on the watch, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
   (UDP 42069) work too.
-- **Game input stays yours**: only the hand that points at or holds a panel is taken from the game; the
-  other hand keeps playing.
+- **Game input stays yours**: a hand on a panel takes from the game only the controls that do something there
+  (the stick only over a screen or window), and only once you let them go; the other hand keeps playing.
 - **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
   HTC Vive, Windows Mixed Reality and Steam Frame controllers.
 
@@ -111,8 +111,8 @@ Run one overlay at a time: two overlays fight over the same controller input and
 - **Put a panel on a hand**: hold it, bring it to your other hand and let go: it sits above that hand like a
   tablet and moves with it. Grab it away and let go in the room to put it back. The toolbar's Hand does the same
   for the hand you are not pointing with.
-- **Move the watch**: grip it with your other hand and slide it along your wrist; it stays on that wrist and
-  keeps its spot. Menu > Reset layout puts it back.
+- **Move the watch**: grip it with your other hand and slide it along your wrist, turning that hand to tilt it; it
+  stays on that wrist and keeps its spot and tilt. Menu > Reset layout puts it back.
 - **Toolbar size**: - and + step through round sizes (1.0, 1.2, 1.5, 2.0 m...) and ease there.
 - **Setup > Controls** lists all of this in VR; Rebind buttons there opens SteamVR's binding screen for
   DesktopVR, where every action can go on another button.
@@ -160,7 +160,7 @@ machine.
 Virtual Desktop or Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame.
 
 **Does it work with VRChat?** Yes. It runs alongside VRChat, types into the chatbox via OSC (enable OSC in
-VRChat's Action Menu), and takes only the hand you're pointing with away from the game.
+VRChat's Action Menu), and takes from the game only the controls you're using on a panel.
 
 **Does it work on Linux?** Not yet. Linux (Wayland screen capture, input) and Steam Frame on-device builds are
 in progress; the Linux release builds and runs the self-test today.

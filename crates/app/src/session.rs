@@ -299,11 +299,11 @@ impl Session {
             panels.push(Panel::on_wrist(next_id(panels), state.dominant.other(), wrist_aspect));
         }
         // A wrist saved by an older build has the old size and orientation; the watch is never hidden (it is the
-        // way into the menu). Where the user moved it on the wrist stays.
+        // way into the menu). Where the user moved and tilted it on the wrist stays.
         if let Some(w) = find(panels, Source::Wrist) {
             let mut fresh = Panel { visible: true, ..Panel::on_wrist(w.id, w.anchor_hand(), wrist_aspect) };
             if state.wrist_moved {
-                fresh.pose.pos = w.pose.pos;
+                fresh.pose = w.pose;
             }
             *w = fresh;
         }
@@ -1482,18 +1482,18 @@ mod tests {
         let w = panels.iter_mut().find(|p| p.source == Source::Wrist).expect("watch");
         let default = w.pose;
         w.pose.pos = w.pose.pos + dvr_core::math::Vec3::new(0.0, 0.0, 0.05);
-        let moved = w.pose.pos;
-        // Restart: the moved spot stays (the turn is the build's own).
+        w.pose.rot = dvr_core::math::Quat::from_axis_angle(dvr_core::math::Vec3::Z, 0.3) * w.pose.rot;
+        let moved = w.pose;
+        // Restart: the moved and tilted watch stays as it was.
         let state = State { wrist_moved: true, panels: panels.clone(), ..s.state };
         let mut again = state.panels.clone();
         let mut s = Session::new(state, &mut again, head);
         let w = again.iter().find(|p| p.source == Source::Wrist).expect("watch");
-        assert_eq!(w.pose.pos, moved);
-        assert_eq!(w.pose.rot, default.rot);
+        assert_eq!(w.pose, moved);
         // Reset layout puts it back.
         s.act(Act::ResetLayout, &mut again, head, &[]);
         let w = again.iter().find(|p| p.source == Source::Wrist).expect("watch");
-        assert_eq!(w.pose.pos, default.pos);
+        assert_eq!(w.pose, default);
         assert!(!s.state.wrist_moved);
     }
 

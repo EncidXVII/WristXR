@@ -8,24 +8,32 @@
   ],
   "actions": [
     { "name": "/actions/main/in/pointer", "type": "pose" },
-    { "name": "/actions/main/in/click", "type": "boolean" },
-    { "name": "/actions/main/in/grab", "type": "boolean" },
-    { "name": "/actions/main/in/stick", "type": "vector2" },
+    { "name": "/actions/point/in/click", "type": "boolean" },
+    { "name": "/actions/point/in/grab", "type": "boolean" },
+    { "name": "/actions/scroll/in/stick", "type": "vector2" },
     { "name": "/actions/main/in/menu", "type": "boolean" },
-    { "name": "/actions/main/in/rightclick", "type": "boolean" },
+    { "name": "/actions/right/in/rightclick", "type": "boolean" },
     { "name": "/actions/main/out/haptic", "type": "vibration" }
   ],
-  "action_sets": [{ "name": "/actions/main", "usage": "leftright" }],
+  "action_sets": [
+    { "name": "/actions/main", "usage": "leftright" },
+    { "name": "/actions/point", "usage": "leftright" },
+    { "name": "/actions/scroll", "usage": "leftright" },
+    { "name": "/actions/right", "usage": "leftright" }
+  ],
   "localization": [
     {
       "language_tag": "en_US",
       "/actions/main": "Desktop overlay",
+      "/actions/point": "Desktop overlay: point",
+      "/actions/scroll": "Desktop overlay: scroll",
+      "/actions/right": "Desktop overlay: right click",
       "/actions/main/in/pointer": "Pointer",
-      "/actions/main/in/click": "Click / type",
-      "/actions/main/in/grab": "Grab panel",
-      "/actions/main/in/stick": "Scroll / push-pull",
+      "/actions/point/in/click": "Click / type",
+      "/actions/point/in/grab": "Grab panel",
+      "/actions/scroll/in/stick": "Scroll / push-pull",
       "/actions/main/in/menu": "Menu (double-tap)",
-      "/actions/main/in/rightclick": "Right click",
+      "/actions/right/in/rightclick": "Right click",
       "/actions/main/out/haptic": "Haptic"
     }
   ]

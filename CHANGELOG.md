@@ -8,6 +8,16 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
+- Pointing at a panel takes from the game only the controls that do something there. The stick is taken only over
+  a screen or window (it scrolls) or while holding a panel; A/X only over a screen or window; the menu button
+  never. So over the keyboard, the toolbar or the watch, you still turn and walk in the game. A control changes
+  hands only once you let it go: a stick you are turning with, or a grip holding something in the game, stays the
+  game's until released, so the game no longer keeps turning you when the laser lands on a panel. Custom SteamVR
+  bindings for DesktopVR need setting again (the controls are in new groups).
+- The watch sits on the back of the wrist, facing out of it, where a real watch is (it was on the controller's top,
+  facing your chest when you turned the wrist). Grip it with the other hand to slide it along the wrist and, by
+  turning that hand, tilt it; it keeps the spot and the tilt after a restart. A spot kept by an older build is
+  dropped once.
 - The watch shows from a wider look: within about 52 degrees of where you look (was 45), and stays to 70 (was
   63). The wrist's turn is unchanged.
 - Holding the trigger no longer gets in the way of dragging: held still, a tick says a right click is ready and
@@ -30,8 +40,8 @@ First public early-access release (Windows).
 - The watch needs a quarter less turn of the wrist: its roll around the forearm must be within about 50 degrees
   of your eyes to show and 61 to stay. Where your arm is counts as before (face within 66 degrees of your eyes,
   stays to 81).
-- Grip the watch with your other hand to move it along your wrist: it stays on that wrist and keeps its turn
-  there, and the spot is kept after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
+- Grip the watch with your other hand to move it along your wrist: it stays on that wrist, and the spot is kept
+  after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
 - Notification banner: a message also shows low in your view (riding with your head), with the app, the sender and

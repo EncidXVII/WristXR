@@ -169,8 +169,9 @@ pub struct State {
     pub hold_right_click: bool,
     /// Trigger-drag on a screen scrolls it (off: it drags, to select text).
     pub drag_scroll: bool,
-    /// The watch was moved on its wrist: keep where it is (its turn always comes from the current build). A spot
-    /// saved by the build that put the watch on the back of the hand (as "watch_moved") is dropped.
+    /// The watch was moved or tilted on its wrist: keep it as it is. Saved under its own name, so a spot kept by
+    /// an older build (on the controller's top, or without its tilt) is dropped once.
+    #[serde(rename = "watch_placed")]
     pub wrist_moved: bool,
     /// Where the head was when the layout was last saved. The next start brings the layout, as arranged, to where
     /// you then face: SteamVR may come back with the playspace moved (a playspace mover's offset is gone).

@@ -20,6 +20,9 @@ pub const MENU_DOUBLE_TAP_MS: u64 = 400;
 pub const KEY_REPEAT_DELAY_MS: u64 = 500;
 pub const KEY_REPEAT_INTERVAL_MS: u64 = 33;
 pub const STICK_DEADZONE: f32 = 0.2;
+/// The overlay takes a hand's stick from the game only while it leans less than this: a game that keeps its
+/// last stick value when it loses the stick would otherwise keep turning or walking.
+pub const STICK_REST: f32 = 0.15;
 pub const SCROLL_NOTCHES_PER_S: f32 = 12.0;
 /// Drag to scroll: one wheel notch per this much of the panel's height the laser moves.
 pub const DRAG_SCROLL_UV: f32 = 0.03;
@@ -65,6 +68,49 @@ impl FrameInput {
     /// Left hand, right hand, head.
     pub fn anchors(&self) -> Anchors {
         [self.hands[0].pose, self.hands[1].pose, self.head]
+    }
+
+    /// This input as the overlay sees it: controls it has not taken from the game read as at rest.
+    pub fn claimed(&self, claims: [Claims; 2]) -> Self {
+        let mut seen = *self;
+        for (h, c) in seen.hands.iter_mut().zip(claims) {
+            if !c.point {
+                (h.trigger, h.grip) = (false, false);
+            }
+            if !c.stick {
+                h.stick = [0.0; 2];
+            }
+            if !c.right {
+                h.right_click = false;
+            }
+        }
+        seen
+    }
+}
+
+/// Which of a hand's controls the overlay takes from the game; the rest (and the menu button) stay shared.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Claims {
+    /// Trigger and grip: on any panel, and while pressing or holding one.
+    pub point: bool,
+    /// Stick: on a screen or window (it scrolls), and while holding a panel (it pushes, pulls and resizes).
+    pub stick: bool,
+    /// A/X: on a screen or window, and while a right click is held.
+    pub right: bool,
+}
+
+impl Claims {
+    /// Next frame's claims, from what the overlay `want`s and the hand's latest (unclaimed) input. A group of
+    /// controls changes hands only while it is let go, so the game never sees a held button or a leaning stick
+    /// freeze: what the overlay wants it takes once let go, and what it no longer wants it keeps until let go.
+    pub fn settle(self, want: Claims, last: &HandInput) -> Claims {
+        let step = |held: bool, want: bool, rest: bool| if held { want || !rest } else { want && rest };
+        let [x, y] = last.stick;
+        Claims {
+            point: step(self.point, want.point, !last.trigger && !last.grip),
+            stick: step(self.stick, want.stick, x.hypot(y) < STICK_REST),
+            right: step(self.right, want.right, !last.right_click),
+        }
     }
 }
 
@@ -158,8 +204,8 @@ struct HandState {
     last_click: Option<(u32, [f32; 2], u64)>,
     scroll: f32,
     menu_tap: Option<u64>,
-    /// Laser hit a panel this frame.
-    on_panel: bool,
+    /// The kind of panel the laser hit this frame.
+    on: Option<Source>,
     /// Right button held on this panel, at this point.
     right: Option<(u32, [f32; 2])>,
     /// Smoothed laser ray.
@@ -241,7 +287,16 @@ impl Engine {
             Grab::Two { .. } => true,
             Grab::Idle => false,
         };
-        st.on_panel || holding || st.right.is_some() || !matches!(st.press, Press::Idle)
+        st.on.is_some() || holding || st.right.is_some() || !matches!(st.press, Press::Idle)
+    }
+
+    /// The controls this hand uses on what it points at or holds (see `Claims`); everything else, such as the
+    /// stick over the keyboard, stays the game's.
+    pub fn wants(&self, hand: Hand) -> Claims {
+        let st = &self.hands[hand.index()];
+        let screen = matches!(st.on, Some(Source::Monitor(_) | Source::Window(_)));
+        let holds = matches!(self.grab, Grab::One { hand: h, .. } if h == hand);
+        Claims { point: self.engaged(hand), stick: screen || holds, right: screen || st.right.is_some() }
     }
 
     pub fn grabbed(&self) -> Option<u32> {
@@ -443,10 +498,9 @@ impl Engine {
                 let ray = rays[hand.index()].unwrap_or(poses[hand.index()]);
                 let spot = ray.pos + ray.forward() * *reach;
                 // Faces you from its middle (where it was last frame), so a grab near an edge never skews it.
-                // The watch keeps its turn on the wrist instead; a free-angle panel turns with the laser.
-                let rot = if watch {
-                    world.rot
-                } else if p.free_turn {
+                // The watch and a free-angle panel turn with the laser instead, as they were grabbed: tilt the
+                // watch on its wrist by turning the hand that holds it.
+                let rot = if watch || p.free_turn {
                     (ray.rot * *turn).normalized()
                 } else {
                     turn_toward(world.rot, world.pos - eye, ease)
@@ -497,7 +551,7 @@ impl Engine {
         } else {
             None
         };
-        st.on_panel = hit.is_some();
+        st.on = hit.map(|h| h.1);
         let trigger_down = cur.trigger && !st.prev.trigger;
 
         // A/X: the right button, held as long as the button is (so right-drag works too). Screens and windows
@@ -869,7 +923,21 @@ mod tests {
         assert!((p.world_pose(&poses).pos - watch.pos).length() > 0.03, "moved");
         let same_turn = p.pose.rot.rotate(Vec3::Z).dot(turn.rotate(Vec3::Z)) > 0.9999
             && p.pose.rot.rotate(Vec3::X).dot(turn.rotate(Vec3::X)) > 0.9999;
-        assert!(same_turn, "keeps its turn on the wrist");
+        assert!(same_turn, "a slide keeps its turn on the wrist");
+        // Grip it again and turn the holding hand: the watch tilts with it, and stays tilted once let go.
+        r.grip = true;
+        let t = run(&mut e, 400, 1, [left, r], &mut out);
+        let before = e.panels[0].world_pose(&poses).rot;
+        let tilt = Quat::from_axis_angle(r.pose.rot.rotate(Vec3::FORWARD), 0.4);
+        r.pose.rot = tilt * r.pose.rot;
+        let t = run(&mut e, t, 10, [left, r], &mut out);
+        r.grip = false;
+        run(&mut e, t, 1, [left, r], &mut out);
+        let after = e.panels[0].world_pose(&poses).rot;
+        let want = tilt * before;
+        for axis in [Vec3::X, Vec3::Y, Vec3::Z] {
+            assert!(after.rotate(axis).dot(want.rotate(axis)) > 0.999, "tilted with the hand");
+        }
     }
 
     #[test]
@@ -927,5 +995,47 @@ mod tests {
         run(&mut e, t, 1, [rest, r], &mut out);
         assert!(out.iter().any(|e| matches!(e, Event::Mouse { button: MouseButton::Right, down: false, .. })));
         assert!(!out.iter().any(|e| matches!(e, Event::Mouse { button: MouseButton::Left, .. })), "never a left click");
+    }
+
+    #[test]
+    fn only_controls_that_do_something_are_taken_from_the_game() {
+        let pose = Pose::new(Vec3::new(0.0, 1.4, -1.0), Quat::IDENTITY);
+        let kb = Pose::new(Vec3::new(1.5, 1.0, -1.0), Quat::IDENTITY);
+        let mut e = Engine::new(vec![
+            Panel::new(1, Source::Monitor(0), pose, 1.0, 0.5),
+            Panel::new(2, Source::Keyboard, kb, 0.6, 0.3),
+        ]);
+        e.raw_laser = true;
+        let mut out = Vec::new();
+        let rest = hand_at(Vec3::new(-0.3, 1.2, -0.2), Vec3::new(-0.3, 1.2, 0.5));
+        let on_screen = hand_at(Vec3::new(0.0, 1.4, -0.2), Vec3::new(0.0, 1.4, -1.0));
+        let on_keys = hand_at(Vec3::new(1.5, 1.0, -0.2), Vec3::new(1.5, 1.0, -1.0));
+        run(&mut e, 0, 1, [rest, on_screen], &mut out);
+        assert_eq!(
+            e.wants(Hand::Right),
+            Claims { point: true, stick: true, right: true },
+            "a screen scrolls and right-clicks"
+        );
+        assert_eq!(e.wants(Hand::Left), Claims::default(), "pointing at nothing takes nothing");
+        run(&mut e, 20, 1, [rest, on_keys], &mut out);
+        assert_eq!(e.wants(Hand::Right), Claims { point: true, ..Claims::default() }, "keys: no stick, no A/X");
+    }
+
+    #[test]
+    fn controls_change_hands_only_while_let_go() {
+        let all = Claims { point: true, stick: true, right: true };
+        let leaning = HandInput { stick: [0.9, 0.0], trigger: true, right_click: true, ..HandInput::default() };
+        // Turning in the game while the laser lands on a screen: the game keeps the stick until it is let go.
+        assert_eq!(Claims::default().settle(all, &leaning), Claims::default());
+        assert_eq!(Claims::default().settle(all, &HandInput { stick: [0.1, 0.0], ..HandInput::default() }), all);
+        // Scrolling while the laser leaves the screen: the overlay keeps the stick until it is let go.
+        assert_eq!(all.settle(Claims::default(), &leaning), all);
+        assert_eq!(all.settle(Claims::default(), &HandInput::default()), Claims::default());
+        // What the overlay has not taken, it does not see.
+        let input = FrameInput { hands: [leaning; 2], ..FrameInput::default() };
+        let seen = input.claimed([Claims::default(), all]);
+        assert_eq!(seen.hands[0].stick, [0.0; 2]);
+        assert!(!seen.hands[0].trigger && !seen.hands[0].right_click);
+        assert_eq!(seen.hands[1].stick, [0.9, 0.0]);
     }
 }

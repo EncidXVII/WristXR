@@ -4,7 +4,7 @@
 use crate::gates::GateResult;
 use dvr_capture_win::{Capture, Frame};
 use dvr_core::backend::VrBackend;
-use dvr_core::engine::FrameInput;
+use dvr_core::engine::{Claims, FrameInput};
 use dvr_core::math::Vec3;
 use dvr_core::panel::{Anchor, Hand, Panel, Source};
 use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
@@ -66,13 +66,14 @@ fn run(manifest: &std::path::Path) -> GateResult {
     let mut sampler = dvr_sys::Sampler::new();
 
     let mut input = FrameInput::default();
-    // Per-hand overlay priority (game input blocked for a hand on a panel) must be accepted by SteamVR.
-    vr.set_exclusive([true, false]);
+    // Per-hand, per-group overlay priority (some of a hand's controls taken from the game) must be accepted.
+    let all = Claims { point: true, stick: true, right: true };
+    vr.set_claims([all, Claims { stick: true, ..Claims::default() }]);
     vr.poll(0, &mut input);
     if vr.input_error() != 0 {
         return Err(format!("UpdateActionState with per-hand priority: EVRInputError {}", vr.input_error()));
     }
-    vr.set_exclusive([false, false]);
+    vr.set_claims([Claims::default(); 2]);
     let (mut frames, mut captured, mut wrist_frames) = (0u32, 0u32, 0u32);
     let start = Instant::now();
     let mut tick = start;

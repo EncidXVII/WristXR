@@ -170,16 +170,21 @@ impl Panel {
         Self::new(MENU_ID, Source::Menu, Pose::new(pos, facing(f)), MENU_WIDTH_M, aspect)
     }
 
-    /// Watch on the given hand: behind the pointer tip, facing up out of the controller. Like a real watch, text
-    /// runs along the forearm and its top points away from you when you raise the wrist across your chest.
+    /// Watch on the given hand: behind the pointer tip, on the back of the hand and facing out of it, where a real
+    /// watch sits. The controller's top (+Y, under the thumb) is a quarter turn around the forearm from there: a
+    /// watch on top faced your chest when you turned the wrist to read it. Like a real watch, text runs along the
+    /// forearm and its top points away from you when you raise the wrist across your chest, palm down.
     pub fn on_wrist(id: u32, hand: Hand, aspect: f32) -> Self {
         use std::f32::consts::FRAC_PI_2;
+        let turn = if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 };
         let face_up = Quat::from_axis_angle(Vec3::X, -FRAC_PI_2);
-        let along_arm = Quat::from_axis_angle(Vec3::Z, if hand == Hand::Left { FRAC_PI_2 } else { -FRAC_PI_2 });
-        let rot = face_up * along_arm;
+        let along_arm = Quat::from_axis_angle(Vec3::Z, turn);
+        // From the top of the controller round to the back of the hand (left: -X, right: +X).
+        let to_back = Quat::from_axis_angle(Vec3::Z, turn);
+        let rot = to_back * face_up * along_arm;
         // The top edge stays put whatever the height: the watch grows downward (toward the elbow) when it opens.
         let drop = WRIST_WIDTH_M * aspect * 0.5 - WRIST_TOP_M;
-        let pose = Pose::new(Vec3::new(0.0, 0.04, 0.16) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
+        let pose = Pose::new(to_back.rotate(Vec3::new(0.0, 0.04, 0.16)) + rot.rotate(Vec3::new(0.0, -drop, 0.0)), rot);
         let mut p = Self::new(id, Source::Wrist, pose, WRIST_WIDTH_M, aspect);
         p.anchor = Anchor::Hand(hand);
         p
@@ -460,12 +465,17 @@ mod tests {
     }
 
     /// Left forearm raised across the chest, palm down: the hand points to the user's right (+X), the user looks
-    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z).
+    /// down at it from above. Text must run along the arm (+X) with its top away from the user (-Z), the face up
+    /// out of the back of the hand.
     #[test]
     fn watch_reads_like_a_watch_on_both_hands() {
-        for (hand, along) in [(Hand::Left, Vec3::X), (Hand::Right, Vec3::X * -1.0)] {
-            // Controller: -Z (laser) along the arm toward the fingers, +Y up out of the back of the hand.
-            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), Quat::from_arc(Vec3::FORWARD, along));
+        use std::f32::consts::FRAC_PI_2;
+        for (hand, along, roll) in [(Hand::Left, Vec3::X, -FRAC_PI_2), (Hand::Right, Vec3::X * -1.0, FRAC_PI_2)] {
+            // Controller as gripped: -Z (laser) along the arm toward the fingers, its top (+Y, under the thumb)
+            // toward the user; the back of the hand faces up.
+            let rot = Quat::from_arc(Vec3::FORWARD, along) * Quat::from_axis_angle(Vec3::Z, roll);
+            assert!(rot.rotate(Vec3::Y).dot(Vec3::Z) > 0.99, "{hand:?}: thumb toward the user");
+            let ctrl = Pose::new(Vec3::new(0.0, 1.2, -0.3), rot);
             let w = Panel::on_wrist(1, hand, 0.5);
             let world = ctrl * w.pose;
             let text_dir = world.rot.rotate(Vec3::X);
