@@ -10,9 +10,9 @@ use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHI
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
+use dvr_core::state::NotifyFrom;
 use dvr_core::state::State;
-use dvr_core::state::{NotifyFrom, WatchLayout};
-use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
+use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, level_for, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
@@ -38,7 +38,7 @@ const POP_OUT_DISTANCE_M: f32 = 0.3;
 /// Characters of the chat line that fit on the space bar.
 const SPACE_BAR_CHARS: usize = 24;
 /// The watch stays expanded this long after the laser leaves it.
-const WRIST_LINGER_MS: u64 = 1500;
+const WRIST_LINGER_MS: u64 = 2500;
 /// How long a notification from another app (Discord, ...) stays on the watch.
 const APP_TOAST_S: f32 = 6.0;
 /// The banner comes in over about this long and goes in a little less (critically damped: no bounce).
@@ -49,9 +49,18 @@ const BANNER_LINGER_S: f32 = 2.0;
 /// How often the watch's playing mark steps while it moves.
 const BEAT_STEP: Duration = Duration::from_millis(22);
 
+/// A screen goes to a coarser level only after wanting it this long (a finer one comes at once), so walking about
+/// or a panel in hand never flips it back and forth.
+const COARSER_AFTER: Duration = Duration::from_millis(600);
+
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
 struct Surface {
+    /// What SteamVR shows (for a screen or window, its `detail` output).
     tex: ID3D11Texture2D,
+    /// Screens and windows: the capture with its mip chain, shown at the level their size in view needs.
+    detail: Option<Detail>,
+    /// A coarser level wanted since then.
+    coarser: Option<(u32, Instant)>,
     capture: Option<Capture>,
     rect: Option<PixelRect>,
     needs_submit: bool,
@@ -105,23 +114,38 @@ fn key_faces(
     }
 }
 
-fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, String> {
-    let blank = |size: (u32, u32)| -> Result<Surface, String> {
-        let tex = gpu.texture(size.0, size.1, None).map_err(err)?;
-        Ok(Surface { tex, capture: None, rect: None, needs_submit: false, dead: false })
+/// `sharp`: screens and windows get their detail pass (see `Detail`).
+fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, String> {
+    let plain = |tex: ID3D11Texture2D| Surface {
+        tex,
+        detail: None,
+        coarser: None,
+        capture: None,
+        rect: None,
+        needs_submit: false,
+        dead: false,
+    };
+    let blank =
+        |size: (u32, u32)| -> Result<Surface, String> { Ok(plain(gpu.texture(size.0, size.1, None).map_err(err)?)) };
+    let screen = |r: PixelRect| -> Result<Surface, String> {
+        if !sharp {
+            return Ok(Surface { rect: Some(r), ..blank((r.w, r.h))? });
+        }
+        let d = Detail::new(gpu, r.w, r.h, 0).map_err(err)?;
+        Ok(Surface { rect: Some(r), ..plain(d.out.clone()) }.with_detail(d))
     };
     let (img, rect) = match panel.source {
         Source::Keyboard => return blank(KEYBOARD_SIZE),
         Source::Monitor(i) => match monitors.get(i as usize) {
-            Some(m) => return Ok(Surface { rect: Some(m.rect), ..blank((m.rect.w, m.rect.h))? }),
+            Some(m) => return screen(m.rect),
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
         },
         Source::Window(h) => match dvr_capture_win::window_rect(h as isize) {
-            Some(r) => return Ok(Surface { rect: Some(r), ..blank((r.w, r.h))? }),
+            Some(r) => return screen(r),
             None => {
                 let img = raster::placeholder(1280, 720, WINDOW_CLOSED);
                 let tex = gpu.image(&img).map_err(err)?;
-                return Ok(Surface { tex, capture: None, rect: None, needs_submit: true, dead: true });
+                return Ok(Surface { needs_submit: true, dead: true, ..plain(tex) });
             }
         },
         Source::Wrist => return blank(WRIST_SIZE),
@@ -129,7 +153,14 @@ fn surface(gpu: &Gpu, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, St
         Source::Toolbar => return blank(TOOLBAR_SIZE),
         Source::Banner => return blank(BANNER_SIZE),
     };
-    Ok(Surface { tex: gpu.image(&img).map_err(err)?, capture: None, rect, needs_submit: true, dead: false })
+    Ok(Surface { rect, needs_submit: true, ..plain(gpu.image(&img).map_err(err)?) })
+}
+
+impl Surface {
+    fn with_detail(mut self, d: Detail) -> Self {
+        self.detail = Some(d);
+        self
+    }
 }
 
 /// What the watch shows, filtered by the Wrist settings.
@@ -159,8 +190,8 @@ fn wrist_info(
         charging: stats.controllers.map(|b| b.charging),
         lowest_tracker: stats.lowest_tracker.filter(|_| battery),
         expanded,
-        // The Performance layout shows the load whatever the FPS and load switch says.
-        load: (state.wrist_load || layout == WatchLayout::Performance).then_some(WristLoad {
+        // The Performance and Game layouts show the load whatever the FPS and load switch says.
+        load: (state.wrist_load || layout.shows_load()).then_some(WristLoad {
             game_fps: stats.game_fps,
             target_fps: stats.display_hz,
             cpu: load.cpu,
@@ -219,8 +250,18 @@ pub fn run() -> Result<(), String> {
     let dir = state_path.parent().ok_or("no config directory")?.to_path_buf();
     let manifest = crate::bindings::install(&dir.join("input")).map_err(err)?;
 
-    let mut vr = OpenVr::init(&manifest)?;
+    let mut vr = OpenVr::connect()?;
+    // SteamVR knows us as an app (dashboard overlay) so it can start us with itself; first run opts in. This comes
+    // before the actions, so even the very first launch gets its buttons.
+    let app = std::env::current_exe()
+        .map_err(err)
+        .and_then(|exe| crate::bindings::install_vrmanifest(&dir, &exe).map_err(err))
+        .and_then(|m| vr.register_app(&m, APP_KEY));
+    vr.load_actions(&manifest)?;
     let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
+    // Screens at the detail the headset shows; without a shader compiler they are shown as captured.
+    let sharpen = Sharpen::new(&gpu).inspect_err(|e| tracing::warn!(%e, "screen detail pass unavailable")).ok();
+    let sharp = sharpen.is_some();
     let monitors = dvr_capture_win::monitors();
     let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
     let head = |vr: &OpenVr| vr.head_pose().unwrap_or(STANDING_HEAD);
@@ -242,11 +283,6 @@ pub fn run() -> Result<(), String> {
         }
     }
 
-    // SteamVR knows us as an app (dashboard overlay) so it can start us with itself; first run opts in.
-    let app = std::env::current_exe()
-        .map_err(err)
-        .and_then(|exe| crate::bindings::install_vrmanifest(&dir, &exe).map_err(err))
-        .and_then(|m| vr.register_app(&m, APP_KEY));
     match app {
         Ok(()) if !session.state.onboarded => {
             if let Err(e) = vr.set_auto_launch(APP_KEY, true) {
@@ -267,7 +303,7 @@ pub fn run() -> Result<(), String> {
     let mut chat = ChatLine::default();
     let mut surfaces = HashMap::new();
     for p in &panels {
-        surfaces.insert(p.id, surface(&gpu, p, &monitors)?);
+        surfaces.insert(p.id, surface(&gpu, sharp, p, &monitors)?);
     }
 
     let strings = Strings::english()?;
@@ -296,6 +332,7 @@ pub fn run() -> Result<(), String> {
     let mut toolbar = Toolbar::new()?;
     // Toolbar view shows this panel's buttons (rebuilt when the panel or its settings change).
     let mut toolbar_for: Option<u32> = None;
+    let mut toolbar_size: Option<(u32, i32)> = None;
     let mut wrist_seen: Option<u64> = None;
     let mut wrist_expanded = false;
     let mut wrist_flags = (false, false);
@@ -309,6 +346,8 @@ pub fn run() -> Result<(), String> {
         Listener::bind(dvr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
     session.notifications_ok = notifications.is_some();
     let mut toast: Option<(Toast, Instant)> = None;
+    // Administrator windows already explained (see `admin_window_at`).
+    let mut admin_told: Vec<String> = Vec::new();
     // Windows notifications from other apps; started only when wanted (Windows may ask for access once).
     let mut app_toasts = (session.state.notify_from != NotifyFrom::Off).then(AppToasts::start);
     let mut keyboard = Keyboard::new()?;
@@ -382,6 +421,8 @@ pub fn run() -> Result<(), String> {
         last_ms = now;
         // The watch shows while you look at it (or point at it, or a notification is up).
         let head_now = head(&vr);
+        // How much detail the headset shows per radian (SteamVR's resolution can change while running).
+        let ppr = vr.pixels_per_radian();
         if vr.worn()
             && let Some(h) = vr.head_pose()
         {
@@ -545,6 +586,22 @@ pub fn run() -> Result<(), String> {
             {
                 dvr_capture_win::focus(h as isize);
             }
+            // A program running as administrator drops our clicks without a word (Windows' UIPI): say why, once
+            // per window, instead of leaving the user clicking at nothing.
+            if let Event::Mouse { panel, uv, down: true, .. } = *e
+                && let Some(r) = rect(panel)
+                && let Some(title) = dvr_input_win::admin_window_at(r.pixel_at(uv))
+                && !admin_told.contains(&title)
+            {
+                admin_told.push(title.clone());
+                let app = if title.is_empty() { strings.get("admin-this-window", &[]) } else { title };
+                let (head, body) =
+                    (strings.get("admin-title", &[("app", app.clone())]), strings.get("admin-body", &[("app", app)]));
+                banner.set("DesktopVR", &head, &body, &strings.get("wrist-now", &[]));
+                let t = Toast { title: head, content: body, source_app: "DesktopVR".into(), timeout_s: APP_TOAST_S };
+                toast = Some((t, Instant::now()));
+                refresh_wrist = true;
+            }
             match *e {
                 Event::PopOut { hand, panel, uv } => pop = Some((hand, panel, uv)),
                 Event::Key { scancode, down } if session.key(scancode, down, dvr_input_win::key_char) => {
@@ -609,7 +666,7 @@ pub fn run() -> Result<(), String> {
             let at = poses[hand.index()];
             let pose = Pose::new(at.pos + at.forward() * POP_OUT_DISTANCE_M, from.world_pose(&poses).rot);
             let p = Panel::new(id, Source::Window(h as u64), pose, width, wr.h as f32 / wr.w as f32);
-            surfaces.insert(id, surface(&gpu, &p, &monitors)?);
+            surfaces.insert(id, surface(&gpu, sharp, &p, &monitors)?);
             engine.panels.push(p);
             engine.start_grab(hand, id, &poses);
             if let Some((_, title)) = dvr_capture_win::windows().into_iter().find(|(w, _)| *w == h) {
@@ -637,7 +694,7 @@ pub fn run() -> Result<(), String> {
             match fx {
                 Effect::Added(id) => {
                     if let Some(p) = engine.panels.iter().find(|p| p.id == id) {
-                        surfaces.insert(id, surface(&gpu, p, &monitors)?);
+                        surfaces.insert(id, surface(&gpu, sharp, p, &monitors)?);
                     }
                 }
                 Effect::Removed(id) => {
@@ -669,7 +726,7 @@ pub fn run() -> Result<(), String> {
                 Effect::AddWindow(h) => {
                     let id = crate::session::next_id(&engine.panels);
                     if let Some(p) = window_panel(id, h as isize, head_now, &screens) {
-                        surfaces.insert(id, surface(&gpu, &p, &monitors)?);
+                        surfaces.insert(id, surface(&gpu, sharp, &p, &monitors)?);
                         engine.panels.push(p);
                     }
                 }
@@ -708,9 +765,11 @@ pub fn run() -> Result<(), String> {
             layout = id;
         }
 
-        if toolbar_dirty {
+        let size = session.toolbar_size(&engine.panels);
+        if toolbar_dirty || size != toolbar_size {
             toolbar.set(&session.toolbar_model(&engine.panels, &strings));
             toolbar_for = session.toolbar_target();
+            toolbar_size = size;
         }
 
         // Watch buttons show hide / keyboard state as soon as it changes.
@@ -919,13 +978,51 @@ pub fn run() -> Result<(), String> {
             if !p.shown() {
                 s.capture = None;
             }
-            match s.capture.as_mut().map(|c| c.copy_latest(&gpu.context, &s.tex)) {
-                Some(Ok(Frame::Copied)) => s.needs_submit = true,
+            let target = s.detail.as_ref().map_or(&s.tex, |d| &d.src);
+            let mut draw = false;
+            match s.capture.as_mut().map(|c| c.copy_latest(&gpu.context, target)) {
+                Some(Ok(Frame::Copied)) => {
+                    if let (Some(d), Some(sh)) = (&s.detail, &sharpen) {
+                        sh.new_frame(&gpu, d);
+                        draw = true;
+                    }
+                    s.needs_submit = true;
+                }
                 Some(Ok(Frame::Resized(w, h))) => {
-                    s.tex = gpu.texture(w, h, None).map_err(err)?;
+                    if let Some(d) = &mut s.detail {
+                        *d = Detail::new(&gpu, w, h, d.level).map_err(err)?;
+                        s.tex = d.out.clone();
+                    } else {
+                        s.tex = gpu.texture(w, h, None).map_err(err)?;
+                    }
                     resized.push((p.id, w, h));
                 }
                 _ => {}
+            }
+            // The level its size in view needs: finer at once, coarser once it has stayed wanted a moment.
+            if let (Some(d), Some(sh), Some(ppr)) = (&mut s.detail, &sharpen, ppr)
+                && p.shown()
+            {
+                let distance = (world.pos - head_now.pos).length().max(0.1);
+                let want = level_for(d.w, p.width_m / distance * ppr);
+                let switch = match s.coarser {
+                    _ if want < d.level => true,
+                    Some((l, since)) if want > d.level && l == want => since.elapsed() >= COARSER_AFTER,
+                    _ => {
+                        s.coarser = (want > d.level).then(|| (want, Instant::now()));
+                        false
+                    }
+                };
+                if switch {
+                    s.coarser = None;
+                    d.set_level(&gpu, want).map_err(err)?;
+                    s.tex = d.out.clone();
+                    draw = true;
+                    s.needs_submit = true;
+                }
+                if draw {
+                    sh.draw(&gpu, d);
+                }
             }
         }
         timer.end(&gpu);

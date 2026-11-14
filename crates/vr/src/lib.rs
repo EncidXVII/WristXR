@@ -93,6 +93,11 @@ pub struct OpenVr {
     applications: Table,
     actions: Actions,
     claims: [Claims; 2],
+    /// The action manifest last loaded, and since when a tracked hand's buttons have not reached us (unbound),
+    /// for one reload.
+    manifest: Option<PathBuf>,
+    unbound_since: Option<u64>,
+    reloaded: bool,
     input_error: i32,
     overlays: HashMap<u64, Placed>,
 }
@@ -115,6 +120,87 @@ pub fn runtime_dir() -> Result<PathBuf, String> {
     json["runtime"][0].as_str().map(PathBuf::from).ok_or_else(|| "no SteamVR runtime registered".into())
 }
 
+/// SteamVR's config folder (`appconfig.json`, `vrappconfig`), as registered in `openvrpaths.vrpath`.
+fn config_dir() -> Result<PathBuf, String> {
+    let file = vrpath_file().ok_or("no user config directory")?;
+    let text = std::fs::read_to_string(&file).map_err(|_| "SteamVR is not installed (no openvrpaths.vrpath)")?;
+    let json: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", file.display()))?;
+    json["config"][0].as_str().map(PathBuf::from).ok_or_else(|| "no SteamVR config folder registered".into())
+}
+
+/// Takes the app off SteamVR's list: its manifest (so no more start with SteamVR) and its per-app settings.
+/// Through SteamVR when it is running (it keeps its list in memory and would write it back); otherwise straight in
+/// SteamVR's files. Never starts SteamVR.
+pub fn remove_app(manifest: &Path, app_key: &str) -> Result<(), String> {
+    if remove_app_live(manifest, app_key).is_err() {
+        remove_app_offline(manifest)?;
+    }
+    let settings = config_dir()?.join("vrappconfig").join(format!("{app_key}.vrappconfig"));
+    match std::fs::remove_file(&settings) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", settings.display())),
+        _ => Ok(()),
+    }
+}
+
+fn remove_app_live(manifest: &Path, app_key: &str) -> Result<(), String> {
+    let factory = ffi::load_factory(&client_library(&runtime_dir()?))?;
+    let mut err = 0;
+    // SAFETY: factory from the runtime library; NUL-terminated version string.
+    let core = unsafe { factory(ffi::CLIENT_CORE_VERSION.as_ptr(), &mut err) }.cast::<ClientCore>();
+    if core.is_null() {
+        return Err(format!("SteamVR client core unavailable (error {err})"));
+    }
+    // SAFETY: a non-null core object always carries its vtable.
+    let vtbl = unsafe { &*(*core).vtbl };
+    // SAFETY: valid core pointer; null startup info is allowed. A background app fails here when SteamVR is off.
+    if unsafe { (vtbl.init)(core, ffi::APP_BACKGROUND, std::ptr::null()) } != 0 {
+        return Err("SteamVR is not running".into());
+    }
+    let mut e = 0;
+    // SAFETY: initialized core; NUL-terminated interface name.
+    let p = unsafe { (vtbl.get_generic_interface)(core, ffi::APPLICATIONS_VERSION.as_ptr(), &mut e) };
+    let result = if p.is_null() || e != 0 {
+        Err(format!("IVRApplications unavailable (VRInitError {e})"))
+    } else {
+        let apps = Table(p.cast());
+        let (path, key) = (cstring(&manifest.to_string_lossy())?, cstring(app_key)?);
+        call!(apps, applications::SET_APPLICATION_AUTO_LAUNCH, fn(*const c_char, u8) -> i32, key.as_ptr(), 0);
+        match call!(apps, applications::REMOVE_APPLICATION_MANIFEST, fn(*const c_char) -> i32, path.as_ptr()) {
+            0 => Ok(()),
+            e => Err(format!("RemoveApplicationManifest: EVRApplicationError {e}")),
+        }
+    };
+    // SAFETY: balances the successful init above.
+    unsafe { (vtbl.cleanup)(core) };
+    result
+}
+
+/// With SteamVR off: drops the manifest from `appconfig.json`'s list.
+fn remove_app_offline(manifest: &Path) -> Result<(), String> {
+    drop_manifest(&config_dir()?.join("appconfig.json"), manifest)
+}
+
+fn drop_manifest(file: &Path, manifest: &Path) -> Result<(), String> {
+    let Ok(text) = std::fs::read_to_string(file) else { return Ok(()) };
+    let mut json: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", file.display()))?;
+    let same = |p: &str| same_path(Path::new(p), manifest);
+    if let Some(list) = json["manifest_paths"].as_array_mut() {
+        let before = list.len();
+        list.retain(|p| !p.as_str().is_some_and(same));
+        if list.len() != before {
+            let out = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+            std::fs::write(file, out).map_err(|e| format!("{}: {e}", file.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Windows paths compare without case and either slash.
+fn same_path(a: &Path, b: &Path) -> bool {
+    let norm = |p: &Path| p.to_string_lossy().replace('/', "\\").to_lowercase();
+    norm(a) == norm(b)
+}
+
 fn client_library(runtime: &Path) -> PathBuf {
     if cfg!(windows) {
         runtime.join("bin").join("vrclient_x64.dll")
@@ -132,6 +218,15 @@ fn cstring(s: &str) -> Result<CString, String> {
 impl OpenVr {
     /// Connects as an overlay app (starts SteamVR if needed) and loads the action manifest.
     pub fn init(manifest: &Path) -> Result<Self, String> {
+        let mut vr = Self::connect()?;
+        vr.load_actions(manifest)?;
+        Ok(vr)
+    }
+
+    /// Connects as an overlay app (starts SteamVR if needed), without input yet: an app that registers itself
+    /// (`register_app`) does that first, then `load_actions`, so SteamVR files the bindings under the app's own key.
+    /// The other way round, a first launch gets bindings filed under a stand-in key and no buttons until a restart.
+    pub fn connect() -> Result<Self, String> {
         let factory = ffi::load_factory(&client_library(&runtime_dir()?))?;
         let mut err = 0;
         // SAFETY: factory from the runtime library; NUL-terminated version string.
@@ -181,6 +276,9 @@ impl OpenVr {
             compositor,
             applications,
             claims: [Claims::default(); 2],
+            manifest: None,
+            unbound_since: None,
+            reloaded: false,
             input_error: 0,
             actions: Actions {
                 set: 0,
@@ -198,7 +296,6 @@ impl OpenVr {
             },
             overlays: HashMap::new(),
         };
-        vr.load_actions(manifest)?;
         for hand in Hand::BOTH {
             let key = cursor_key(hand);
             let name = format!("dvr.cursor.{}", hand.index());
@@ -209,7 +306,9 @@ impl OpenVr {
         Ok(vr)
     }
 
-    fn load_actions(&mut self, manifest: &Path) -> Result<(), String> {
+    /// Loads the action manifest (see `connect`).
+    pub fn load_actions(&mut self, manifest: &Path) -> Result<(), String> {
+        self.manifest = Some(manifest.to_path_buf());
         let path = cstring(&manifest.to_string_lossy())?;
         let e = call!(self.input, input::SET_ACTION_MANIFEST_PATH, fn(*const c_char) -> i32, path.as_ptr());
         if e != 0 {
@@ -329,6 +428,26 @@ impl OpenVr {
             u8::from(on)
         );
         if e != 0 { Err(format!("SetApplicationAutoLaunch: EVRApplicationError {e}")) } else { Ok(()) }
+    }
+
+    /// How many of the headset's rendered pixels one radian spans in the middle of the view (left eye, at SteamVR's
+    /// render resolution): how much detail a panel of a given size and distance can show.
+    pub fn pixels_per_radian(&self) -> Option<f32> {
+        let (mut w, mut h) = (0u32, 0u32);
+        call!(self.system, system::GET_RECOMMENDED_RENDER_TARGET_SIZE, fn(*mut u32, *mut u32) -> (), &mut w, &mut h);
+        let (mut l, mut r, mut t, mut b) = (0f32, 0f32, 0f32, 0f32);
+        call!(
+            self.system,
+            system::GET_PROJECTION_RAW,
+            fn(i32, *mut f32, *mut f32, *mut f32, *mut f32) -> (),
+            0,
+            &mut l,
+            &mut r,
+            &mut t,
+            &mut b
+        );
+        // Tangents: one tangent unit is one radian at the centre of the view.
+        (w > 0 && r - l > 0.1).then(|| w as f32 / (r - l))
     }
 
     /// DXGI adapter SteamVR renders on; textures must come from it.
@@ -453,6 +572,11 @@ impl OpenVr {
     }
 
     fn digital(&self, action: u64, device: u64) -> bool {
+        let d = self.digital_data(action, device);
+        d.active != 0 && d.state != 0
+    }
+
+    fn digital_data(&self, action: u64, device: u64) -> DigitalData {
         let mut d = DigitalData::default();
         call!(
             self.input,
@@ -463,7 +587,33 @@ impl OpenVr {
             size_of::<DigitalData>() as u32,
             device
         );
-        d.active != 0 && d.state != 0
+        d
+    }
+
+    /// Safety net for bindings SteamVR filed under the wrong app: a tracked controller whose trigger has not
+    /// reached us for a few seconds (outside SteamVR's dashboard, which takes the buttons while open) gets the
+    /// action manifest loaded again, once.
+    fn check_bindings(&mut self, now_ms: u64, input: &FrameInput) {
+        const UNBOUND_MS: u64 = 3000;
+        let unbound = Hand::BOTH.iter().any(|h| {
+            input.hands[h.index()].tracked
+                && self.digital_data(self.actions.click, self.actions.hands[h.index()]).active == 0
+        }) && !(call!(self.overlay, overlay::IS_DASHBOARD_VISIBLE, fn() -> u8) != 0);
+        if !unbound {
+            self.unbound_since = None;
+            return;
+        }
+        let since = *self.unbound_since.get_or_insert(now_ms);
+        if !self.reloaded
+            && now_ms.saturating_sub(since) >= UNBOUND_MS
+            && let Some(m) = self.manifest.clone()
+        {
+            self.reloaded = true;
+            tracing::warn!("controller buttons not bound; loading the action manifest again");
+            if let Err(e) = self.load_actions(&m) {
+                tracing::warn!(%e, "action manifest reload failed");
+            }
+        }
     }
 
     fn set_visible(&mut self, key: u64, visible: bool) {
@@ -565,6 +715,7 @@ impl VrBackend for OpenVr {
         if let Some(head) = self.head_pose() {
             input.head = head;
         }
+        self.check_bindings(now_ms, input);
         true
     }
 
@@ -672,5 +823,26 @@ impl Drop for OpenVr {
         }
         // SAFETY: core was initialized in `init` and is cleaned up exactly once.
         unsafe { ((*(*self.core).vtbl).cleanup)(self.core) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uninstalling_drops_only_our_manifest_from_steamvrs_list() {
+        let dir = std::env::temp_dir().join(format!("dvr-appconfig-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("appconfig.json");
+        let ours = r"C:\Users\Someone\AppData\Roaming\DesktopVR\config\desktopvr.vrmanifest";
+        let theirs = r"C:\Program Files\Other\other.vrmanifest";
+        let list = serde_json::json!({ "manifest_paths": [ours.to_uppercase().replace('\\', "/"), theirs] });
+        std::fs::write(&file, list.to_string()).expect("write");
+        drop_manifest(&file, Path::new(ours)).expect("drop");
+        let back: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&file).expect("read")).expect("json");
+        assert_eq!(back["manifest_paths"], serde_json::json!([theirs]));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

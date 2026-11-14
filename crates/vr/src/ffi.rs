@@ -3,6 +3,8 @@
 use std::ffi::{CStr, c_char, c_void};
 
 pub const APP_OVERLAY: i32 = 2;
+/// Never starts SteamVR: init fails when it is not running.
+pub const APP_BACKGROUND: i32 = 3;
 pub const ORIGIN_STANDING: i32 = 1;
 pub const TEXTURE_DIRECTX: i32 = 0;
 pub const COLOR_SPACE_AUTO: i32 = 0;
@@ -26,6 +28,8 @@ pub const APPLICATIONS_VERSION: &CStr = c"FnTable:IVRApplications_008";
 pub const CLIENT_CORE_VERSION: &CStr = c"IVRClientCore_003";
 
 pub mod system {
+    pub const GET_RECOMMENDED_RENDER_TARGET_SIZE: usize = 0;
+    pub const GET_PROJECTION_RAW: usize = 2;
     pub const GET_DXGI_OUTPUT_INFO: usize = 8;
     pub const GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE: usize = 12;
     pub const GET_TRACKED_DEVICE_ACTIVITY_LEVEL: usize = 16;
@@ -51,9 +55,11 @@ pub mod overlay {
     pub const HIDE_OVERLAY: usize = 44;
     pub const WAIT_FRAME_SYNC: usize = 47;
     pub const SET_OVERLAY_TEXTURE: usize = 60;
+    pub const IS_DASHBOARD_VISIBLE: usize = 68;
 }
 pub mod applications {
     pub const ADD_APPLICATION_MANIFEST: usize = 0;
+    pub const REMOVE_APPLICATION_MANIFEST: usize = 1;
     pub const IDENTIFY_APPLICATION: usize = 11;
     pub const SET_APPLICATION_AUTO_LAUNCH: usize = 17;
     pub const GET_APPLICATION_AUTO_LAUNCH: usize = 18;
@@ -288,11 +294,15 @@ mod tests {
             ("IVRSystem", "GetFloatTrackedDeviceProperty", system::GET_FLOAT_TRACKED_DEVICE_PROPERTY),
             ("IVRCompositor", "GetFrameTiming", compositor::GET_FRAME_TIMING),
             ("IVRApplications", "AddApplicationManifest", applications::ADD_APPLICATION_MANIFEST),
+            ("IVRApplications", "RemoveApplicationManifest", applications::REMOVE_APPLICATION_MANIFEST),
             ("IVRApplications", "IdentifyApplication", applications::IDENTIFY_APPLICATION),
             ("IVRApplications", "SetApplicationAutoLaunch", applications::SET_APPLICATION_AUTO_LAUNCH),
             ("IVRApplications", "GetApplicationAutoLaunch", applications::GET_APPLICATION_AUTO_LAUNCH),
             ("IVRSystem", "AcknowledgeQuit_Exiting", system::ACKNOWLEDGE_QUIT_EXITING),
             ("IVROverlay", "CreateOverlay", overlay::CREATE_OVERLAY),
+            ("IVRSystem", "GetRecommendedRenderTargetSize", system::GET_RECOMMENDED_RENDER_TARGET_SIZE),
+            ("IVRSystem", "GetProjectionRaw", system::GET_PROJECTION_RAW),
+            ("IVROverlay", "IsDashboardVisible", overlay::IS_DASHBOARD_VISIBLE),
             ("IVROverlay", "DestroyOverlay", overlay::DESTROY_OVERLAY),
             ("IVROverlay", "SetOverlayAlpha", overlay::SET_OVERLAY_ALPHA),
             ("IVROverlay", "SetOverlaySortOrder", overlay::SET_OVERLAY_SORT_ORDER),

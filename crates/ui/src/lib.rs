@@ -192,7 +192,8 @@ slint::slint! {
         in property <string> ring-track;
         in property <bool> expanded;
         in property <int> card-height;
-        // WatchLayout: 0 Standard, 1 Clock, 2 No batteries, 3 Batteries, 4 Music, 5 Performance, 6 Compact.
+        // WatchLayout: 0 Standard, 1 Clock, 2 No batteries, 3 Batteries, 4 Music, 5 Performance, 6 Compact, 7 Game,
+        // 8 Player.
         in property <int> layout;
         // 0 none, 1 music, 2 message, 3 low battery, 4 performance
         in property <int> strip;
@@ -255,9 +256,9 @@ slint::slint! {
         background: transparent;
 
         property <bool> compact: root.layout == 6;
-        property <bool> big: root.layout == 4;
+        property <bool> big: root.layout == 4 || root.layout == 8;
         property <bool> tagged: root.layout == 3;
-        property <bool> date-right: root.layout == 1 || root.layout == 2;
+        property <bool> date-right: root.layout == 1 || root.layout == 2 || root.layout == 7 || root.layout == 8;
         // 0 closed .. 1 open; content shown while it is above 0, so closing fades it out instead of cutting it.
         property <float> open: root.expanded ? 1 : 0;
         animate open { duration: root.motion ? 200ms : 0ms; easing: ease-out; }
@@ -963,8 +964,8 @@ impl Wrist {
         let v = &self.view;
         let layout = w.layout;
         let compact = layout == L::Compact;
-        let big = layout == L::Music;
-        v.set_layout(L::ALL.iter().position(|l| *l == layout).unwrap_or(0) as i32);
+        let big = layout.shows_player();
+        v.set_layout(layout.view_index());
         v.set_time(format!("{:02}:{:02}", w.hour, w.minute).into());
 
         // Battery rings: L / R (numbers when open), plus the lowest tracker. Clock and No batteries show them only
@@ -975,7 +976,7 @@ impl Wrist {
             (w.controllers[1], w.controllers_on[1], w.charging[1], "R", "wrist-right-controller"),
             (w.lowest_tracker, false, false, "T", "wrist-tracker"),
         ];
-        let show_rings = w.expanded || !matches!(layout, L::Clock | L::NoBatteries);
+        let show_rings = w.expanded || !layout.date_beside();
         let numbers = w.expanded || matches!(layout, L::Batteries | L::Compact);
         let tag = |short: &str| if layout == L::Batteries { short.into() } else { Default::default() };
         let rings: Vec<RingView> = devices
@@ -1027,7 +1028,7 @@ impl Wrist {
                 (3, s.get("wrist-low", &args), String::new())
             }
             _ if matches!(layout, L::Clock | L::Batteries) => (0, String::new(), String::new()),
-            _ if layout == L::Performance => match &w.load {
+            _ if layout.shows_load() => match &w.load {
                 Some(_) => (4, String::new(), String::new()),
                 None => (0, String::new(), String::new()),
             },
@@ -1203,11 +1204,11 @@ impl Wrist {
         match input {
             PlayPause if closed_song => Some(match g.layout {
                 WatchLayout::Compact => (522.0, COMPACT_H / 2.0),
-                WatchLayout::Music => (12.0 + 434.0, HEADER_H + 48.0),
+                l if l.shows_player() => (12.0 + 434.0, HEADER_H + 48.0),
                 _ => (514.0, 166.0),
             }),
-            Previous if closed_song && g.layout == WatchLayout::Music => Some((12.0 + 370.0, HEADER_H + 48.0)),
-            Next if closed_song && g.layout == WatchLayout::Music => Some((12.0 + 498.0, HEADER_H + 48.0)),
+            Previous if closed_song && g.layout.shows_player() => Some((12.0 + 370.0, HEADER_H + 48.0)),
+            Next if closed_song && g.layout.shows_player() => Some((12.0 + 498.0, HEADER_H + 48.0)),
             _ if !g.expanded => None,
             AddBack => g.adding.then_some((280.0, g.body_y + ROW / 2.0)),
             AddScreen if g.adding => pick(AddScreen),
@@ -1458,6 +1459,8 @@ mod tests {
             (L::Music, 3, 1, BIG_END),
             (L::Performance, 3, 4, STRIP_END),
             (L::Compact, 2, 1, COMPACT_H),
+            (L::Game, 0, 4, STRIP_END),
+            (L::Player, 0, 1, BIG_END),
         ];
         for (layout, rings, strip, height) in want {
             wrist.set(&base(layout));

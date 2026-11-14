@@ -16,6 +16,8 @@ mod run;
 mod session;
 #[cfg(windows)]
 mod tray;
+#[cfg(windows)]
+mod uninstall;
 mod update;
 
 use std::process::ExitCode;
@@ -30,6 +32,10 @@ fn main() -> ExitCode {
         #[cfg(windows)]
         dvr_sys::attach_parent_console();
         return selftest();
+    }
+    #[cfg(windows)]
+    if std::env::args().any(|a| a == "--uninstall") {
+        return uninstall::run();
     }
     // A second copy would fight the first over the controllers and the notification port.
     #[cfg(windows)]

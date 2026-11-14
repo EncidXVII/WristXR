@@ -8,6 +8,9 @@ wrist-left-controller = Left controller
 wrist-right-controller = Right controller
 wrist-tracker = Tracker
 wrist-now = now
+admin-title = Can't click { $app }
+admin-body = It runs as administrator, and Windows blocks clicks from other apps. Run DesktopVR as administrator too, or { $app } without it.
+admin-this-window = this window
 wrist-menu = Menu
 wrist-keyboard = Keyboard
 wrist-screens = Show overlay
@@ -133,6 +136,10 @@ layout-performance = Performance
 layout-performance-hint = FPS, CPU and GPU
 layout-compact = Compact
 layout-compact-hint = One slim bar
+layout-game = Game
+layout-game-hint = Time, date, FPS, CPU, GPU
+layout-player = Player
+layout-player-hint = Time, date, small player
 layout-footer = Opening the watch looks the same in every layout
 
 ## Setup

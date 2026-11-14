@@ -405,6 +405,13 @@ impl Session {
     /// back, the keyboard included. The menu and watch stay. Showing again turns and moves the whole layout, as it
     /// was arranged, to where the user now faces: after a playspace mover or a walk around the room everything is
     /// back in front with one double-tap.
+    /// Shows everything again if hidden (see `toggle_hidden`).
+    fn show_all(&mut self, panels: &mut [Panel], head: Pose) {
+        if self.hidden {
+            self.toggle_hidden(panels, head);
+        }
+    }
+
     pub fn toggle_hidden(&mut self, panels: &mut [Panel], head: Pose) {
         self.hidden = !self.hidden;
         if self.hidden {
@@ -634,6 +641,17 @@ impl Session {
         self.toolbar
     }
 
+    /// The size the toolbar shows for its panel, as shown (tenths of a metre): the toolbar is drawn again when this
+    /// changes, also when the panel is sized in hand (grip and stick, or both hands) rather than with its buttons.
+    pub fn toolbar_size(&self, panels: &[Panel]) -> Option<(u32, i32)> {
+        let p = panels.iter().find(|p| Some(p.id) == self.toolbar)?;
+        Some((p.id, (self.shown_width(p) * 10.0).round() as i32))
+    }
+
+    fn shown_width(&self, p: &Panel) -> f32 {
+        self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1)
+    }
+
     /// Index of `tool` in the toolbar last built.
     pub fn tool_index(&self, tool: Tool) -> Option<usize> {
         self.tools.borrow().iter().position(|t| *t == tool)
@@ -706,8 +724,7 @@ impl Session {
             tools.extend([Tool::Curve, Tool::FreeTurn]);
         }
         l.group(lock);
-        let width = self.size_goal.filter(|g| g.0 == p.id).map_or(p.width_m, |g| g.1);
-        let size = s.get("tool-size", &[("m", format!("{width:.1}"))]);
+        let size = s.get("tool-size", &[("m", format!("{:.1}", self.shown_width(p)))]);
         l.group(vec![
             (b(ToolKind::Step, "−".into(), ""), None),
             (b(ToolKind::Readout, size, ""), None),
@@ -1074,7 +1091,8 @@ impl Session {
                         add(&mut acts, Act::Layout(layout), choice)
                     })
                     .collect();
-                l.rows(Col::Full, rows, 56.0);
+                // Nine layouts: rows at the 48 px floor so the footer still fits.
+                l.rows(Col::Full, rows, 48.0);
                 l.footer(t("layout-footer"), None);
                 l.finish()
             }
@@ -1351,9 +1369,11 @@ impl Session {
                     p.visible = false;
                 }
             }
-            // Adding a screen or window closes the menu so the new panel is not hidden behind it.
+            // Adding a screen or window closes the menu so the new panel is not hidden behind it, and shows
+            // everything again if it was hidden (a double-tap in a game can hide it unnoticed).
             Act::AddScreen => {
                 if let Some(i) = Self::unshown_monitor(panels, monitors) {
+                    self.show_all(panels, head);
                     let id = next_id(panels);
                     panels.push(self.new_screen(id, i, head, &monitors[i as usize]));
                     fx.push(Effect::Added(id));
@@ -1386,6 +1406,7 @@ impl Session {
                     if let Some((_, name)) = self.windows.iter().find(|(w, _)| *w == h) {
                         self.window_names.insert(h, name.clone());
                     }
+                    self.show_all(panels, head);
                     fx.push(Effect::AddWindow(h));
                     self.page = Page::Tab(TAB_PANELS);
                     Self::close(panels);
@@ -1542,6 +1563,17 @@ mod tests {
         let seen = head.inverse().transform_point(p.pos);
         assert!((seen - screen.pos).length() < 1e-4, "screen at {seen:?} from the head");
         assert!(!s.hidden);
+    }
+
+    #[test]
+    fn opening_a_window_while_hidden_shows_everything() {
+        let mut panels = Vec::new();
+        let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
+        s.windows = vec![(7, "Notes".into())];
+        s.toggle_hidden(&mut panels, Pose::IDENTITY);
+        let fx = s.act(Act::AddWindow(7), &mut panels, Pose::IDENTITY, &[]);
+        assert!(fx.iter().any(|e| matches!(e, Effect::AddWindow(7))));
+        assert!(!s.hidden, "the new window is not added hidden");
     }
 
     #[test]

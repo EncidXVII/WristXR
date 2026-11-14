@@ -307,6 +307,29 @@ pub fn error_dialog(title: &str, message: &str) {
     }
 }
 
+/// A plain message with an OK button.
+pub fn info_dialog(title: &str, message: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONINFORMATION, MB_OK, MessageBoxW};
+    let text: Vec<u16> = message.encode_utf16().chain([0]).collect();
+    let title: Vec<u16> = title.encode_utf16().chain([0]).collect();
+    // SAFETY: NUL-terminated UTF-16 strings that outlive the call.
+    unsafe {
+        MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), MB_OK | MB_ICONINFORMATION);
+    }
+}
+
+/// A yes/no question; true for Yes. No is the default button.
+pub fn ask_dialog(title: &str, message: &str) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{IDYES, MB_DEFBUTTON2, MB_ICONQUESTION, MB_YESNO, MessageBoxW};
+    let text: Vec<u16> = message.encode_utf16().chain([0]).collect();
+    let title: Vec<u16> = title.encode_utf16().chain([0]).collect();
+    // SAFETY: NUL-terminated UTF-16 strings that outlive the call.
+    unsafe {
+        MessageBoxW(None, PCWSTR(text.as_ptr()), PCWSTR(title.as_ptr()), MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON2)
+            == IDYES
+    }
+}
+
 /// Working set of this process in bytes (RAM budget and soak memory growth).
 pub fn working_set_bytes() -> u64 {
     use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};

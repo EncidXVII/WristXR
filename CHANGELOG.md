@@ -8,6 +8,10 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
+- Screens and windows look sharper in the headset, far ones most: each is shown at the detail its size in view
+  needs (from a full set of smaller copies, so text no longer shimmers or smears when the compositor shrinks it),
+  with a light sharpen. A far screen also hands SteamVR a smaller picture. Under 0.1 ms of GPU per captured frame.
+- The open watch stays open 2.5 seconds after the laser leaves it (was 1.5).
 - Pointing at a panel takes from the game only the controls that do something there. The stick is taken only over
   a screen or window (it scrolls) or while holding a panel; A/X only over a screen or window; the menu button
   never. So over the keyboard, the toolbar or the watch, you still turn and walk in the game. A control changes
@@ -44,6 +48,11 @@ First public early-access release (Windows).
   after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- Uninstall: `Uninstall DesktopVR.cmd` in the folder (or `DesktopVR.exe --uninstall`) takes DesktopVR off
+  SteamVR's list, so it no longer starts with SteamVR, and deletes its settings and layout, after asking. It
+  works with SteamVR running or not, and never starts it.
+- Two watch layouts: Game (time, date, FPS, CPU and GPU) and Player (time, date and the small player), for
+  Performance and Music without the batteries.
 - Notification banner: a message also shows low in your view (riding with your head), with the app, the sender and
   up to three lines of text. It rises and fades in, goes back down the same way after about 6 seconds, and stays
   while you point at it. Without Windows' animations it simply appears and goes.
@@ -124,3 +133,13 @@ First public early-access release (Windows).
 - Release check against GitHub (no identifiers), `--selftest` report.
 
 [0.1.0]: https://github.com/EncidXVII/DesktopVR/releases/tag/v0.1.0
+
+### Fixed
+- Clicking a window of a program that runs as administrator now explains, once, why nothing happens (Windows drops
+  clicks from other apps there) instead of failing silently.
+- Opening a window or a screen while everything is hidden shows everything again: a double-tap of the menu button
+  in a game could hide it all unnoticed, and the new window was added hidden.
+- The toolbar's size readout follows a panel sized in hand (grip and stick, or both hands), not just its buttons.
+- The very first launch gets its controller buttons: SteamVR now learns which app this is before the controls are
+  loaded (they used to work only after a restart). If a tracked controller's buttons still never arrive, the
+  controls are loaded again once.

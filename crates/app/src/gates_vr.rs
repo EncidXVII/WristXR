@@ -7,7 +7,7 @@ use dvr_core::backend::VrBackend;
 use dvr_core::engine::{Claims, FrameInput};
 use dvr_core::math::Vec3;
 use dvr_core::panel::{Anchor, Hand, Panel, Source};
-use dvr_gfx_d3d11::{Gpu, GpuTimer, raw};
+use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, raw};
 use dvr_ui::{WRIST_SIZE, Wrist, WristInfo, WristLoad};
 use dvr_vr::OpenVr;
 use std::time::{Duration, Instant};
@@ -35,12 +35,14 @@ pub fn overlay_live() -> GateResult {
 }
 
 fn run(manifest: &std::path::Path) -> GateResult {
-    let mut vr = OpenVr::init(manifest)?;
-    // Gate C (tray / autostart): register the app with SteamVR and round-trip auto-launch.
+    let mut vr = OpenVr::connect()?;
+    // Gate C (tray / autostart): register the app with SteamVR (before the actions, as the app does) and
+    // round-trip auto-launch.
     let dir = manifest.parent().ok_or("manifest has no folder")?;
     let exe = std::env::current_exe().map_err(err)?;
     let app = crate::bindings::install_vrmanifest(dir, &exe).map_err(err)?;
     vr.register_app(&app, crate::bindings::APP_KEY)?;
+    vr.load_actions(manifest)?;
     for on in [true, false] {
         vr.set_auto_launch(crate::bindings::APP_KEY, on)?;
         if vr.auto_launch(crate::bindings::APP_KEY) != on {
@@ -58,7 +60,10 @@ fn run(manifest: &std::path::Path) -> GateResult {
     wrist_panel.anchor = Anchor::World;
     wrist_panel.pose = panel.pose;
     wrist_panel.pose.pos = panel.pose.pos + Vec3::new(0.0, -0.45, 0.2);
-    let tex = gpu.texture(monitor.rect.w, monitor.rect.h, None).map_err(err)?;
+    // As the app shows a screen, at its worst case for the budget: the full-size level, so the detail pass draws
+    // every pixel of every captured frame.
+    let sharpen = Sharpen::new(&gpu).map_err(err)?;
+    let detail = Detail::new(&gpu, monitor.rect.w, monitor.rect.h, 0).map_err(err)?;
     let wrist_tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
     let mut capture = Capture::monitor(&gpu.device, monitor.handle).map_err(err)?;
     let mut wrist = Wrist::new()?;
@@ -116,7 +121,11 @@ fn run(manifest: &std::path::Path) -> GateResult {
             }
             None => false,
         };
-        let capture_new = capture.copy_latest(&gpu.context, &tex).map_err(err)? == Frame::Copied;
+        let capture_new = capture.copy_latest(&gpu.context, &detail.src).map_err(err)? == Frame::Copied;
+        if capture_new {
+            sharpen.new_frame(&gpu, &detail);
+            sharpen.draw(&gpu, &detail);
+        }
         timer.end(&gpu);
         gpu.flush();
         if wrist_new {
@@ -124,7 +133,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
             wrist_frames += 1;
         }
         if capture_new {
-            vr.set_texture_d3d11(1, raw(&tex))?;
+            vr.set_texture_d3d11(1, raw(&detail.out))?;
             captured += 1;
         }
         vr.wait_frame(20);

@@ -10,7 +10,7 @@
 point at your screens and click, type on a two-hand VR keyboard, send messages to the VRChat chatbox, glance at
 your wrist for time, batteries and load, then get back to the game.
 
-It costs about **0.01 ms of GPU time per frame** and shows its own cost live. Everything stays out of your
+It costs under **0.1 ms of GPU time per frame** and shows its own cost live. Everything stays out of your
 way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
 
 [**Download for Windows**](https://github.com/EncidXVII/DesktopVR/releases/latest) ·
@@ -80,6 +80,10 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 
 It starts with SteamVR from then on; untick **Start with SteamVR** in the tray icon to stop that.
 
+**Uninstall:** quit DesktopVR (tray icon > Quit), run `Uninstall DesktopVR.cmd` in its folder (or
+`DesktopVR.exe --uninstall`) and confirm. That takes it off SteamVR's list and deletes its settings and layout;
+then delete the folder.
+
 ## Switching from XSOverlay, OVR Toolkit or Desktop+
 
 On first run DesktopVR reads your XSOverlay settings file (your own `overlaySettings.json`) and keeps your
@@ -145,7 +149,7 @@ the worst case (60 fps capture):
 
 | Budget | Target | Measured |
 |---|---|---|
-| GPU per VR frame (this overlay) | < 0.3 ms | 0.005–0.02 ms |
+| GPU per VR frame (this overlay) | < 0.3 ms | 0.01–0.1 ms |
 | CPU, one core | < 3 % | 0.6–2.8 % |
 | RAM | < 150 MB | 64–78 MB |
 
@@ -165,7 +169,7 @@ VRChat's Action Menu), and takes from the game only the controls you're using on
 **Does it work on Linux?** Not yet. Linux (Wayland screen capture, input) and Steam Frame on-device builds are
 in progress; the Linux release builds and runs the self-test today.
 
-**Does it slow down my game?** It's designed not to: about 0.01 ms GPU per frame and a few percent of one CPU
+**Does it slow down my game?** It's designed not to: under 0.1 ms GPU per frame and a few percent of one CPU
 core. Hidden panels stop capturing entirely. Setup shows the real cost on your machine.
 
 **Is Windows SmartScreen warning me?** Early builds aren't code-signed yet (see

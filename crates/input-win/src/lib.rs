@@ -237,6 +237,56 @@ pub fn caps_lock() -> bool {
     unsafe { GetKeyState(i32::from(VK_CAPITAL.0)) & 1 != 0 }
 }
 
+fn elevated(process: windows::Win32::Foundation::HANDLE) -> Option<bool> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
+    use windows::Win32::System::Threading::OpenProcessToken;
+    let mut token = Default::default();
+    let mut e = TOKEN_ELEVATION::default();
+    let mut len = 0u32;
+    // SAFETY: the token handle is closed below; the out-buffer is a TOKEN_ELEVATION of the size given.
+    unsafe {
+        OpenProcessToken(process, TOKEN_QUERY, &mut token).ok()?;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            Some((&raw mut e).cast()),
+            size_of::<TOKEN_ELEVATION>() as u32,
+            &mut len,
+        );
+        let _ = CloseHandle(token);
+        ok.ok()?;
+    }
+    Some(e.TokenIsElevated != 0)
+}
+
+/// The title of the window at this desktop point when it belongs to a program running as administrator and we do
+/// not: Windows then silently drops our clicks and keys on it (UIPI), so the user can be told why nothing happens.
+pub fn admin_window_at(p: (i32, i32)) -> Option<String> {
+    use windows::Win32::Foundation::{CloseHandle, POINT};
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::UI::WindowsAndMessaging::{GA_ROOT, GetAncestor, GetWindowTextW, WindowFromPoint};
+    // SAFETY: the pseudo-handle of this process needs no closing.
+    if elevated(unsafe { GetCurrentProcess() })? {
+        return None;
+    }
+    // SAFETY: plain window and process queries; the process handle is closed below.
+    unsafe {
+        let hwnd = GetAncestor(WindowFromPoint(POINT { x: p.0, y: p.1 }), GA_ROOT);
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let admin = elevated(process);
+        let _ = CloseHandle(process);
+        if admin != Some(true) {
+            return None;
+        }
+        let mut buf = [0u16; 256];
+        let n = GetWindowTextW(hwnd, &mut buf);
+        Some(String::from_utf16_lossy(&buf[..n.max(0) as usize]))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

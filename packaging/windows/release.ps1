@@ -10,7 +10,7 @@ $stage = Join-Path $out "DesktopVR-$version-windows-x64"
 if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 New-Item -ItemType Directory -Force $stage | Out-Null
 Copy-Item target\release\dvr-app.exe (Join-Path $stage 'DesktopVR.exe')
-Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md $stage
+Copy-Item README.md, LICENSE, THIRD_PARTY_NOTICES.md, 'packaging\windows\Uninstall DesktopVR.cmd' $stage
 
 $zip = "$stage.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }

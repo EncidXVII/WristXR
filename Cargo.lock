@@ -939,6 +939,7 @@ name = "dvr-gfx-d3d11"
 version = "0.1.0"
 dependencies = [
  "dvr-core",
+ "tracing",
  "windows 0.61.3",
 ]
 

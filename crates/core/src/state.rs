@@ -110,18 +110,55 @@ pub enum WatchLayout {
     Performance,
     /// One slim bar: time, battery numbers, the song.
     Compact,
+    /// Time, date, and game fps with CPU and GPU load: Performance with the date where the batteries were.
+    Game,
+    /// Time, date, and the small two-line player: Music with the date where the batteries were.
+    Player,
 }
 
 impl WatchLayout {
-    pub const ALL: [Self; 7] = [
+    /// In the order Watch > Layout lists them.
+    pub const ALL: [Self; 9] = [
         Self::Standard,
         Self::Clock,
         Self::NoBatteries,
         Self::Batteries,
         Self::Music,
+        Self::Player,
         Self::Performance,
+        Self::Game,
         Self::Compact,
     ];
+
+    /// Its number in the watch view (see `WristView.layout`), fixed whatever the menu order.
+    pub fn view_index(self) -> i32 {
+        match self {
+            Self::Standard => 0,
+            Self::Clock => 1,
+            Self::NoBatteries => 2,
+            Self::Batteries => 3,
+            Self::Music => 4,
+            Self::Performance => 5,
+            Self::Compact => 6,
+            Self::Game => 7,
+            Self::Player => 8,
+        }
+    }
+
+    /// Shows fps, CPU and GPU when closed (whatever the FPS and load switch says).
+    pub fn shows_load(self) -> bool {
+        matches!(self, Self::Performance | Self::Game)
+    }
+
+    /// Shows the two-line player (back, play, next) when closed.
+    pub fn shows_player(self) -> bool {
+        matches!(self, Self::Music | Self::Player)
+    }
+
+    /// Batteries only when open; the date sits where they would be.
+    pub fn date_beside(self) -> bool {
+        matches!(self, Self::Clock | Self::NoBatteries | Self::Game | Self::Player)
+    }
 
     /// Fluent ids of its name and one-line description.
     pub fn ids(self) -> (&'static str, &'static str) {
@@ -133,6 +170,8 @@ impl WatchLayout {
             Self::Music => ("layout-music", "layout-music-hint"),
             Self::Performance => ("layout-performance", "layout-performance-hint"),
             Self::Compact => ("layout-compact", "layout-compact-hint"),
+            Self::Game => ("layout-game", "layout-game-hint"),
+            Self::Player => ("layout-player", "layout-player-hint"),
         }
     }
 }
