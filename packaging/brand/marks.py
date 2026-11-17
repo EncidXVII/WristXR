@@ -26,6 +26,7 @@ from PIL import Image, ImageDraw
 LIME = (0xC6, 0xFF, 0x1A)
 INK = (0x1B, 0x1B, 0x1D)
 TILE = (0x14, 0x14, 0x16)
+ROUND = 7 / 32  # tile corner radius as a share of its size (56 of 256): clearly rounded from 16 px up
 K = 0.25  # lean: one across for every four up, about the centre line (y = 16)
 
 # Each mark as polygons on the upright 32-unit grid, cuts already applied. Holes are listed after the shape they
@@ -68,9 +69,9 @@ def mark_svg(app, rgb):
 
 
 def icon_svg(app):
-    # The 256 px layout: a 256 tile, radius 32, the mark at 6 px per unit, 32 px in from the edge.
+    # The 256 px layout: a 256 tile, radius 56, the mark at 6 px per unit, 32 px in from the edge.
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">'
-            f'<rect width="256" height="256" rx="32" fill="#141416"/>'
+            f'<rect width="256" height="256" rx="{256 * ROUND:g}" fill="#141416"/>'
             f'<path transform="translate(32 32) scale(6)" fill="#C6FF1A" fill-rule="evenodd" d="{svg_path(app)}"/>'
             f'</svg>\n')
 
@@ -95,7 +96,7 @@ def draw_mark(app, size, offset, scale, rgb, base=None):
 def tile(size):
     big = size * SS
     m = Image.new("L", (big, big), 0)
-    ImageDraw.Draw(m).rounded_rectangle((0, 0, big - 1, big - 1), radius=max(1, round(size * 0.125)) * SS, fill=255)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, big - 1, big - 1), radius=round(size * ROUND * SS), fill=255)
     m = m.reduce(SS)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     img.paste(Image.new("RGBA", (size, size), TILE + (255,)), (0, 0), m)

@@ -84,7 +84,7 @@ slint::slint! {
             background: close-touch.pressed ? #36363B : close-touch.has-hover ? #2A2A2E : #1D1D20;
             Path {
                 width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
-                commands: root.close-icon; fill: transparent; stroke: #F5F5F7; stroke-width: 2.4px;
+                commands: root.close-icon; fill: transparent; stroke: #F5F5F7; stroke-width: 2.2px;
             }
             close-touch := TouchArea { clicked => { root.close-clicked(); } }
         }
@@ -201,7 +201,7 @@ slint::slint! {
             }
             if s.kind == 5 || s.kind == 8 : Path {
                 width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
-                commands: s.icon; fill: transparent; stroke-width: 2.6px;
+                commands: s.icon; fill: transparent; stroke-width: 2.2px;
                 stroke: s.kind == 5 ? #A8A8AF : #F5F5F7;
             }
             touch := TouchArea { enabled: s.enabled; clicked => { root.slot-clicked(i); } }

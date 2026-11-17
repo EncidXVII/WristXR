@@ -99,7 +99,7 @@ slint::slint! {
         background: touch.pressed ? #444449 : touch.has-hover ? #38383D : #2A2A2E;
         Path {
             x: 12px; y: 11px; width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
-            commands: "M12 5v14 M5 12h14"; stroke: #F5F5F7; stroke-width: 2.4px; fill: transparent;
+            commands: "M12 5v14 M5 12h14"; stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
         }
         Text {
             x: 38px; width: parent.width - 50px; height: parent.height; text: root.label; font-size: 24px;
@@ -425,7 +425,7 @@ slint::slint! {
                     Path {
                         width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
-                        stroke: #F5F5F7; stroke-width: 2px; fill: transparent;
+                        stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
                     }
                 }
                 if root.strip == 2 : Rectangle {
@@ -480,7 +480,7 @@ slint::slint! {
                     Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
-                        stroke: #F5F5F7; stroke-width: 2px; fill: transparent;
+                        stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
                     }
                 }
                 Text {
@@ -595,7 +595,7 @@ slint::slint! {
                         x: 14px; y: 9px; width: 44px; height: 44px; border-radius: 22px; background: #2A2A2E;
                         Path {
                             width: 24px; height: 24px; viewbox-width: 24; viewbox-height: 24;
-                            commands: "M15 6l-6 6 6 6"; stroke: #F5F5F7; stroke-width: 2.4px; fill: transparent;
+                            commands: "M15 6l-6 6 6 6"; stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
                         }
                     }
                     Text {
