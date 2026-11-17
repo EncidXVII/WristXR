@@ -133,10 +133,6 @@ slint::slint! {
                 x: 16px; y: (parent.height - 12px) / 2; width: 12px; height: 12px; border-radius: 6px;
                 background: s.on ? Theme.accent : #88888F;
             }
-            // Unread dot.
-            if s.kind == 9 && s.on : Rectangle {
-                x: 6px; y: 18px; width: 10px; height: 10px; border-radius: 5px; background: Theme.accent;
-            }
             // Choice: a radio dot (accent when chosen).
             if s.kind == 11 : Rectangle {
                 x: 16px; y: (parent.height - 26px) / 2; width: 26px; height: 26px; border-radius: 13px;
@@ -151,6 +147,11 @@ slint::slint! {
                 x: 20px; y: s.kind == 9 ? 14px : (parent.height - 40px) / 2;
                 width: 40px; height: 40px; border-radius: 11px; background: s.tile-color;
                 Text { text: s.tile; font-size: 24px; font-weight: 700; color: #FFFFFF; }
+            }
+            // Unread: a dot on the tile's corner, so every row's tile and text stay on the same inset.
+            if s.kind == 9 && s.on : Rectangle {
+                x: 48px; y: 6px; width: 16px; height: 16px; border-radius: 8px; background: Theme.accent;
+                border-width: 3px; border-color: #1D1D20;
             }
             // Row text: label (and detail on a second line for messages), value on the right.
             // Control: the control takes whatever the action's name leaves.

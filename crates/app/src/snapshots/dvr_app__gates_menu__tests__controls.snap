@@ -24,4 +24,4 @@ Control "Stick up, down" "" "Push, pull" [disabled]
 Control "Stick left, right" "" "Size" [disabled]
 Control "Both grips" "" "Size" [disabled]
 Control "To other hand" "" "Attach" [disabled]
-Action "Rebind buttons" "" ""
+Action "Rebind buttons" "" "›"

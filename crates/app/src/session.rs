@@ -39,7 +39,7 @@ const HIDE_S: f32 = 0.1;
 const WATCH_SHOW_S: f32 = 0.08;
 const WATCH_HIDE_S: f32 = 0.18;
 /// Windows listed per page of "Add window".
-const WINDOWS_PER_PAGE: usize = 8;
+const WINDOWS_PER_PAGE: usize = 6;
 /// Notifications kept for the Inbox (newest first).
 pub const HISTORY_LEN: usize = 5;
 /// Panels listed under "Open now" before "and n more".
@@ -1021,7 +1021,8 @@ impl Session {
                 if cards.is_empty() {
                     l.paragraph(Col::Full, t("menu-windows-none"), Tone::Secondary, 40.0);
                 }
-                l.cards(Col::Full, cards, 2, 74.0);
+                // One full-width row each: window titles are long, and half-width cards cut them short.
+                l.rows(Col::Full, cards, ROW_H);
                 let more = (self.windows.len() > start + WINDOWS_PER_PAGE)
                     .then(|| add(&mut acts, Act::MoreWindows, primary(t("menu-more"), false)));
                 l.footer(t("menu-yank"), more);
@@ -1145,7 +1146,7 @@ impl Session {
                 ];
                 l.rows(Col::Right, rows, ROW_H);
                 l.label(Col::Right, t("menu-controls-buttons"));
-                let rebind = row(t("menu-rebind"));
+                let rebind = row(t("menu-rebind")).value("›");
                 l.rows(Col::Right, vec![add(&mut acts, Act::Rebind, rebind)], ROW_H);
                 l.finish()
             }
