@@ -91,3 +91,7 @@ impl Detail {
 pub fn width_for(width: u32, _pixels_across: f32) -> u32 {
     width
 }
+
+pub fn close_enough(_current: u32, _want: u32) -> bool {
+    true
+}

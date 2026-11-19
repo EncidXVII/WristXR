@@ -2,7 +2,9 @@
 //! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
 //! X11 or the Wayland portal on Linux.
 use crate::bindings::APP_KEY;
-use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, width_for};
+use crate::plat::{
+    self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, close_enough, width_for,
+};
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use dvr_core::backend::VrBackend;
@@ -57,7 +59,7 @@ struct Surface {
     tex: Tex,
     /// Screens and windows: the capture with its mip chain, shown at the level their size in view needs.
     detail: Option<Detail>,
-    /// A smaller picture width wanted since then.
+    /// A smaller picture wanted since then.
     coarser: Option<(u32, Instant)>,
     capture: Option<Capture>,
     rect: Option<PixelRect>,
@@ -994,19 +996,21 @@ pub fn run() -> Result<(), String> {
                 }
                 _ => {}
             }
-            // The width its size in view needs: larger at once, smaller once it has stayed wanted a moment.
+            // The width its size in view needs, exactly: a larger picture at once, a smaller one once it has stayed
+            // wanted a moment; within a few percent the picture stays.
             if let (Some(d), Some(sh), Some(ppr)) = (&mut s.detail, &sharpen, ppr)
                 && p.shown()
             {
                 let distance = (world.pos - head_now.pos).length().max(0.1);
                 let want = width_for(d.w, p.width_m / distance * ppr);
-                let switch = match s.coarser {
-                    _ if want > d.width => true,
-                    Some((l, since)) if want < d.width && l == want => since.elapsed() >= COARSER_AFTER,
-                    _ => {
-                        s.coarser = (want < d.width).then(|| (want, Instant::now()));
-                        false
-                    }
+                let switch = if close_enough(d.width, want) {
+                    s.coarser = None;
+                    false
+                } else if want > d.width {
+                    true
+                } else {
+                    // Smaller by more than the margin: once it has stayed so a moment, at the width wanted then.
+                    s.coarser.get_or_insert((want, Instant::now())).1.elapsed() >= COARSER_AFTER
                 };
                 if switch {
                     s.coarser = None;

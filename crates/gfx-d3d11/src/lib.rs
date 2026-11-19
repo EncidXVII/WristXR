@@ -4,7 +4,7 @@
 
 mod detail;
 
-pub use detail::{Detail, SHARPEN, Sharpen, width_for};
+pub use detail::{Detail, SHARPEN, Sharpen, close_enough, width_for};
 use dvr_core::raster::Image;
 use std::ffi::c_void;
 use windows::Win32::Foundation::{E_POINTER, HMODULE};

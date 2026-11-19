@@ -27,9 +27,9 @@ use windows::core::{Error, PCSTR, Result, s};
 pub const SHARPEN: f32 = 0.2;
 /// Shrunk by at least this much, a screen goes through the Kaiser resample; less, it is shown as captured.
 const RESAMPLE_FROM: f32 = 2.0;
-/// Output widths come in steps this far apart (and at least the shown width), so walking about does not make a new
-/// texture every frame.
-const WIDTH_STEP: f32 = 0.95;
+/// A picture is kept while the width its screen needs stays within this share of it, so walking about does not
+/// make a new texture every frame; past it, the new one is made at exactly the needed width.
+const KEEP_WITHIN: f32 = 0.04;
 /// Lobes of the windowed sinc on each side, and the Kaiser window's shape (higher is smoother, with less ringing).
 const KAISER_LOBES: f32 = 2.0;
 const KAISER_BETA: f32 = 4.0;
@@ -94,18 +94,19 @@ float4 ps(V i) : SV_Target {
 ";
 
 /// The width to show a `src_w` pixel wide picture at when it spans `needed` headset pixels: the full width close up
-/// (shrunk less than `RESAMPLE_FROM`), otherwise the smallest `WIDTH_STEP` step at least `needed` wide. The steps
-/// count down from half the capture, so the resample always reads a mip level, never the full capture.
+/// (shrunk less than `RESAMPLE_FROM`), otherwise exactly `needed`, so SteamVR is left a 1:1 sample. Never more than
+/// half the capture, so the resample always reads a mip level, never the full capture.
 pub fn width_for(src_w: u32, needed: f32) -> u32 {
     let needed = needed.max(1.0);
     if needed * RESAMPLE_FROM > src_w as f32 {
         return src_w;
     }
-    let mut w = (src_w / 2) as f32;
-    while w * WIDTH_STEP >= needed {
-        w *= WIDTH_STEP;
-    }
-    (w.round() as u32).clamp(1, src_w)
+    (needed.round() as u32).clamp(1, (src_w / 2).max(1))
+}
+
+/// True while a picture `current` wide is still right for a screen that needs `want`: keep it, no new texture.
+pub fn close_enough(current: u32, want: u32) -> bool {
+    (want as f32 - current as f32).abs() <= current as f32 * KEEP_WITHIN
 }
 
 /// The mip level the resample reads for an output `out_w` wide: the smallest level still at least that wide, so it
@@ -452,18 +453,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn close_up_keeps_the_capture_and_further_off_steps_down_to_just_over_the_shown_width() {
+    fn close_up_keeps_the_capture_and_further_off_gets_exactly_the_shown_width() {
         // Shrunk less than 2x: as captured.
         assert_eq!(width_for(3840, 3000.0), 3840);
         assert_eq!(width_for(3840, 1921.0), 3840);
-        // Further: never narrower than shown, at most one step wider.
-        for needed in [1900.0, 1000.0, 640.0, 300.0, 40.0f32] {
-            let w = width_for(3840, needed) as f32;
-            assert!(w >= needed.floor() && w <= needed / WIDTH_STEP + 1.0, "{needed}: {w}");
-        }
-        // Nearby sizes land on the same step, so a small move needs no new texture.
-        assert_eq!(width_for(3840, 1000.0), width_for(3840, 1010.0));
+        // Further: the shown width, never more than half the capture.
+        assert_eq!(width_for(3840, 1000.0), 1000);
+        assert_eq!(width_for(3840, 640.4), 640);
+        assert_eq!(width_for(3840, 1920.0), 1920);
         assert!(width_for(3840, 0.0) >= 1);
+        // A small move keeps the picture; a bigger one makes a new one.
+        assert!(close_enough(1000, 1030) && close_enough(1000, 970));
+        assert!(!close_enough(1000, 1050) && !close_enough(1000, 950));
     }
 
     #[test]
