@@ -1,7 +1,7 @@
-"""The DesktopVR / FitnessVR / Parallax marks: one geometry, every icon file.
+"""The Slant marks (DesktopVR, FitnessVR, Parallax, FoveaXR, EveryVR): one geometry, every icon file.
 
-The same script lives in all three repositories. It draws the marks from their construction (upright bars on a
-32-unit grid, leaned 1:4, sharp corners cut at 45 degrees) and writes, for one app:
+The same script lives in every repository. It draws the marks from their construction (upright bars on a 32-unit
+grid, leaned 1:4, sharp corners cut at 45 degrees) and writes, for one app:
 
   <app>-mark.svg        the mark in the lime accent, transparent (README, docs)
   <app>-mark-ink.svg    the mark in dark ink, for light backgrounds
@@ -12,9 +12,19 @@ The same script lives in all three repositories. It draws the marks from their c
   <app>-tray.ico        the tray icon for dark taskbars: lime mark only, 16-64 px
   <app>-tray-ink.ico    the tray icon for light taskbars: ink mark only, 16-64 px
 
-Usage: python marks.py desktopvr|fitnessvr|parallax OUT_DIR
+With --web, also the files a website needs, in OUT_DIR/web:
+
+  favicon.svg, favicon.ico       browser tabs (the app icon; .ico at 16, 32 and 48 px)
+  apple-touch-icon.png           180 px, square: iOS rounds it itself
+  icon-192.png, icon-512.png     web app icons, rounded tile
+  icon-maskable-512.png          full-bleed, the mark inside the 80% safe circle, for Android's own shapes
+  site.webmanifest, head.html    the manifest and the <link> tags that use all of the above
+
+Usage: python marks.py desktopvr|fitnessvr|parallax|foveaxr|everyvr OUT_DIR [--web]
 Needs Pillow.
 """
+
+import json
 
 import io
 import struct
@@ -46,8 +56,27 @@ MARKS = {
         [(8, 16), (14, 16), (14, 24), (8, 24)],  # its opening
         [(11, 4), (24.25, 4), (28, 7), (28, 20), (25.5, 20), (23, 18), (23, 8), (13.5, 8), (11, 6)],  # frame behind
     ],
+    # Viewfinder: four corner brackets (arms 10) round a 6 x 8 centre, every gap 4. The two outer corners that are
+    # joints are cut 3, the ten bar and block ends 2.
+    "foveaxr": [
+        [(4, 4), (11.5, 4), (14, 6), (14, 8), (9, 8), (9, 14), (6.5, 14), (4, 12)],  # top left
+        [(18, 4), (24.25, 4), (28, 7), (28, 14), (25.5, 14), (23, 12), (23, 8), (20.5, 8), (18, 6)],  # top right
+        [(4, 18), (6.5, 18), (9, 20), (9, 24), (11.5, 24), (14, 26), (14, 28), (7.75, 28), (4, 25)],  # bottom left
+        [(23, 18), (25.5, 18), (28, 20), (28, 28), (20.5, 28), (18, 26), (18, 24), (23, 24)],  # bottom right
+        [(13, 12), (16.5, 12), (19, 14), (19, 20), (15.5, 20), (13, 18)],  # centre
+    ],
+    # Portal: a square @, one stroke winding in. A spiral packs five uprights and four gaps across, so its uprights
+    # are 4.5, not 5 (dense glyphs take thinner stems): the family's weight, still heavier than the flat bars once
+    # leaned, and the curl's end keeps 2 units of flat edge after its cut.
+    "everyvr": [
+        [(5.25, 4), (23, 4), (26.75, 7), (26.75, 28), (9, 28), (5.25, 25), (5.25, 12), (14.5, 12), (18.25, 15),
+         (18.25, 20), (16.25, 20), (13.75, 18), (13.75, 16), (9.75, 16), (9.75, 24), (22.25, 24), (22.25, 8),
+         (7.75, 8), (5.25, 6)],
+    ],
 }
-HOLES = {"desktopvr": {1}, "fitnessvr": set(), "parallax": {1}}
+HOLES = {"desktopvr": {1}, "fitnessvr": set(), "parallax": {1}, "foveaxr": set(), "everyvr": set()}
+NAMES = {"desktopvr": "DesktopVR", "fitnessvr": "FitnessVR", "parallax": "Parallax", "foveaxr": "FoveaXR",
+         "everyvr": "EveryVR"}
 
 
 def leaned(poly):
@@ -159,10 +188,42 @@ def ico(images):
     return out + b"".join(blobs)
 
 
+def square(size):
+    return Image.new("RGBA", (size, size), TILE + (255,))
+
+
+def web(app, out):
+    """Favicons, touch and web app icons, the manifest and the <head> tags (see the module docstring)."""
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "favicon.svg").write_text(icon_svg(app), encoding="utf-8")
+    (out / "favicon.ico").write_bytes(ico([app_icon(app, n) for n in (16, 32, 48)]))
+    # The 256 layout scaled: the mark's grid is 3/4 of the icon, centred.
+    draw_mark(app, 180, 22.5, 180 * 0.75 / 32, LIME, square(180)).save(out / "apple-touch-icon.png", optimize=True)
+    draw_mark(app, 192, 24, 4.5, LIME, tile(192)).save(out / "icon-192.png", optimize=True)
+    app_icon(app, 512).save(out / "icon-512.png", optimize=True)
+    # Maskable: the mark (24 units across) at 10 px per unit sits inside the central 80% circle.
+    draw_mark(app, 512, 96, 10, LIME, square(512)).save(out / "icon-maskable-512.png", optimize=True)
+    manifest = {
+        "name": NAMES[app], "short_name": NAMES[app], "icons": [
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png"},
+            {"src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ], "theme_color": "#0B0B0C", "background_color": "#0B0B0C", "display": "standalone",
+    }
+    (out / "site.webmanifest").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (out / "head.html").write_text(
+        '<link rel="icon" href="/favicon.ico" sizes="32x32">\n'
+        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n'
+        '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
+        '<link rel="manifest" href="/site.webmanifest">\n'
+        '<meta name="theme-color" content="#0B0B0C">\n', encoding="utf-8")
+
+
 def main():
-    if len(sys.argv) != 3 or sys.argv[1] not in MARKS:
+    args = [a for a in sys.argv[1:] if a != "--web"]
+    if len(args) != 2 or args[0] not in MARKS:
         sys.exit(__doc__)
-    app, out = sys.argv[1], Path(sys.argv[2])
+    app, out = args[0], Path(args[1])
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{app}-mark.svg").write_text(mark_svg(app, LIME), encoding="utf-8")
     (out / f"{app}-mark-ink.svg").write_text(mark_svg(app, INK), encoding="utf-8")
@@ -173,6 +234,8 @@ def main():
     (out / f"{app}.ico").write_bytes(ico([app_icon(app, n) for n in (16, 20, 24, 32, 40, 48, 64, 128, 256)]))
     (out / f"{app}-tray.ico").write_bytes(ico([tray_icon(app, n, LIME) for n in TRAY_SIZES]))
     (out / f"{app}-tray-ink.ico").write_bytes(ico([tray_icon(app, n, INK) for n in TRAY_SIZES]))
+    if "--web" in sys.argv:
+        web(app, out / "web")
     print(f"{app}: wrote {out}")
 
 
