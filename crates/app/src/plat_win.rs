@@ -5,7 +5,7 @@ use dvr_vr::OpenVr;
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 
 pub use dvr_capture_win::{Frame, Monitor};
-pub use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, level_for};
+pub use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, width_for};
 pub use dvr_input_win::{
     Injector, admin_window_at, caps_lock, key_char, layout_id, layout_name, layouts, next_layout, select_layout,
 };

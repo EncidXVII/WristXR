@@ -60,10 +60,10 @@ fn run(manifest: &std::path::Path) -> GateResult {
     wrist_panel.anchor = Anchor::World;
     wrist_panel.pose = panel.pose;
     wrist_panel.pose.pos = panel.pose.pos + Vec3::new(0.0, -0.45, 0.2);
-    // As the app shows a screen, at its worst case for the budget: the full-size level, so the detail pass draws
+    // As the app shows a screen, at its worst case for the budget: full size, so the detail pass draws
     // every pixel of every captured frame.
     let sharpen = Sharpen::new(&gpu).map_err(err)?;
-    let detail = Detail::new(&gpu, monitor.rect.w, monitor.rect.h, 0).map_err(err)?;
+    let detail = Detail::new(&gpu, monitor.rect.w, monitor.rect.h, monitor.rect.w).map_err(err)?;
     let wrist_tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
     let mut capture = Capture::monitor(&gpu.device, monitor.handle).map_err(err)?;
     let mut wrist = Wrist::new()?;

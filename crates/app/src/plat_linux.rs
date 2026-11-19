@@ -75,19 +75,19 @@ impl Sharpen {
 pub struct Detail {
     pub src: Tex,
     pub out: Tex,
-    pub level: u32,
+    pub width: u32,
     pub w: u32,
 }
 
 impl Detail {
-    pub fn new(_gpu: &Gpu, _w: u32, _h: u32, _level: u32) -> Result<Self, String> {
+    pub fn new(_gpu: &Gpu, _w: u32, _h: u32, _width: u32) -> Result<Self, String> {
         Err("the screen detail pass is not built for Vulkan yet".into())
     }
-    pub fn set_level(&mut self, _gpu: &Gpu, _level: u32) -> Result<(), String> {
+    pub fn set_width(&mut self, _gpu: &Gpu, _width: u32) -> Result<(), String> {
         Ok(())
     }
 }
 
-pub fn level_for(_width: u32, _pixels_across: f32) -> u32 {
-    0
+pub fn width_for(width: u32, _pixels_across: f32) -> u32 {
+    width
 }

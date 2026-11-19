@@ -2,7 +2,7 @@
 //! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
 //! X11 or the Wayland portal on Linux.
 use crate::bindings::APP_KEY;
-use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, level_for};
+use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, width_for};
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use dvr_core::backend::VrBackend;
@@ -47,8 +47,8 @@ const BANNER_LINGER_S: f32 = 2.0;
 /// How often the watch's playing mark steps while it moves.
 const BEAT_STEP: Duration = Duration::from_millis(22);
 
-/// A screen goes to a coarser level only after wanting it this long (a finer one comes at once), so walking about
-/// or a panel in hand never flips it back and forth.
+/// A screen goes to a smaller picture only after wanting it this long (a larger one comes at once), so walking
+/// about or a panel in hand never flips it back and forth.
 const COARSER_AFTER: Duration = Duration::from_millis(600);
 
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
@@ -57,7 +57,7 @@ struct Surface {
     tex: Tex,
     /// Screens and windows: the capture with its mip chain, shown at the level their size in view needs.
     detail: Option<Detail>,
-    /// A coarser level wanted since then.
+    /// A smaller picture width wanted since then.
     coarser: Option<(u32, Instant)>,
     capture: Option<Capture>,
     rect: Option<PixelRect>,
@@ -129,7 +129,7 @@ fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Resul
         if !sharp {
             return Ok(Surface { rect: Some(r), ..blank((r.w, r.h))? });
         }
-        let d = Detail::new(gpu, r.w, r.h, 0).map_err(err)?;
+        let d = Detail::new(gpu, r.w, r.h, r.w).map_err(err)?;
         Ok(Surface { rect: Some(r), ..plain(d.out.clone()) }.with_detail(d))
     };
     let (img, rect) = match panel.source {
@@ -985,7 +985,7 @@ pub fn run() -> Result<(), String> {
                 }
                 Some(Ok(Frame::Resized(w, h))) => {
                     if let Some(d) = &mut s.detail {
-                        *d = Detail::new(&gpu, w, h, d.level).map_err(err)?;
+                        *d = Detail::new(&gpu, w, h, d.width.min(w)).map_err(err)?;
                         s.tex = d.out.clone();
                     } else {
                         s.tex = gpu.texture(w, h, None).map_err(err)?;
@@ -994,23 +994,23 @@ pub fn run() -> Result<(), String> {
                 }
                 _ => {}
             }
-            // The level its size in view needs: finer at once, coarser once it has stayed wanted a moment.
+            // The width its size in view needs: larger at once, smaller once it has stayed wanted a moment.
             if let (Some(d), Some(sh), Some(ppr)) = (&mut s.detail, &sharpen, ppr)
                 && p.shown()
             {
                 let distance = (world.pos - head_now.pos).length().max(0.1);
-                let want = level_for(d.w, p.width_m / distance * ppr);
+                let want = width_for(d.w, p.width_m / distance * ppr);
                 let switch = match s.coarser {
-                    _ if want < d.level => true,
-                    Some((l, since)) if want > d.level && l == want => since.elapsed() >= COARSER_AFTER,
+                    _ if want > d.width => true,
+                    Some((l, since)) if want < d.width && l == want => since.elapsed() >= COARSER_AFTER,
                     _ => {
-                        s.coarser = (want > d.level).then(|| (want, Instant::now()));
+                        s.coarser = (want < d.width).then(|| (want, Instant::now()));
                         false
                     }
                 };
                 if switch {
                     s.coarser = None;
-                    d.set_level(&gpu, want).map_err(err)?;
+                    d.set_width(&gpu, want).map_err(err)?;
                     s.tex = d.out.clone();
                     draw = true;
                     s.needs_submit = true;

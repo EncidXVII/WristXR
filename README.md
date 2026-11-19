@@ -97,7 +97,7 @@ registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes 
 - **X11**: everything works as on Windows, with no prompt.
 - Needs Vulkan, fontconfig and, on Wayland, PipeWire and xdg-desktop-portal (all standard on current desktops).
   The tray icon needs a StatusNotifierItem tray (KDE, XFCE, GNOME with the AppIndicator extension).
-- Not on Linux yet: the extra screen sharpening, key click sounds, switching the keyboard language from VR (the
+- Not on Linux yet: the screen detail pass (on Linux SteamVR shrinks screens itself), key click sounds, switching the keyboard language from VR (the
   keys type in your system layout; their labels show US), and the GPU load on NVIDIA.
 
 ## Switching from XSOverlay, OVR Toolkit or Desktop+
