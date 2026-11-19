@@ -23,14 +23,18 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | annotate-snippets | 0.12.17 | MIT OR Apache-2.0 |
 | anstyle | 1.0.14 | MIT OR Apache-2.0 |
 | arboard | 3.7.0 | MIT OR Apache-2.0 |
+| arc-swap | 1.9.5 | MIT OR Apache-2.0 |
 | arrayref | 0.3.9 | BSD-2-Clause |
 | arrayvec | 0.7.8 | MIT OR Apache-2.0 |
 | ash | 0.38.0+1.3.281 | MIT OR Apache-2.0 |
+| ashpd | 0.12.3 | MIT |
 | async-broadcast | 0.7.2 | MIT OR Apache-2.0 |
 | async-channel | 2.5.0 | Apache-2.0 OR MIT |
 | async-executor | 1.14.1 | Apache-2.0 OR MIT |
+| async-fs | 2.2.0 | Apache-2.0 OR MIT |
 | async-io | 2.6.0 | Apache-2.0 OR MIT |
 | async-lock | 3.5.0 | Apache-2.0 OR MIT |
+| async-net | 2.0.0 | Apache-2.0 OR MIT |
 | async-process | 2.5.0 | Apache-2.0 OR MIT |
 | async-recursion | 1.2.0 | MIT OR Apache-2.0 |
 | async-signal | 0.2.14 | Apache-2.0 OR MIT |
@@ -80,6 +84,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | crc32fast | 1.5.4 | MIT OR Apache-2.0 |
 | critical-section | 1.2.0 | MIT OR Apache-2.0 |
 | crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 |
+| crossbeam-queue | 0.3.14 | MIT OR Apache-2.0 |
 | crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 |
 | crunchy | 0.2.4 | MIT |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib |
@@ -142,6 +147,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | gdk-pixbuf-sys | 0.18.0 | MIT |
 | gdk-sys | 0.18.2 | MIT |
 | gethostname | 1.1.0 | Apache-2.0 |
+| getrandom | 0.3.4 | MIT OR Apache-2.0 |
 | getrandom | 0.4.3 | MIT OR Apache-2.0 |
 | gif | 0.14.2 | MIT OR Apache-2.0 |
 | gio | 0.18.4 | MIT |
@@ -219,6 +225,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | js-sys | 0.3.107 | MIT OR Apache-2.0 |
 | keyboard-types | 0.7.0 | MIT OR Apache-2.0 |
 | keyboard-types | 0.8.3 | MIT OR Apache-2.0 |
+| ksni | 0.3.7 | Unlicense |
 | kurbo | 0.13.1 | Apache-2.0 OR MIT |
 | libappindicator | 0.9.0 | Apache-2.0 OR MIT |
 | libappindicator-sys | 0.9.0 | Apache-2.0 OR MIT |
@@ -301,6 +308,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | parlance | 0.1.1 | Apache-2.0 OR MIT |
 | parley | 0.11.1 | Apache-2.0 OR MIT |
 | parley_data | 0.11.1 | Apache-2.0 OR MIT |
+| pastey | 0.2.3 | MIT OR Apache-2.0 |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 |
 | pico-args | 0.5.0 | MIT |
 | pin-project | 1.1.13 | Apache-2.0 OR MIT |
@@ -316,6 +324,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | portable-atomic | 1.15.0 | Apache-2.0 OR MIT |
 | portable-atomic-util | 0.2.8 | Apache-2.0 OR MIT |
 | potential_utf | 0.1.6 | Unicode-3.0 |
+| ppv-lite86 | 0.2.21 | MIT OR Apache-2.0 |
 | presser | 0.3.1 | MIT OR Apache-2.0 |
 | proc-macro-crate | 1.3.1 | MIT OR Apache-2.0 |
 | proc-macro-crate | 2.0.2 | MIT OR Apache-2.0 |
@@ -328,7 +337,11 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 |
 | quick-error | 2.0.1 | MIT/Apache-2.0 |
 | quote | 1.0.47 | MIT OR Apache-2.0 |
+| r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
+| rand | 0.9.5 | MIT OR Apache-2.0 |
+| rand_chacha | 0.9.0 | MIT OR Apache-2.0 |
+| rand_core | 0.9.5 | MIT OR Apache-2.0 |
 | range-alloc | 0.1.5 | MIT OR Apache-2.0 |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib |
 | raw-window-metal | 1.1.0 | MIT OR Apache-2.0 |
@@ -389,6 +402,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | synstructure | 0.14.0 | MIT |
 | sys-locale | 0.3.2 | MIT OR Apache-2.0 |
 | taffy | 0.10.1 | MIT |
+| task-local | 0.1.1 | MIT OR Apache-2.0 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
 | text-size | 1.1.1 | MIT OR Apache-2.0 |
 | thiserror | 1.0.69 | MIT OR Apache-2.0 |
@@ -433,6 +447,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | uuid | 1.29.0 | Apache-2.0 OR MIT |
 | vtable | 0.5.0 | MIT OR Apache-2.0 |
 | vtable-macro | 0.5.0 | MIT OR Apache-2.0 |
+| wasip2 | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | wasm-bindgen | 0.2.130 | MIT OR Apache-2.0 |
 | wasm-bindgen-futures | 0.4.80 | MIT OR Apache-2.0 |
 | wasm-bindgen-macro | 0.2.130 | MIT OR Apache-2.0 |
@@ -496,6 +511,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | winit | 0.30.13 | Apache-2.0 |
 | winnow | 0.5.40 | MIT |
 | winnow | 1.0.5 | MIT |
+| wit-bindgen | 0.57.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | write-fonts | 0.50.0 | MIT OR Apache-2.0 |
 | writeable | 0.6.4 | Unicode-3.0 |
 | x11rb | 0.13.2 | MIT OR Apache-2.0 |

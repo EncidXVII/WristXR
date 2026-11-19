@@ -48,6 +48,10 @@ First public early-access release (Windows).
   after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- Linux: DesktopVR runs on Linux with SteamVR for Linux, on X11 and on Wayland. On Wayland, screens, windows,
+  keyboard and pointer go through the desktop portal (asked once, remembered after); frames come from PipeWire.
+  Panels reach SteamVR through Vulkan. The tray, Discord and other app notifications on the watch, media controls
+  (MPRIS), the update check and `--uninstall` work there too. New, and not yet tested on hardware.
 - Uninstall: `Uninstall DesktopVR.cmd` in the folder (or `DesktopVR.exe --uninstall`) takes DesktopVR off
   SteamVR's list, so it no longer starts with SteamVR, and deletes its settings and layout, after asking. It
   works with SteamVR running or not, and never starts it.

@@ -7,6 +7,7 @@ pub const APP_OVERLAY: i32 = 2;
 pub const APP_BACKGROUND: i32 = 3;
 pub const ORIGIN_STANDING: i32 = 1;
 pub const TEXTURE_DIRECTX: i32 = 0;
+pub const TEXTURE_VULKAN: i32 = 2;
 pub const COLOR_SPACE_AUTO: i32 = 0;
 pub const EVENT_QUIT: u32 = 700;
 pub const HMD_INDEX: usize = 0;
@@ -31,6 +32,7 @@ pub mod system {
     pub const GET_RECOMMENDED_RENDER_TARGET_SIZE: usize = 0;
     pub const GET_PROJECTION_RAW: usize = 2;
     pub const GET_DXGI_OUTPUT_INFO: usize = 8;
+    pub const GET_OUTPUT_DEVICE: usize = 9;
     pub const GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE: usize = 12;
     pub const GET_TRACKED_DEVICE_ACTIVITY_LEVEL: usize = 16;
     pub const GET_TRACKED_DEVICE_INDEX_FOR_CONTROLLER_ROLE: usize = 18;
@@ -66,6 +68,8 @@ pub mod applications {
 }
 pub mod compositor {
     pub const GET_FRAME_TIMING: usize = 10;
+    pub const GET_VULKAN_INSTANCE_EXTENSIONS_REQUIRED: usize = 41;
+    pub const GET_VULKAN_DEVICE_EXTENSIONS_REQUIRED: usize = 42;
 }
 pub mod input {
     pub const SET_ACTION_MANIFEST_PATH: usize = 0;
@@ -153,6 +157,21 @@ pub struct FrameTiming {
     pub vsyncs_ready: u32,
     pub vsyncs_to_first_view: u32,
     pub transfer_latency_ms: f32,
+}
+
+/// `VRVulkanTextureData_t`: what `Texture::handle` points at for a Vulkan texture.
+#[repr(C)]
+pub struct VulkanTexture {
+    pub image: u64,
+    pub device: *mut c_void,
+    pub physical_device: *mut c_void,
+    pub instance: *mut c_void,
+    pub queue: *mut c_void,
+    pub queue_family_index: u32,
+    pub width: u32,
+    pub height: u32,
+    pub format: u32,
+    pub sample_count: u32,
 }
 
 #[repr(C)]
@@ -275,6 +294,7 @@ mod tests {
     fn table_indices_match_header() {
         let checks: &[(&str, &str, usize)] = &[
             ("IVRSystem", "GetDXGIOutputInfo", system::GET_DXGI_OUTPUT_INFO),
+            ("IVRSystem", "GetOutputDevice", system::GET_OUTPUT_DEVICE),
             ("IVRSystem", "GetDeviceToAbsoluteTrackingPose", system::GET_DEVICE_TO_ABSOLUTE_TRACKING_POSE),
             ("IVRSystem", "PollNextEvent", system::POLL_NEXT_EVENT),
             ("IVRSystem", "GetTrackedDeviceActivityLevel", system::GET_TRACKED_DEVICE_ACTIVITY_LEVEL),
@@ -293,6 +313,12 @@ mod tests {
             ("IVRSystem", "GetBoolTrackedDeviceProperty", system::GET_BOOL_TRACKED_DEVICE_PROPERTY),
             ("IVRSystem", "GetFloatTrackedDeviceProperty", system::GET_FLOAT_TRACKED_DEVICE_PROPERTY),
             ("IVRCompositor", "GetFrameTiming", compositor::GET_FRAME_TIMING),
+            (
+                "IVRCompositor",
+                "GetVulkanInstanceExtensionsRequired",
+                compositor::GET_VULKAN_INSTANCE_EXTENSIONS_REQUIRED,
+            ),
+            ("IVRCompositor", "GetVulkanDeviceExtensionsRequired", compositor::GET_VULKAN_DEVICE_EXTENSIONS_REQUIRED),
             ("IVRApplications", "AddApplicationManifest", applications::ADD_APPLICATION_MANIFEST),
             ("IVRApplications", "RemoveApplicationManifest", applications::REMOVE_APPLICATION_MANIFEST),
             ("IVRApplications", "IdentifyApplication", applications::IDENTIFY_APPLICATION),

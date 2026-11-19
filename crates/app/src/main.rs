@@ -5,18 +5,27 @@ mod bindings;
 mod gates;
 #[cfg(windows)]
 mod gates_input;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod gates_menu;
 #[cfg(windows)]
 mod gates_vr;
 mod import;
 #[cfg(windows)]
+#[path = "plat_win.rs"]
+mod plat;
+#[cfg(target_os = "linux")]
+#[path = "plat_linux.rs"]
+mod plat;
+#[cfg(any(windows, target_os = "linux"))]
 mod run;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 mod session;
 #[cfg(windows)]
 mod tray;
-#[cfg(windows)]
+#[cfg(target_os = "linux")]
+#[path = "tray_linux.rs"]
+mod tray;
+#[cfg(any(windows, target_os = "linux"))]
 mod uninstall;
 mod update;
 
@@ -33,20 +42,20 @@ fn main() -> ExitCode {
         dvr_sys::attach_parent_console();
         return selftest();
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     if std::env::args().any(|a| a == "--uninstall") {
         return uninstall::run();
     }
     // A second copy would fight the first over the controllers and the notification port.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     let Some(_instance) = dvr_sys::single_instance() else {
         fatal("DesktopVR is already running. Use its tray icon to open the menu or quit.");
         return ExitCode::FAILURE;
     };
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     let result = run::run();
-    #[cfg(not(windows))]
-    let result: Result<(), String> = Err("Linux capture and input backends are not built yet.".into());
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let result: Result<(), String> = Err("DesktopVR runs on Windows and Linux.".into());
     let code = match result {
         Ok(()) => 0,
         Err(e) => {
@@ -54,25 +63,25 @@ fn main() -> ExitCode {
             1
         }
     };
-    // Settings are saved; skip library teardown, which can hang with background WinRT threads still running.
-    #[cfg(windows)]
+    // Settings are saved; skip library teardown, which can hang with background threads still running.
+    #[cfg(any(windows, target_os = "linux"))]
     dvr_sys::terminate(code);
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     ExitCode::from(code as u8)
 }
 
-/// A startup failure the user must see (e.g. SteamVR missing): a dialog on Windows, stderr elsewhere.
+/// A startup failure the user must see (e.g. SteamVR missing): a dialog (on Linux through zenity or kdialog when
+/// installed), and stderr.
 fn fatal(message: &str) {
-    #[cfg(windows)]
-    dvr_sys::error_dialog("DesktopVR", message);
-    #[cfg(not(windows))]
     eprintln!("{message}");
+    #[cfg(any(windows, target_os = "linux"))]
+    dvr_sys::error_dialog("DesktopVR", message);
 }
 
 fn selftest() -> ExitCode {
     #[cfg_attr(not(windows), allow(unused_mut))]
     let mut results: Vec<_> = gates::GATES.iter().map(|(name, gate)| (*name, gate())).collect();
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     results.push(("4c first run + menu", gates_menu::first_run_and_menu()));
     #[cfg(windows)]
     if std::env::args().any(|a| a == "--vr") {
@@ -119,10 +128,13 @@ fn selftest() -> ExitCode {
 fn system_info() -> serde_json::Value {
     #[cfg(windows)]
     let (gpus, monitors) = (
-        dvr_gfx_d3d11::adapter_names(),
-        dvr_capture_win::monitors().iter().map(|m| format!("{}x{}", m.rect.w, m.rect.h)).collect::<Vec<_>>(),
+        plat::adapter_names(),
+        plat::monitors().iter().map(|m| format!("{}x{}", m.rect.w, m.rect.h)).collect::<Vec<_>>(),
     );
-    #[cfg(not(windows))]
+    // Linux: no monitor list here, since on Wayland asking for one opens the screen-sharing prompt.
+    #[cfg(target_os = "linux")]
+    let (gpus, monitors): (Vec<String>, Vec<String>) = (plat::adapter_names(), Vec::new());
+    #[cfg(not(any(windows, target_os = "linux")))]
     let (gpus, monitors): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
     serde_json::json!({ "gpus": gpus, "monitors": monitors, "cpus": std::thread::available_parallelism().map_or(0, |n| n.get()) })
 }

@@ -27,16 +27,20 @@ pub fn install(dir: &Path) -> io::Result<PathBuf> {
 }
 
 /// SteamVR application key for the `.vrmanifest` (auto-launch with SteamVR).
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub const APP_KEY: &str = "desktopvr.overlay";
 
 /// The app icon SteamVR shows next to DesktopVR in its startup and overlay lists.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 const STEAMVR_IMAGE: &[u8] = include_bytes!("../../../packaging/brand/desktopvr-256.png");
 
 /// Writes the SteamVR application manifest pointing at `exe` into `dir`, with the app icon beside it.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
+    #[cfg(windows)]
+    const BINARY_PATH: &str = "binary_path_windows";
+    #[cfg(target_os = "linux")]
+    const BINARY_PATH: &str = "binary_path_linux";
     std::fs::create_dir_all(dir)?;
     let image = dir.join("desktopvr.png");
     std::fs::write(&image, STEAMVR_IMAGE)?;
@@ -45,7 +49,7 @@ pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
         "applications": [{
             "app_key": APP_KEY,
             "launch_type": "binary",
-            "binary_path_windows": exe.to_string_lossy(),
+            BINARY_PATH: exe.to_string_lossy(),
             "image_path": image.to_string_lossy(),
             "is_dashboard_overlay": true,
             "strings": { "en_us": { "name": "DesktopVR", "description": "Your desktop in VR" } }

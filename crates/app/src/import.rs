@@ -50,6 +50,12 @@ pub fn detect() -> Option<Imported> {
     xsoverlay(&std::fs::read_to_string(xsoverlay_path()?).ok()?)
 }
 
+/// XSOverlay is Windows-only: nothing to import elsewhere.
+#[cfg(not(windows))]
+pub fn detect() -> Option<Imported> {
+    None
+}
+
 pub fn apply(state: &mut State, imp: &Imported) {
     if let Some(h) = imp.dominant {
         state.dominant = h;

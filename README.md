@@ -18,8 +18,9 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 
 ![DesktopVR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
 
-> **Status: early access (0.1).** The Windows build works end to end with SteamVR. Linux and Steam Frame
-> (on-device) are in progress. Not yet tested on every headset: please send a self-test report (below).
+> **Status: early access (0.1).** The Windows build works end to end with SteamVR. The Linux build (X11 and
+> Wayland) is new and not yet tested on hardware: reports welcome. Not yet tested on every headset: please send a
+> self-test report (below).
 
 ## Features
 
@@ -83,6 +84,21 @@ It starts with SteamVR from then on; untick **Start with SteamVR** in the tray i
 **Uninstall:** quit DesktopVR (tray icon > Quit), run `Uninstall DesktopVR.cmd` in its folder (or
 `DesktopVR.exe --uninstall`) and confirm. That takes it off SteamVR's list and deletes its settings and layout;
 then delete the folder.
+
+### Linux
+
+Unpack the Linux archive, run `./install.sh`, start SteamVR, then run `~/.local/share/desktopvr/desktopvr`. It
+registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes it all.
+
+- **Wayland** (GNOME, KDE Plasma, and others with a desktop portal): the first run asks once, on the desktop, which
+  screens and windows to share and whether DesktopVR may use the keyboard and pointer. Take the headset off to
+  answer; later runs remember it. Windows show as "Shared window 1, 2..." (Wayland gives no titles), and a window
+  cannot be pulled out of a screen.
+- **X11**: everything works as on Windows, with no prompt.
+- Needs Vulkan, fontconfig and, on Wayland, PipeWire and xdg-desktop-portal (all standard on current desktops).
+  The tray icon needs a StatusNotifierItem tray (KDE, XFCE, GNOME with the AppIndicator extension).
+- Not on Linux yet: the extra screen sharpening, key click sounds, switching the keyboard language from VR (the
+  keys type in your system layout; their labels show US), and the GPU load on NVIDIA.
 
 ## Switching from XSOverlay, OVR Toolkit or Desktop+
 
@@ -166,8 +182,8 @@ Virtual Desktop or Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed 
 **Does it work with VRChat?** Yes. It runs alongside VRChat, types into the chatbox via OSC (enable OSC in
 VRChat's Action Menu), and takes from the game only the controls you're using on a panel.
 
-**Does it work on Linux?** Not yet. Linux (Wayland screen capture, input) and Steam Frame on-device builds are
-in progress; the Linux release builds and runs the self-test today.
+**Does it work on Linux?** Yes, on X11 and Wayland with SteamVR for Linux (see [Linux](#linux)). It is new and not
+yet tested on hardware, so please report what you find.
 
 **Does it slow down my game?** It's designed not to: under 0.1 ms GPU per frame and a few percent of one CPU
 core. Hidden panels stop capturing entirely. Setup shows the real cost on your machine.
@@ -189,7 +205,8 @@ on the watch; they are never stored on disk or sent anywhere. Switch it off in M
 
 ## Building from source
 
-Rust stable (1.85+). `cargo test --workspace`, `cargo run -p dvr-app -- --selftest`. Live checks against
+Rust stable (1.85+). `cargo test --workspace`, `cargo run -p dvr-app -- --selftest`. Linux needs
+`libfontconfig1-dev pkg-config`; Vulkan and PipeWire are loaded at run time, so their headers are not needed. Live checks against
 SteamVR's null driver: `harness/null-driver.ps1 target/release/dvr-app.exe --selftest --vr` (backs up and
 restores your SteamVR settings). See [CONTRIBUTING.md](CONTRIBUTING.md).
 

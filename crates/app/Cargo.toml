@@ -23,6 +23,15 @@ dvr-ui.workspace = true
 windows.workspace = true
 tray-icon.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+dvr-vr.workspace = true
+dvr-gfx-vk.workspace = true
+dvr-desktop-linux.workspace = true
+dvr-sys.workspace = true
+dvr-ui.workspace = true
+ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
+png = "0.18.1"
+
 [lints]
 workspace = true
 

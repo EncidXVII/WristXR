@@ -1,0 +1,18 @@
+[package]
+name = "dvr-desktop-linux"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Linux: screens, windows and input. X11 directly; Wayland through the desktop portal (one prompt for capture and
+# input) with PipeWire loaded at run time. The Windows build uses dvr-capture-win and dvr-input-win.
+[target.'cfg(target_os = "linux")'.dependencies]
+dvr-core.workspace = true
+x11rb.workspace = true
+libc.workspace = true
+tracing.workspace = true
+ashpd = { version = "0.12", default-features = false, features = ["async-std"] }
+futures-lite = "2"
+
+[lints]
+workspace = true

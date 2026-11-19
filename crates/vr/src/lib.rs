@@ -4,6 +4,8 @@
 
 mod ffi;
 
+pub use ffi::VulkanTexture;
+
 use dvr_core::backend::VrBackend;
 use dvr_core::engine::{Claims, FrameInput};
 use dvr_core::math::Pose;
@@ -448,6 +450,57 @@ impl OpenVr {
         );
         // Tangents: one tangent unit is one radian at the centre of the view.
         (w > 0 && r - l > 0.1).then(|| w as f32 / (r - l))
+    }
+
+    /// Vulkan extensions SteamVR needs on the instance (`None`) or on a physical device (its raw handle).
+    pub fn vulkan_extensions(&self, physical_device: Option<u64>) -> Vec<String> {
+        let mut buf = vec![0u8; 4096];
+        let n = match physical_device {
+            None => call!(
+                self.compositor,
+                compositor::GET_VULKAN_INSTANCE_EXTENSIONS_REQUIRED,
+                fn(*mut u8, u32) -> u32,
+                buf.as_mut_ptr(),
+                buf.len() as u32
+            ),
+            Some(d) => call!(
+                self.compositor,
+                compositor::GET_VULKAN_DEVICE_EXTENSIONS_REQUIRED,
+                fn(*mut c_void, *mut u8, u32) -> u32,
+                d as *mut c_void,
+                buf.as_mut_ptr(),
+                buf.len() as u32
+            ),
+        };
+        let text = &buf[..(n as usize).min(buf.len())];
+        let text = text.split(|b| *b == 0).next().unwrap_or_default();
+        String::from_utf8_lossy(text).split_whitespace().map(str::to_owned).collect()
+    }
+
+    /// The Vulkan physical device (raw handle) the headset is on, for `instance` (a raw `VkInstance` handle).
+    pub fn vulkan_output_device(&self, instance: u64) -> u64 {
+        let mut device = 0u64;
+        call!(
+            self.system,
+            system::GET_OUTPUT_DEVICE,
+            fn(*mut u64, i32, *mut c_void) -> (),
+            &mut device,
+            ffi::TEXTURE_VULKAN,
+            instance as *mut c_void
+        );
+        device
+    }
+
+    /// Hands a Vulkan image to an existing overlay. The image must be in TRANSFER_SRC_OPTIMAL and its upload done.
+    pub fn set_texture_vulkan(&mut self, key: u64, texture: &mut ffi::VulkanTexture) -> Result<(), String> {
+        let p = self.overlays.get(&key).ok_or("no such overlay")?;
+        let mut t = ffi::Texture {
+            handle: (texture as *mut ffi::VulkanTexture).cast(),
+            kind: ffi::TEXTURE_VULKAN,
+            color_space: ffi::COLOR_SPACE_AUTO,
+        };
+        let e = call!(self.overlay, overlay::SET_OVERLAY_TEXTURE, fn(u64, *mut ffi::Texture) -> i32, p.handle, &mut t);
+        if e != 0 { Err(format!("SetOverlayTexture: EVROverlayError {e}")) } else { Ok(()) }
     }
 
     /// DXGI adapter SteamVR renders on; textures must come from it.

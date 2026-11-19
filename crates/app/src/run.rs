@@ -1,8 +1,10 @@
-//! The VR session on Windows: OpenVR overlays, WGC capture, SendInput, Slint menu and wrist.
+//! The VR session: OpenVR overlays, screen and window capture, input into the desktop, Slint menu and wrist. The
+//! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
+//! X11 or the Wayland portal on Linux.
 use crate::bindings::APP_KEY;
+use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, level_for};
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
-use dvr_capture_win::{Capture, Frame, Monitor};
 use dvr_core::backend::VrBackend;
 use dvr_core::chat::{ChatAction, ChatLine};
 use dvr_core::engine::{Claims, Engine, Event, FrameInput, MouseButton};
@@ -11,8 +13,6 @@ use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
 use dvr_core::state::{NotifyFrom, State, is_discord_app};
-use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, level_for, raw};
-use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
 use dvr_osc::{Chatbox, VRCHAT_ADDR};
 use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
@@ -23,7 +23,6 @@ use dvr_ui::{
 use dvr_vr::{OpenVr, cursor_key};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 
 const SAVE_DELAY: Duration = Duration::from_secs(1);
 const CURSOR_LIFT_M: f32 = 0.003;
@@ -55,7 +54,7 @@ const COARSER_AFTER: Duration = Duration::from_millis(600);
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
 struct Surface {
     /// What SteamVR shows (for a screen or window, its `detail` output).
-    tex: ID3D11Texture2D,
+    tex: Tex,
     /// Screens and windows: the capture with its mip chain, shown at the level their size in view needs.
     detail: Option<Detail>,
     /// A coarser level wanted since then.
@@ -76,7 +75,7 @@ fn err(e: impl std::fmt::Display) -> String {
 /// Key labels in the active OS layout, in the case they will type (Shift latched / Caps Lock). The language key
 /// shows the current language.
 fn layout_labels(shift: bool, caps: bool) -> Vec<String> {
-    let lang = dvr_input_win::layout_name();
+    let lang = plat::layout_name();
     ROWS.iter()
         .flat_map(|r| r.iter())
         .map(|key| {
@@ -84,7 +83,7 @@ fn layout_labels(shift: bool, caps: bool) -> Vec<String> {
                 return lang.clone();
             }
             let typed = (key.label.chars().count() == 1)
-                .then(|| dvr_input_win::key_char(key.sc, shift, caps))
+                .then(|| plat::key_char(key.sc, shift, caps))
                 .flatten()
                 .filter(|c| !c.is_whitespace());
             typed.map_or_else(|| key.label.to_owned(), |c| c.to_string())
@@ -115,7 +114,7 @@ fn key_faces(
 
 /// `sharp`: screens and windows get their detail pass (see `Detail`).
 fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Result<Surface, String> {
-    let plain = |tex: ID3D11Texture2D| Surface {
+    let plain = |tex: Tex| Surface {
         tex,
         detail: None,
         coarser: None,
@@ -139,7 +138,7 @@ fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Resul
             Some(m) => return screen(m.rect),
             None => (raster::placeholder(1280, 720, "MONITOR NOT CONNECTED"), None),
         },
-        Source::Window(h) => match dvr_capture_win::window_rect(h as isize) {
+        Source::Window(h) => match plat::window_rect(h) {
             Some(r) => return screen(r),
             None => {
                 let img = raster::placeholder(1280, 720, WINDOW_CLOSED);
@@ -214,7 +213,7 @@ fn wrist_info(
 
 /// Windows the user can add, front to back.
 fn list_windows() -> Vec<(u64, String)> {
-    dvr_capture_win::windows().into_iter().map(|(h, title)| (h as u64, title)).collect()
+    plat::windows()
 }
 
 /// The watch's Add list: the first windows, marked when already shown.
@@ -235,10 +234,10 @@ fn now_playing_line(m: &MediaInfo) -> String {
 }
 
 /// A window shown as its own panel in front of the user, at the physical scale it has on the main screen.
-fn window_panel(id: u32, hwnd: isize, head: Pose, screens: &[MonitorInfo]) -> Option<Panel> {
-    let wr = dvr_capture_win::window_rect(hwnd)?;
+fn window_panel(id: u32, window: u64, head: Pose, screens: &[MonitorInfo]) -> Option<Panel> {
+    let wr = plat::window_rect(window)?;
     let main_w = screens.iter().find(|m| m.primary).or(screens.first()).map_or(1920, |m| m.rect.w);
-    let mut p = Panel::in_front_of(id, Source::Window(hwnd as u64), head, wr.h as f32 / wr.w as f32);
+    let mut p = Panel::in_front_of(id, Source::Window(window), head, wr.h as f32 / wr.w as f32);
     p.width_m = (DEFAULT_WIDTH_M * wr.w as f32 / main_w as f32).clamp(0.3, DEFAULT_WIDTH_M * 1.5);
     p.pose.pos = head.pos + (p.pose.pos - head.pos) * WINDOW_NEARER;
     Some(p)
@@ -257,11 +256,11 @@ pub fn run() -> Result<(), String> {
         .and_then(|exe| crate::bindings::install_vrmanifest(&dir, &exe).map_err(err))
         .and_then(|m| vr.register_app(&m, APP_KEY));
     vr.load_actions(&manifest)?;
-    let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
+    let gpu = plat::gpu(&vr)?;
     // Screens at the detail the headset shows; without a shader compiler they are shown as captured.
     let sharpen = Sharpen::new(&gpu).inspect_err(|e| tracing::warn!(%e, "screen detail pass unavailable")).ok();
     let sharp = sharpen.is_some();
-    let monitors = dvr_capture_win::monitors();
+    let monitors = plat::monitors();
     let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
     let head = |vr: &OpenVr| vr.head_pose().unwrap_or(STANDING_HEAD);
 
@@ -273,12 +272,12 @@ pub fn run() -> Result<(), String> {
     let mut panels = state.panels.clone();
     let mut session = Session::new(state, &mut panels, head(&vr));
     session.imported = imported.is_some();
-    session.language = dvr_input_win::layout_name();
-    session.languages = dvr_input_win::layouts();
+    session.language = plat::layout_name();
+    session.languages = plat::layouts();
     // Names for windows kept from last time (toolbar chip, "Open now").
-    for (h, title) in dvr_capture_win::windows() {
-        if panels.iter().any(|p| p.source == Source::Window(h as u64)) {
-            session.window_names.insert(h as u64, title);
+    for (h, title) in plat::windows() {
+        if panels.iter().any(|p| p.source == Source::Window(h)) {
+            session.window_names.insert(h, title);
         }
     }
 
@@ -297,7 +296,7 @@ pub fn run() -> Result<(), String> {
 
     let mut cursor = gpu.image(&raster::cursor(64, session.state.accent.rgb())).map_err(err)?;
     for hand in Hand::BOTH {
-        vr.set_texture_d3d11(cursor_key(hand), raw(&cursor))?;
+        plat::submit(&gpu, &mut vr, cursor_key(hand), &cursor)?;
     }
     let mut chat = ChatLine::default();
     let mut surfaces = HashMap::new();
@@ -310,7 +309,7 @@ pub fn run() -> Result<(), String> {
     let mut tray =
         Tray::new(&strings, vr.auto_launch(APP_KEY)).inspect_err(|e| tracing::warn!(%e, "tray unavailable")).ok();
     let chatbox = Chatbox::new(VRCHAT_ADDR.parse().map_err(err)?).map_err(err)?;
-    let mut layout = dvr_input_win::layout_id();
+    let mut layout = plat::layout_id();
     let mut layout_checked = Instant::now();
     let mut engine = Engine::new(panels);
     let mut injector = Injector::new();
@@ -359,7 +358,7 @@ pub fn run() -> Result<(), String> {
     let mut wrist_adding = false;
     let mut faces: Vec<KeyFace> = Vec::with_capacity(80);
     let mut held: Vec<u16> = Vec::with_capacity(8);
-    let mut labels = layout_labels(false, dvr_input_win::caps_lock());
+    let mut labels = layout_labels(false, plat::caps_lock());
     let mut key_state = None;
     let mut battery_low = [false; 2];
     let mut stats_at = Instant::now() - STATS_PERIOD;
@@ -376,9 +375,9 @@ pub fn run() -> Result<(), String> {
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
     let mut release = None;
     // SteamVR normally says goodbye with a quit event; if its server dies instead, we notice here and leave too.
-    let steamvr = dvr_sys::ProcessWatch::by_name("vrserver.exe");
+    let steamvr = dvr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER);
     // Backstop: even if a SteamVR call never returns once SteamVR is gone, the process still ends.
-    if let Some(w) = dvr_sys::ProcessWatch::by_name("vrserver.exe") {
+    if let Some(w) = dvr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER) {
         w.exit_when_gone(Duration::from_secs(5));
     }
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
@@ -456,7 +455,7 @@ pub fn run() -> Result<(), String> {
         let mut closed = Vec::new();
         for p in &engine.panels {
             if let (Source::Window(h), Some(s)) = (p.source, surfaces.get_mut(&p.id)) {
-                s.rect = dvr_capture_win::window_rect(h as isize);
+                s.rect = plat::window_rect(h);
                 if s.rect.is_none() {
                     closed.push(p.id);
                 }
@@ -583,13 +582,13 @@ pub fn run() -> Result<(), String> {
             if let Event::Mouse { panel, down: true, .. } = *e
                 && let Some(Source::Window(h)) = engine.panels.iter().find(|p| p.id == panel).map(|p| p.source)
             {
-                dvr_capture_win::focus(h as isize);
+                plat::focus(h);
             }
             // A program running as administrator drops our clicks without a word (Windows' UIPI): say why, once
             // per window, instead of leaving the user clicking at nothing.
             if let Event::Mouse { panel, uv, down: true, .. } = *e
                 && let Some(r) = rect(panel)
-                && let Some(title) = dvr_input_win::admin_window_at(r.pixel_at(uv))
+                && let Some(title) = plat::admin_window_at(r.pixel_at(uv))
                 && !admin_told.contains(&title)
             {
                 admin_told.push(title.clone());
@@ -603,11 +602,11 @@ pub fn run() -> Result<(), String> {
             }
             match *e {
                 Event::PopOut { hand, panel, uv } => pop = Some((hand, panel, uv)),
-                Event::Key { scancode, down } if session.key(scancode, down, dvr_input_win::key_char) => {
+                Event::Key { scancode, down } if session.key(scancode, down, plat::key_char) => {
                     menu_dirty = true;
                 }
                 Event::Key { scancode, down } if session.state.chatbox => {
-                    let sent = match chat.key(scancode, down, dvr_input_win::key_char) {
+                    let sent = match chat.key(scancode, down, plat::key_char) {
                         ChatAction::None => Ok(()),
                         ChatAction::Edited => {
                             redraw_keyboard = true;
@@ -644,7 +643,7 @@ pub fn run() -> Result<(), String> {
                     menu_dirty = true;
                 }
                 Event::NextLanguage => {
-                    dvr_input_win::next_layout();
+                    plat::next_layout();
                 }
                 Event::Moved { .. } => dirty = Some(Instant::now()),
             }
@@ -656,20 +655,20 @@ pub fn run() -> Result<(), String> {
         if let Some((hand, panel, uv)) = pop
             && let Some(from) = engine.panels.iter().find(|p| p.id == panel).copied()
             && let Some(rect) = surfaces.get(&panel).and_then(|s| s.rect)
-            && let Some(h) = dvr_capture_win::window_at(rect.pixel_at(uv))
-            && let Some(wr) = dvr_capture_win::window_rect(h)
+            && let Some(h) = plat::window_at(rect.pixel_at(uv))
+            && let Some(wr) = plat::window_rect(h)
         {
             // Same physical scale it had on the monitor, in front of the hand that pulled it.
             let id = crate::session::next_id(&engine.panels);
             let width = (from.width_m * wr.w as f32 / rect.w as f32).max(MIN_WIDTH_M);
             let at = poses[hand.index()];
             let pose = Pose::new(at.pos + at.forward() * POP_OUT_DISTANCE_M, from.world_pose(&poses).rot);
-            let p = Panel::new(id, Source::Window(h as u64), pose, width, wr.h as f32 / wr.w as f32);
+            let p = Panel::new(id, Source::Window(h), pose, width, wr.h as f32 / wr.w as f32);
             surfaces.insert(id, surface(&gpu, sharp, &p, &monitors)?);
             engine.panels.push(p);
             engine.start_grab(hand, id, &poses);
-            if let Some((_, title)) = dvr_capture_win::windows().into_iter().find(|(w, _)| *w == h) {
-                session.window_names.insert(h as u64, title);
+            if let Some((_, title)) = plat::windows().into_iter().find(|(w, _)| *w == h) {
+                session.window_names.insert(h, title);
             }
             menu_dirty = true;
             dirty = Some(Instant::now());
@@ -716,7 +715,7 @@ pub fn run() -> Result<(), String> {
                     keyboard.set_accent(accent);
                     cursor = gpu.image(&raster::cursor(64, accent)).map_err(err)?;
                     for hand in Hand::BOTH {
-                        vr.set_texture_d3d11(cursor_key(hand), raw(&cursor))?;
+                        plat::submit(&gpu, &mut vr, cursor_key(hand), &cursor)?;
                     }
                     redraw_keyboard = true;
                     toolbar_dirty = true;
@@ -724,16 +723,16 @@ pub fn run() -> Result<(), String> {
                 }
                 Effect::AddWindow(h) => {
                     let id = crate::session::next_id(&engine.panels);
-                    if let Some(p) = window_panel(id, h as isize, head_now, &screens) {
+                    if let Some(p) = window_panel(id, h, head_now, &screens) {
                         surfaces.insert(id, surface(&gpu, sharp, &p, &monitors)?);
                         engine.panels.push(p);
                     }
                 }
                 Effect::NextLanguage => {
-                    dvr_input_win::next_layout();
+                    plat::next_layout();
                 }
                 Effect::Language(i) => {
-                    dvr_input_win::select_layout(i);
+                    plat::select_layout(i);
                 }
                 Effect::NotifyFrom(from) => {
                     if from != NotifyFrom::Off && app_toasts.is_none() {
@@ -753,11 +752,11 @@ pub fn run() -> Result<(), String> {
 
         if layout_checked.elapsed() >= LAYOUT_POLL {
             layout_checked = Instant::now();
-            let id = dvr_input_win::layout_id();
+            let id = plat::layout_id();
             if id != layout {
                 redraw_keyboard = true;
-                session.language = dvr_input_win::layout_name();
-                session.languages = dvr_input_win::layouts();
+                session.language = plat::layout_name();
+                session.languages = plat::layouts();
                 menu_dirty = true;
                 toolbar_dirty = true;
             }
@@ -920,7 +919,7 @@ pub fn run() -> Result<(), String> {
         }
         // Keyboard view: rebuilt only when what it shows changes (labels, lit keys, hover, chat line).
         let latched = engine.keyboard().latched();
-        let caps = dvr_input_win::caps_lock();
+        let caps = plat::caps_lock();
         let state = (
             key_hover,
             latched,
@@ -966,10 +965,8 @@ pub fn run() -> Result<(), String> {
             // Hidden or faded-out panels stop capturing (no GPU or CPU cost while hidden).
             if p.shown() && s.capture.is_none() && !s.dead {
                 s.capture = match p.source {
-                    Source::Monitor(i) => {
-                        monitors.get(i as usize).and_then(|m| Capture::monitor(&gpu.device, m.handle).ok())
-                    }
-                    Source::Window(h) => Capture::window(&gpu.device, h as isize).ok(),
+                    Source::Monitor(i) => monitors.get(i as usize).and_then(|m| Capture::monitor(&gpu, m).ok()),
+                    Source::Window(h) => Capture::window(&gpu, h).ok(),
                     _ => None,
                 };
             }
@@ -978,7 +975,7 @@ pub fn run() -> Result<(), String> {
             }
             let target = s.detail.as_ref().map_or(&s.tex, |d| &d.src);
             let mut draw = false;
-            match s.capture.as_mut().map(|c| c.copy_latest(&gpu.context, target)) {
+            match s.capture.as_mut().map(|c| c.copy_latest(&gpu, target)) {
                 Some(Ok(Frame::Copied)) => {
                     if let (Some(d), Some(sh)) = (&s.detail, &sharpen) {
                         sh.new_frame(&gpu, d);
@@ -1034,7 +1031,7 @@ pub fn run() -> Result<(), String> {
         for p in &engine.panels {
             if let Some(s) = surfaces.get_mut(&p.id)
                 && std::mem::take(&mut s.needs_submit)
-                && let Err(e) = vr.set_texture_d3d11(u64::from(p.id), raw(&s.tex))
+                && let Err(e) = plat::submit(&gpu, &mut vr, u64::from(p.id), &s.tex)
             {
                 tracing::warn!(%e, panel = p.id, "panel texture rejected");
             }

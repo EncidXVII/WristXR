@@ -3,7 +3,7 @@
 use serde::Deserialize;
 
 /// `owner/name` of the release repository; empty disables the check.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub const REPO: &str = "EncidXVII/DesktopVR";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,20 +35,19 @@ pub fn parse(json: &str, current: &str) -> Option<Release> {
 }
 
 /// Checks once on a background thread; the receiver yields a release only when one is newer.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub fn check_in_background() -> std::sync::mpsc::Receiver<Release> {
     let (tx, rx) = std::sync::mpsc::channel();
     if !REPO.is_empty() {
         std::thread::spawn(move || {
             let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
-            // curl.exe ships with Windows 10+; no HTTP client crate needed. CREATE_NO_WINDOW: the app has no
-            // console, so without it curl would flash a console window at startup.
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            let out = std::process::Command::new("curl.exe")
-                .args(["-sfL", "--max-time", "10", "-H", "User-Agent: DesktopVR-update-check", &url])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
+            // curl ships with Windows 10+ and with every Linux desktop; no HTTP client crate needed.
+            let mut cmd = std::process::Command::new(if cfg!(windows) { "curl.exe" } else { "curl" });
+            cmd.args(["-sfL", "--max-time", "10", "-H", "User-Agent: DesktopVR-update-check", &url]);
+            // CREATE_NO_WINDOW: the app has no console, so without it curl would flash one at startup.
+            #[cfg(windows)]
+            std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x0800_0000);
+            let out = cmd.output();
             if let Some(r) =
                 out.ok().and_then(|o| parse(&String::from_utf8_lossy(&o.stdout), env!("CARGO_PKG_VERSION")))
             {
@@ -60,9 +59,9 @@ pub fn check_in_background() -> std::sync::mpsc::Receiver<Release> {
 }
 
 /// Opens the release page in the default browser.
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "linux"))]
 pub fn open(url: &str) {
     if url.starts_with("https://github.com/") {
-        let _ = std::process::Command::new("explorer.exe").arg(url).spawn();
+        let _ = std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(url).spawn();
     }
 }

@@ -22,8 +22,11 @@ pub fn run() -> ExitCode {
         error("No settings folder found.");
         return ExitCode::FAILURE;
     };
-    // `...\DesktopVR\config`: the whole `DesktopVR` folder goes, and nothing above it.
-    let Some(root) = config.parent().filter(|r| r.file_name().is_some_and(|n| n == "DesktopVR")) else {
+    // Windows: `...\DesktopVR\config`, so the whole `DesktopVR` folder goes; Linux: `~/.config/desktopvr` itself.
+    // Nothing above it, ever.
+    let root = if cfg!(windows) { config.parent() } else { Some(config.as_path()) };
+    let name = if cfg!(windows) { "DesktopVR" } else { "desktopvr" };
+    let Some(root) = root.filter(|r| r.file_name().is_some_and(|n| n == name)) else {
         error(&format!("Unexpected settings folder: {}", config.display()));
         return ExitCode::FAILURE;
     };
@@ -48,6 +51,14 @@ pub fn run() -> ExitCode {
     match std::fs::remove_dir_all(root) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => problems.push(format!("{}: {e}", root.display())),
         _ => {}
+    }
+    // Linux: the screen-sharing permission the portal gave (asked again on the next install).
+    #[cfg(target_os = "linux")]
+    if let Some(state) = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
+    {
+        let _ = std::fs::remove_dir_all(state.join("desktopvr"));
     }
     if problems.is_empty() {
         if quiet {
