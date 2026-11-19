@@ -49,7 +49,6 @@ impl Injector {
         Self { last: None }
     }
 
-    /// Absolute move over the whole virtual desktop; skipped when the pixel did not change.
     /// Exact physical-pixel positioning. SendInput's normalized absolute coordinates are off by several pixels
     /// (or clamp at monitor edges) on mixed-DPI desktops, so the cursor is placed with SetCursorPos instead.
     fn place(p: (i32, i32)) {
@@ -136,8 +135,7 @@ impl Injector {
 
 /// Keyboard layout of the foreground window; changes when the user switches language.
 pub fn layout_id() -> isize {
-    // SAFETY: read-only queries.
-    unsafe { GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None)).0 as isize }
+    foreground_layout().0 as isize
 }
 
 fn foreground_layout() -> HKL {
@@ -203,7 +201,7 @@ fn translate(scancode: u16, shift: bool, caps: bool) -> Option<String> {
     let code = u32::from(scancode & 0xFF) | if scancode & EXT != 0 { 0xE000 } else { 0 };
     // SAFETY: read-only layout queries; ToUnicodeEx flag 4 leaves the keyboard state untouched.
     unsafe {
-        let layout = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), None));
+        let layout = foreground_layout();
         let vk = MapVirtualKeyExW(code, MAPVK_VSC_TO_VK_EX, Some(layout));
         if vk == 0 {
             return None;
@@ -215,11 +213,6 @@ fn translate(scancode: u16, shift: bool, caps: bool) -> Option<String> {
         let n = ToUnicodeEx(vk, code, &state, &mut buf, 4, Some(layout));
         (n > 0).then(|| String::from_utf16_lossy(&buf[..n as usize]))
     }
-}
-
-/// Text a key shows in the foreground window's keyboard layout (unshifted).
-pub fn key_label(scancode: u16) -> Option<String> {
-    translate(scancode, false, false)
 }
 
 /// Character a key types with the given Shift/Caps state; dead keys and multi-char results yield `None`.

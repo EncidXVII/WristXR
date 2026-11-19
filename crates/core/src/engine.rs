@@ -1,8 +1,9 @@
 //! Per-frame interaction logic: laser pointer, keyboard typing, grab/scale.
 //! Rules: hover never clicks, trigger clicks, A/X right-clicks, grip only grabs, locked panels ignore grip.
 //! A held panel keeps the spot you grabbed under the laser and turns to face you, level; it never copies the
-//! twist of the wrist, unless it is set to a free angle (then it turns with the laser as you grabbed it). Let go of it next to your other hand and it stays on that hand. The watch is the exception:
-//! the other hand can move it, but it stays on its wrist and keeps its turn there, so it still reads like a watch.
+//! twist of the wrist, unless it is set to a free angle (then it turns with the laser as you grabbed it). Let go of
+//! it next to your other hand and it stays on that hand. The watch is the exception: the other hand can move it, but
+//! it stays on its wrist and keeps its turn there, so it still reads like a watch.
 //! `step` does not allocate as long as `out` has spare capacity (reserve ~64).
 use crate::keyboard::{self, Keyboard};
 use crate::math::{Pose, Quat, Vec3};

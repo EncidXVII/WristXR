@@ -193,12 +193,6 @@ impl Capture {
         Self::start(device, item)
     }
 
-    /// Captured content size in pixels.
-    pub fn size(&self) -> Result<(u32, u32)> {
-        let s = self._item.Size()?;
-        Ok((s.Width.max(1) as u32, s.Height.max(1) as u32))
-    }
-
     fn start(device: &ID3D11Device, item: GraphicsCaptureItem) -> Result<Self> {
         let dxgi: IDXGIDevice = device.cast()?;
         // SAFETY: wraps our D3D11 device for WinRT; no ownership transfer.

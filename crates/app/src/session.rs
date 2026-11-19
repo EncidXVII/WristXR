@@ -401,10 +401,6 @@ impl Session {
         }
     }
 
-    /// Double-tap left menu / Hide all (as in XSOverlay): fade screens, windows and keyboard out, or bring them all
-    /// back, the keyboard included. The menu and watch stay. Showing again turns and moves the whole layout, as it
-    /// was arranged, to where the user now faces: after a playspace mover or a walk around the room everything is
-    /// back in front with one double-tap.
     /// Shows everything again if hidden (see `toggle_hidden`).
     fn show_all(&mut self, panels: &mut [Panel], head: Pose) {
         if self.hidden {
@@ -412,6 +408,10 @@ impl Session {
         }
     }
 
+    /// Double-tap left menu / Hide all (as in XSOverlay): fade screens, windows and keyboard out, or bring them all
+    /// back, the keyboard included. The menu and watch stay. Showing again turns and moves the whole layout, as it
+    /// was arranged, to where the user now faces: after a playspace mover or a walk around the room everything is
+    /// back in front with one double-tap.
     pub fn toggle_hidden(&mut self, panels: &mut [Panel], head: Pose) {
         self.hidden = !self.hidden;
         if self.hidden {
@@ -523,8 +523,7 @@ impl Session {
     }
 
     /// Routes laser events on the menu and toolbar to their views and decides which panel shows the toolbar.
-    /// `rays`: each hand's laser. Returns true when the menu saw pointer activity.
-    pub fn pointer(&mut self, input: PointerInput, panels: &[Panel], menu: &Menu, toolbar: &Toolbar) -> bool {
+    pub fn pointer(&mut self, input: PointerInput, panels: &[Panel], menu: &Menu, toolbar: &Toolbar) {
         let PointerInput { events, now, rays, anchors } = input;
         self.clock = now;
         let mut over_menu = false;
@@ -625,7 +624,6 @@ impl Session {
         }
         self.menu_hovered = over_menu;
         self.toolbar_hovered = over_toolbar;
-        over_menu
     }
 
     /// Remembers a notification for the Inbox.
@@ -1304,16 +1302,14 @@ impl Session {
         }
     }
 
-    /// Applies a menu click. `hands` are the current controller poses.
+    /// Applies a menu click.
     pub fn input(
         &mut self,
         input: MenuInput,
         panels: &mut Vec<Panel>,
         head: Pose,
-        hands: &Anchors,
         monitors: &[MonitorInfo],
     ) -> Vec<Effect> {
-        let _ = hands;
         let fx = Vec::new();
         let slot = match input {
             MenuInput::Tab(i) => {

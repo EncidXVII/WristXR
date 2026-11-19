@@ -45,7 +45,7 @@ impl Ctx {
         }
         let poses = [self.rig.hands[0].pose, self.rig.hands[1].pose, HEAD];
         for click in self.menu.take_inputs() {
-            let fx = self.session.input(click, &mut self.rig.engine.panels, HEAD, &poses, &self.screens);
+            let fx = self.session.input(click, &mut self.rig.engine.panels, HEAD, &self.screens);
             self.effects.extend(fx);
         }
         for click in self.toolbar.take_inputs() {
@@ -445,7 +445,7 @@ mod tests {
         let click = |session: &mut Session, panels: &mut Vec<_>, label: &str| {
             let m = session.model(panels, &screens, &strings, (0.0, 0.0));
             let i = m.find(label).unwrap_or_else(|| panic!("{label} not on {}", m.title));
-            session.input(dvr_ui::MenuInput::Slot(i), panels, HEAD, &Default::default(), &screens)
+            session.input(dvr_ui::MenuInput::Slot(i), panels, HEAD, &screens)
         };
         session.page = Page::Tab(TAB_SETUP);
         click(&mut session, &mut panels, "Theme");

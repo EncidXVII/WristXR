@@ -10,8 +10,7 @@ use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHI
 use dvr_core::math::{Pose, Quat, Vec3};
 use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use dvr_core::raster;
-use dvr_core::state::NotifyFrom;
-use dvr_core::state::State;
+use dvr_core::state::{NotifyFrom, State, is_discord_app};
 use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, level_for, raw};
 use dvr_input_win::Injector;
 use dvr_notify_api::{Listener, Toast};
@@ -678,7 +677,7 @@ pub fn run() -> Result<(), String> {
 
         let mut effects: Vec<Effect> = wrist_effects;
         for click in menu.take_inputs() {
-            effects.extend(session.input(click, &mut engine.panels, head_now, &poses, &screens));
+            effects.extend(session.input(click, &mut engine.panels, head_now, &screens));
             dirty = Some(Instant::now());
             menu_dirty = true;
             // Watch settings (layout, what it shows) show on the watch at once.
@@ -824,8 +823,7 @@ pub fn run() -> Result<(), String> {
                 continue;
             }
             // Discord's first line already names the sender; other apps get their name in front.
-            let title =
-                if t.app.to_lowercase().contains("discord") { t.title } else { format!("{}: {}", t.app, t.title) };
+            let title = if is_discord_app(&t.app) { t.title } else { format!("{}: {}", t.app, t.title) };
             session.notified(&t.app, &title, &t.body);
             menu_dirty = true;
             if session.state.haptics {
@@ -1053,8 +1051,14 @@ pub fn run() -> Result<(), String> {
 
         if dirty.is_some_and(|t| t.elapsed() >= SAVE_DELAY) {
             session.persist(&engine.panels, worn_head);
-            session.state.save(&state_path).map_err(err)?;
-            dirty = None;
+            // A save that fails (disk full, the file held by a scanner) is tried again; it never ends the session.
+            dirty = match session.state.save(&state_path) {
+                Ok(()) => None,
+                Err(e) => {
+                    tracing::warn!(%e, "settings not saved; retrying");
+                    Some(Instant::now())
+                }
+            };
         }
         vr.wait_frame(20);
     }

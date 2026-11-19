@@ -69,12 +69,7 @@ impl ProcessWatch {
         // SAFETY: zero-timeout wait on a handle we own.
         unsafe { WaitForSingleObject(self.0, 0) == WAIT_TIMEOUT }
     }
-}
 
-// SAFETY: a process handle may be waited on from any thread.
-unsafe impl Send for ProcessWatch {}
-
-impl ProcessWatch {
     /// Backstop on its own thread: once the watched process has been gone for `grace` (time for the main loop to
     /// notice, save and leave by itself), end this process even if the main loop is stuck.
     pub fn exit_when_gone(self, grace: Duration) {
@@ -87,6 +82,9 @@ impl ProcessWatch {
         });
     }
 }
+
+// SAFETY: a process handle may be waited on from any thread.
+unsafe impl Send for ProcessWatch {}
 
 impl Drop for ProcessWatch {
     fn drop(&mut self) {

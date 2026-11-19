@@ -1,4 +1,5 @@
-//! Tray icon: open the menu in VR, hide or show everything, start with SteamVR, quit. Events arrive through the main thread's message pump.
+//! Tray icon: open the menu in VR, hide or show everything, start with SteamVR, quit. Events arrive through the
+//! main thread's message pump.
 use std::time::{Duration, Instant};
 
 use dvr_core::raster::{ACCENT, BG, Image};
