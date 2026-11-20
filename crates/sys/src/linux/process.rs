@@ -73,7 +73,10 @@ impl ProcessWatch {
 
 /// Ends the process now, skipping library teardown. Settings must already be saved.
 pub fn terminate(code: u32) -> ! {
-    std::process::exit(code as i32)
+    // `_exit`, not `exit`: exit handlers and library destructors are the teardown that can hang, and the watchdogs
+    // call this from their own threads while the main one may be stuck in such a library.
+    // SAFETY: ends the process; nothing runs after it.
+    unsafe { libc::_exit(code as i32) }
 }
 
 /// After a quit: if orderly cleanup has not finished within `grace`, end the process anyway.

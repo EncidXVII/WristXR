@@ -114,7 +114,10 @@ impl Sampler {
     pub fn sample(&mut self) -> Load {
         let now = cpu_jiffies();
         let cpu = match (self.cpu, now) {
-            (Some((b0, t0)), Some((b1, t1))) if t1 > t0 => Some((b1 - b0) as f32 / (t1 - t0) as f32),
+            // The kernel's iowait count can step back, so busy time is not strictly rising.
+            (Some((b0, t0)), Some((b1, t1))) if t1 > t0 => {
+                Some((b1.saturating_sub(b0) as f32 / (t1 - t0) as f32).min(1.0))
+            }
             _ => None,
         };
         self.cpu = now;
@@ -177,9 +180,19 @@ pub fn info_dialog(title: &str, message: &str) {
     dialog("--info", title, message);
 }
 
-/// Yes/no; without a dialog tool (or a desktop) the answer is no.
+/// Yes/no. Without a dialog tool the question goes to the terminal it was started from; with neither, the answer
+/// is no.
 pub fn ask_dialog(title: &str, message: &str) -> bool {
-    (have("zenity") || have("kdialog")) && dialog("--question", title, message)
+    use std::io::IsTerminal;
+    if have("zenity") || have("kdialog") {
+        return dialog("--question", title, message);
+    }
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+    eprint!("{title}: {message} [y/N] ");
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer).is_ok() && matches!(answer.trim(), "y" | "Y" | "yes")
 }
 
 /// Resident memory of this process.

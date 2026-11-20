@@ -134,10 +134,13 @@ fn config_dir() -> Result<PathBuf, String> {
 /// Through SteamVR when it is running (it keeps its list in memory and would write it back); otherwise straight in
 /// SteamVR's files. Never starts SteamVR.
 pub fn remove_app(manifest: &Path, app_key: &str) -> Result<(), String> {
+    // SteamVR gone (uninstalled first), or never there: no list to be on.
+    let Ok(config) = config_dir() else { return Ok(()) };
     if remove_app_live(manifest, app_key).is_err() {
-        remove_app_offline(manifest)?;
+        // With SteamVR off: out of `appconfig.json`'s list.
+        drop_manifest(&config.join("appconfig.json"), manifest)?;
     }
-    let settings = config_dir()?.join("vrappconfig").join(format!("{app_key}.vrappconfig"));
+    let settings = config.join("vrappconfig").join(format!("{app_key}.vrappconfig"));
     match std::fs::remove_file(&settings) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{}: {e}", settings.display())),
         _ => Ok(()),
@@ -175,11 +178,6 @@ fn remove_app_live(manifest: &Path, app_key: &str) -> Result<(), String> {
     // SAFETY: balances the successful init above.
     unsafe { (vtbl.cleanup)(core) };
     result
-}
-
-/// With SteamVR off: drops the manifest from `appconfig.json`'s list.
-fn remove_app_offline(manifest: &Path) -> Result<(), String> {
-    drop_manifest(&config_dir()?.join("appconfig.json"), manifest)
 }
 
 fn drop_manifest(file: &Path, manifest: &Path) -> Result<(), String> {

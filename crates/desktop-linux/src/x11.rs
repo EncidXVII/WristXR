@@ -213,7 +213,6 @@ fn clamp16(v: i32) -> i16 {
 /// One System V shared-memory segment attached to the X server, for MIT-SHM GetImage.
 struct Shm {
     seg: u32,
-    id: i32,
     ptr: *mut u8,
     len: usize,
 }
@@ -221,8 +220,9 @@ struct Shm {
 impl Shm {
     #[allow(unsafe_code)]
     fn new(x: &X11, len: usize) -> Res<Self> {
-        // SAFETY: plain System V calls; the segment is marked for removal right away, so it goes when both we and the
-        // server detach (also if we crash).
+        // SAFETY: plain System V calls. The segment is marked for removal as soon as the server has attached (or
+        // could not), so it goes when both we and the server detach, also if we crash: a System V segment left
+        // unmarked would outlive the process.
         unsafe {
             let id = libc::shmget(libc::IPC_PRIVATE, len, libc::IPC_CREAT | 0o600);
             if id < 0 {
@@ -233,10 +233,18 @@ impl Shm {
                 libc::shmctl(id, libc::IPC_RMID, std::ptr::null_mut());
                 return Err("shmat failed".into());
             }
-            let seg = x.conn.generate_id().map_err(e)?;
-            x.conn.shm_attach(seg, id as u32, false).map_err(e)?.check().map_err(e)?;
+            let attached = x.conn.generate_id().map_err(e).and_then(|seg| {
+                x.conn.shm_attach(seg, id as u32, false).map_err(e)?.check().map_err(e)?;
+                Ok(seg)
+            });
             libc::shmctl(id, libc::IPC_RMID, std::ptr::null_mut());
-            Ok(Self { seg, id, ptr: ptr.cast(), len })
+            match attached {
+                Ok(seg) => Ok(Self { seg, ptr: ptr.cast(), len }),
+                Err(err) => {
+                    libc::shmdt(ptr);
+                    Err(err)
+                }
+            }
         }
     }
 }
@@ -248,7 +256,6 @@ impl Drop for Shm {
             let _ = x.conn.shm_detach(self.seg);
             let _ = x.conn.flush();
         }
-        let _ = self.id;
         // SAFETY: `ptr` came from shmat and is detached once.
         unsafe {
             libc::shmdt(self.ptr.cast());
@@ -265,6 +272,8 @@ pub enum Target {
 pub struct XCapture {
     target: Target,
     shm: Option<Shm>,
+    /// The server could not attach a segment (a remote display): plain GetImage from then on, no more tries.
+    no_shm: bool,
     /// The window's Composite pixmap and the size it was named at.
     pixmap: Option<(u32, u16, u16)>,
     buf: Vec<u8>,
@@ -281,7 +290,7 @@ impl XCapture {
             // Under a compositor windows are redirected already; without one this keeps their pixels for us.
             let _ = x.conn.composite_redirect_window(w, Redirect::AUTOMATIC);
         }
-        Ok(Self { target, shm: None, pixmap: None, buf: Vec::new(), w: 0, h: 0 })
+        Ok(Self { target, shm: None, no_shm: !x.shm, pixmap: None, buf: Vec::new(), w: 0, h: 0 })
     }
 
     /// Reads the latest pixels (BGRA, rows of `w * 4`); `None` when the source is gone or unreadable.
@@ -317,9 +326,10 @@ impl XCapture {
         let len = usize::from(w) * usize::from(h) * 4;
         self.buf.resize(len, 0);
         let mut read = false;
-        if x.shm {
+        if !self.no_shm {
             if self.shm.as_ref().is_none_or(|s| s.len < len) {
                 self.shm = Shm::new(x, len).inspect_err(|err| tracing::warn!(%err, "MIT-SHM unavailable")).ok();
+                self.no_shm = self.shm.is_none();
             }
             if let Some(s) = &self.shm {
                 let fmt = u8::from(ImageFormat::Z_PIXMAP);

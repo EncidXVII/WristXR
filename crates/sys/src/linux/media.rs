@@ -152,7 +152,7 @@ fn read(conn: &Connection) -> Option<(Player, MediaInfo, Volume)> {
     Some((Player { name, proxy: p, unmuted: None }, info, volume))
 }
 
-fn control(conn: &Connection, player: &mut Player, cmd: MediaCommand) {
+fn control(player: &mut Player, cmd: MediaCommand) {
     let p = &player.proxy;
     let r = match cmd {
         MediaCommand::PlayPause => p.call_method("PlayPause", &()).map(drop),
@@ -184,7 +184,6 @@ fn control(conn: &Connection, player: &mut Player, cmd: MediaCommand) {
     if let Err(e) = r {
         eprintln!("{}: {e}", player.name);
     }
-    let _ = conn;
 }
 
 impl Media {
@@ -217,9 +216,9 @@ impl Media {
                 match rx.recv_timeout(POLL) {
                     Ok(cmd) => {
                         if let Some(p) = player.as_mut() {
-                            control(&conn, p, cmd);
+                            control(p, cmd);
                             while let Ok(more) = rx.try_recv() {
-                                control(&conn, p, more);
+                                control(p, more);
                             }
                         }
                     }
