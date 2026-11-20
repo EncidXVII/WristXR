@@ -65,6 +65,9 @@ struct Surface {
     capture: Option<Capture>,
     rect: Option<PixelRect>,
     needs_submit: bool,
+    /// Its `detail` holds a capture. Not after a new size until the first frame at it: meanwhile the last picture
+    /// stays up, rather than an empty one.
+    captured: bool,
     /// Source is gone (window closed): showing a placeholder, no capture attempts.
     dead: bool,
 }
@@ -124,6 +127,7 @@ fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Resul
         capture: None,
         rect: None,
         needs_submit: false,
+        captured: false,
         dead: false,
     };
     let blank =
@@ -982,6 +986,8 @@ pub fn run() -> Result<(), String> {
                 Some(Ok(Frame::Copied)) => {
                     if let (Some(d), Some(sh)) = (&s.detail, &sharpen) {
                         sh.new_frame(&gpu, d);
+                        s.tex = d.out.clone();
+                        s.captured = true;
                         draw = true;
                     }
                     s.needs_submit = true;
@@ -989,7 +995,7 @@ pub fn run() -> Result<(), String> {
                 Some(Ok(Frame::Resized(w, h))) => {
                     if let Some(d) = &mut s.detail {
                         *d = Detail::new(&gpu, w, h, d.width.min(w)).map_err(err)?;
-                        s.tex = d.out.clone();
+                        s.captured = false;
                     } else {
                         s.tex = gpu.texture(w, h, None).map_err(err)?;
                     }
@@ -1017,9 +1023,11 @@ pub fn run() -> Result<(), String> {
                 if switch {
                     s.coarser = None;
                     d.set_width(&gpu, want).map_err(err)?;
-                    s.tex = d.out.clone();
-                    draw = true;
-                    s.needs_submit = true;
+                    if s.captured {
+                        s.tex = d.out.clone();
+                        draw = true;
+                        s.needs_submit = true;
+                    }
                 }
                 if draw {
                     sh.draw(&gpu, d);

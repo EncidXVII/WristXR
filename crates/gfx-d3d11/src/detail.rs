@@ -13,6 +13,7 @@
 //!   there is no sharpen (so no halos).
 //! - Shrunk less than that (close up): the capture as it is, with a light sharpen that offsets SteamVR's resample.
 use crate::Gpu;
+use std::cell::Cell;
 use windows::Win32::Foundation::E_POINTER;
 use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
 use windows::Win32::Graphics::Direct3D::{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob};
@@ -263,6 +264,8 @@ pub struct Detail {
     out_h: u32,
     /// Set when `width` is below the capture's: the picture goes through the resample.
     across: Option<Across>,
+    /// The mip chain is older than the capture (rebuilt by the next draw that reads it).
+    mips_stale: Cell<bool>,
 }
 
 impl Sharpen {
@@ -327,12 +330,10 @@ impl Sharpen {
         })
     }
 
-    /// A new capture landed in `d.src`: rebuilds its mip chain when the resample will read one.
-    pub fn new_frame(&self, gpu: &Gpu, d: &Detail) {
-        if d.across.as_ref().is_some_and(|a| a.level > 0) {
-            // SAFETY: the view belongs to this device and covers every level.
-            unsafe { gpu.context.GenerateMips(&d.srv) };
-        }
+    /// A new capture landed in `d.src`: its mip chain is rebuilt when a draw next reads it. Not here, since the
+    /// picture's width (and so whether it reads a mip level) can change before the next capture.
+    pub fn new_frame(&self, _gpu: &Gpu, d: &Detail) {
+        d.mips_stale.set(true);
     }
 
     /// One full-screen triangle from `from` into `to` (`size` pixels), with `shader` and its constants.
@@ -401,6 +402,10 @@ impl Sharpen {
     pub fn draw(&self, gpu: &Gpu, d: &Detail) {
         match &d.across {
             Some(a) => {
+                if a.level > 0 && d.mips_stale.replace(false) {
+                    // SAFETY: the view belongs to this device and covers every level.
+                    unsafe { gpu.context.GenerateMips(&d.srv) };
+                }
                 let (lw, lh) = (level_size(d.w, a.level), level_size(d.h, a.level));
                 self.resample(gpu, &d.srv, a.level, (lw, lh), &a.rtv, (d.width, lh), false);
                 self.resample(gpu, &a.srv, 0, (d.width, lh), &d.rtv, (d.width, d.out_h), true);
@@ -422,7 +427,7 @@ impl Detail {
         let src = texture(gpu, w, h, true, false)?;
         let srv = srv(gpu, &src)?;
         let (out, rtv, width, out_h, across) = Self::output(gpu, w, h, width)?;
-        Ok(Self { src, srv, w, h, out, rtv, width, out_h, across })
+        Ok(Self { src, srv, w, h, out, rtv, width, out_h, across, mips_stale: Cell::new(true) })
     }
 
     #[allow(clippy::type_complexity)]
@@ -523,6 +528,24 @@ mod tests {
             gpu.context.Unmap(&staging, 0);
         }
         px
+    }
+
+    #[test]
+    fn a_screen_moved_away_between_captures_still_shows_the_capture() {
+        let Ok(gpu) = Gpu::new(None) else { return };
+        let pass = Sharpen::new(&gpu).expect("shaders compile");
+        // Close up (the capture as it is), one frame, then moved far off before the screen changes again: the new
+        // picture reads a mip level, which must hold that frame, not an empty or older one.
+        let (w, h) = (96u32, 48u32);
+        let d = &mut Detail::new(&gpu, w, h, w).expect("detail");
+        gpu.update(&d.src, &[200u8, 200, 200, 255].repeat((w * h) as usize), w);
+        pass.new_frame(&gpu, d);
+        pass.draw(&gpu, d);
+        d.set_width(&gpu, 12).expect("narrower");
+        pass.draw(&gpu, d);
+        for p in read(&gpu, &d.out, d.width, d.out_h).chunks(4) {
+            assert!((p[0] as i32 - 200).abs() <= 2, "the capture, not a stale level: {p:?}");
+        }
     }
 
     #[test]
