@@ -6,7 +6,7 @@
 //! an overlay bilinearly, without mipmaps, so text would shimmer and smear. So the overlay gets a picture already at
 //! about the size it is shown:
 //!
-//! - Shrunk by 2.5x or more: the capture's mip chain, then a Kaiser-windowed sinc (a proper low-pass, as SimulaVR
+//! - Shrunk by 2x or more: the capture's mip chain, then a Kaiser-windowed sinc (a proper low-pass, as SimulaVR
 //!   filters its windows) from the nearest level straight to twice the shown width. SteamVR samples the overlay
 //!   twice more (into the eye view, then for the lens), which from a picture exactly the shown width would take
 //!   about a quarter of small text's detail; from twice it keeps nearly all of it. Letters keep smooth edges and
@@ -30,14 +30,14 @@ use windows::core::{Error, PCSTR, Result, s};
 /// Close up: the picture plus this share of its difference from its four neighbours' average. Light, so edges firm
 /// up without halos.
 pub const SHARPEN: f32 = 0.2;
-/// Shrunk by at least this much, a screen goes through the Kaiser resample; less, it is shown as captured (the top of
-/// `KEEP`, so the capture as it is never holds more than a resampled picture would).
-const RESAMPLE_FROM: f32 = 2.5;
+/// Shrunk by at least this much, a screen goes through the Kaiser resample; less, it is shown as captured. The same as
+/// `MARGIN`, so the resample takes over at the capture's own width: no step where it does.
+const RESAMPLE_FROM: f32 = 2.0;
 /// Further off, the picture is this many times the width the screen is shown at.
 const MARGIN: f32 = 2.0;
-/// A picture is kept while it is this many times the shown width (a new one, at `MARGIN`, past either end), so
-/// resizing a screen or walking about seldom makes a new texture, and a shrinking screen keeps its detail longer.
-const KEEP: std::ops::RangeInclusive<f32> = 1.5..=2.5;
+/// A picture is kept while it is this many times the shown width (a new one, at `MARGIN`, past either end): steps of
+/// about a tenth, too small to see as the screen moves, few enough that walking about seldom draws a new one.
+const KEEP: std::ops::RangeInclusive<f32> = 1.8..=2.2;
 /// Lobes of the windowed sinc on each side, and the Kaiser window's shape (higher is smoother, with less ringing).
 const KAISER_LOBES: f32 = 2.0;
 const KAISER_BETA: f32 = 4.0;
@@ -484,17 +484,19 @@ mod tests {
 
     #[test]
     fn close_up_keeps_the_capture_and_further_off_gets_twice_the_shown_width() {
-        // Shrunk less than 2.5x: as captured.
+        // Shrunk less than 2x: as captured.
         assert_eq!(width_for(3840, 3000.0), 3840);
-        assert_eq!(width_for(3840, 1537.0), 3840);
-        // Further: twice the shown width.
+        assert_eq!(width_for(3840, 1921.0), 3840);
+        // Further: twice the shown width, from the capture's own width down (no step where the resample takes over).
+        assert_eq!(width_for(3840, 1920.0), 3840);
         assert_eq!(width_for(3840, 1536.0), 3072);
         assert_eq!(width_for(3840, 1000.0), 2000);
         assert_eq!(width_for(3840, 640.4), 1281);
         assert!(width_for(3840, 0.0) >= 1);
-        // A picture stays from 1.5x to 2.5x the shown width; past that a new one is made.
-        assert!(keeps(2000, 1000.0) && keeps(2000, 1333.0) && keeps(2000, 800.0));
-        assert!(!keeps(2000, 1400.0) && !keeps(2000, 790.0));
+        // A picture stays from 1.8x to 2.2x the shown width; past that a new one is made, a tenth or so finer or
+        // coarser.
+        assert!(keeps(2000, 1000.0) && keeps(2000, 1110.0) && keeps(2000, 910.0));
+        assert!(!keeps(2000, 1120.0) && !keeps(2000, 900.0));
         // Close up the full capture stays (width_for asks for it again).
         assert_eq!(width_for(3840, 2500.0), 3840);
     }
