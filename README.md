@@ -1,4 +1,7 @@
-<img src="packaging/brand/wristxr-mark.svg" width="72" alt="WristXR logo">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="packaging/brand/wristxr-mark.svg">
+  <img src="packaging/brand/wristxr-mark-ink.svg" width="72" alt="WristXR logo">
+</picture>
 
 # WristXR: free VR desktop overlay with wrist clock for SteamVR
 
