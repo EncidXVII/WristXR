@@ -53,6 +53,8 @@ const BEAT_STEP: Duration = Duration::from_millis(22);
 /// A screen goes to a smaller picture only after wanting it this long (a larger one comes at once), so walking
 /// about or a panel in hand never flips it back and forth.
 const COARSER_AFTER: Duration = Duration::from_millis(600);
+/// SteamVR's texture bounds for a whole texture: u and v, min then max.
+const FULL_TEXTURE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 
 /// GPU side of a panel: its texture and, for visible monitor panels, a live capture.
 struct Surface {
@@ -65,6 +67,8 @@ struct Surface {
     capture: Option<Capture>,
     rect: Option<PixelRect>,
     needs_submit: bool,
+    /// The part of `tex` SteamVR was last told to show (a screen's picture fills only part of it).
+    bounds: [f32; 4],
     /// Its `detail` holds a capture. Not after a new size until the first frame at it: meanwhile the last picture
     /// stays up, rather than an empty one.
     captured: bool,
@@ -127,6 +131,7 @@ fn surface(gpu: &Gpu, sharp: bool, panel: &Panel, monitors: &[Monitor]) -> Resul
         capture: None,
         rect: None,
         needs_submit: false,
+        bounds: FULL_TEXTURE,
         captured: false,
         dead: false,
     };
@@ -963,6 +968,8 @@ pub fn run() -> Result<(), String> {
         if let Some(px) = banner.render() {
             upload(px, Source::Banner, BANNER_SIZE.0, &mut surfaces);
         }
+        // A screen drew a new detail level this frame: SteamVR must not see it half drawn.
+        let mut wait_gpu = false;
         for p in &engine.panels {
             let world = p.world_pose(&poses);
             // Leaning into a screen fades it out rather than letting the near clip slice it.
@@ -1022,10 +1029,11 @@ pub fn run() -> Result<(), String> {
                 };
                 if switch {
                     s.coarser = None;
+                    // Same texture, new picture size: drawn now, its bounds told SteamVR with it.
                     d.set_width(&gpu, want).map_err(err)?;
                     if s.captured {
-                        s.tex = d.out.clone();
                         draw = true;
+                        wait_gpu = true;
                         s.needs_submit = true;
                     }
                 }
@@ -1036,6 +1044,9 @@ pub fn run() -> Result<(), String> {
         }
         timer.end(&gpu);
         gpu.flush();
+        if wait_gpu {
+            plat::finish(&gpu);
+        }
         for (id, w, h) in resized.drain(..) {
             if let Some(p) = engine.panels.iter_mut().find(|p| p.id == id) {
                 p.aspect = h as f32 / w as f32;
@@ -1043,10 +1054,20 @@ pub fn run() -> Result<(), String> {
             }
         }
         for p in &engine.panels {
-            if let Some(s) = surfaces.get_mut(&p.id)
-                && std::mem::take(&mut s.needs_submit)
-                && let Err(e) = plat::submit(&gpu, &mut vr, u64::from(p.id), &s.tex)
+            let Some(s) = surfaces.get_mut(&p.id) else { continue };
+            if !std::mem::take(&mut s.needs_submit) {
+                continue;
+            }
+            let key = u64::from(p.id);
+            if let Some(b) = s.detail.as_ref().map(Detail::bounds)
+                && b != s.bounds
             {
+                match vr.set_texture_bounds(key, b) {
+                    Ok(()) => s.bounds = b,
+                    Err(e) => tracing::warn!(%e, panel = p.id, "panel bounds rejected"),
+                }
+            }
+            if let Err(e) = plat::submit(&gpu, &mut vr, key, &s.tex) {
                 tracing::warn!(%e, panel = p.id, "panel texture rejected");
             }
         }

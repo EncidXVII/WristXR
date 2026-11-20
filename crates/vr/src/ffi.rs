@@ -54,6 +54,7 @@ pub mod overlay {
     pub const SET_OVERLAY_SORT_ORDER: usize = 20;
     pub const SET_OVERLAY_WIDTH_IN_METERS: usize = 22;
     pub const SET_OVERLAY_CURVATURE: usize = 24;
+    pub const SET_OVERLAY_TEXTURE_BOUNDS: usize = 30;
     pub const SET_OVERLAY_TRANSFORM_ABSOLUTE: usize = 33;
     pub const SET_OVERLAY_TRANSFORM_TRACKED_DEVICE_RELATIVE: usize = 35;
     pub const SHOW_OVERLAY: usize = 43;
@@ -337,6 +338,7 @@ mod tests {
             ("IVROverlay", "SetOverlaySortOrder", overlay::SET_OVERLAY_SORT_ORDER),
             ("IVROverlay", "SetOverlayWidthInMeters", overlay::SET_OVERLAY_WIDTH_IN_METERS),
             ("IVROverlay", "SetOverlayCurvature", overlay::SET_OVERLAY_CURVATURE),
+            ("IVROverlay", "SetOverlayTextureBounds", overlay::SET_OVERLAY_TEXTURE_BOUNDS),
             ("IVROverlay", "SetOverlayTransformAbsolute", overlay::SET_OVERLAY_TRANSFORM_ABSOLUTE),
             (
                 "IVROverlay",

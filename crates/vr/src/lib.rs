@@ -519,6 +519,14 @@ impl OpenVr {
         if e != 0 { Err(format!("SetOverlayTexture: EVROverlayError {e}")) } else { Ok(()) }
     }
 
+    /// The part of the overlay's texture SteamVR shows: u and v, min then max (0..1 each).
+    pub fn set_texture_bounds(&mut self, key: u64, [u_min, v_min, u_max, v_max]: [f32; 4]) -> Result<(), String> {
+        let p = self.overlays.get(&key).ok_or("no such overlay")?;
+        let b = [u_min, v_min, u_max, v_max];
+        let e = call!(self.overlay, overlay::SET_OVERLAY_TEXTURE_BOUNDS, fn(u64, *const [f32; 4]) -> i32, p.handle, &b);
+        if e != 0 { Err(format!("SetOverlayTextureBounds: EVROverlayError {e}")) } else { Ok(()) }
+    }
+
     /// Paces the loop to the compositor (returns at frame start or after `timeout_ms`).
     pub fn wait_frame(&self, timeout_ms: u32) {
         let e = call!(self.overlay, overlay::WAIT_FRAME_SYNC, fn(u32) -> i32, timeout_ms);

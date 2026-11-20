@@ -24,6 +24,11 @@ pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
     Gpu::new(vr.adapter_index()).map_err(|e| e.to_string())
 }
 
+/// Waits until the GPU has drawn everything queued (see `Gpu::finish`).
+pub fn finish(gpu: &Gpu) {
+    gpu.finish();
+}
+
 /// Hands a texture to an overlay. Call after `Gpu::flush`.
 pub fn submit(_gpu: &Gpu, vr: &mut OpenVr, key: u64, tex: &Tex) -> Result<(), String> {
     vr.set_texture_d3d11(key, wxr_gfx_d3d11::raw(tex))

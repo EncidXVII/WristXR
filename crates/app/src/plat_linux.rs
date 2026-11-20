@@ -20,6 +20,9 @@ pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
 }
 
 /// Hands a texture to an overlay. Call after `Gpu::flush`.
+/// Nothing to wait for: Linux screens never change detail level (see `Detail`).
+pub fn finish(_gpu: &Gpu) {}
+
 pub fn submit(gpu: &Gpu, vr: &mut OpenVr, key: u64, tex: &Tex) -> Result<(), String> {
     gpu.submit(vr, key, tex)
 }
@@ -88,6 +91,9 @@ impl Detail {
     }
     pub fn set_width(&mut self, _gpu: &Gpu, _width: u32) -> Result<(), String> {
         Ok(())
+    }
+    pub fn bounds(&self) -> [f32; 4] {
+        [0.0, 0.0, 1.0, 1.0]
     }
 }
 

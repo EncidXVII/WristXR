@@ -13,9 +13,10 @@ use windows::Win32::Foundation::{E_POINTER, HMODULE};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0};
 use windows::Win32::Graphics::Direct3D11::{
     D3D11_ASYNC_GETDATA_DONOTFLUSH, D3D11_BIND_SHADER_RESOURCE, D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT, D3D11_QUERY_DESC, D3D11_QUERY_TIMESTAMP, D3D11_QUERY_TIMESTAMP_DISJOINT,
-    D3D11_RESOURCE_MISC_SHARED, D3D11_SDK_VERSION, D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT,
-    D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Query, ID3D11Texture2D,
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT, D3D11_QUERY_DESC, D3D11_QUERY_EVENT, D3D11_QUERY_TIMESTAMP,
+    D3D11_QUERY_TIMESTAMP_DISJOINT, D3D11_RESOURCE_MISC_SHARED, D3D11_SDK_VERSION, D3D11_SUBRESOURCE_DATA,
+    D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11CreateDevice, ID3D11Device, ID3D11DeviceContext, ID3D11Query,
+    ID3D11Texture2D,
 };
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
 use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory1};
@@ -99,6 +100,34 @@ impl Gpu {
     pub fn flush(&self) {
         // SAFETY: immediate context owned by this device.
         unsafe { self.context.Flush() };
+    }
+
+    /// Waits (at most 50 ms) until the GPU has done everything queued so far: for the rare frame whose picture
+    /// SteamVR must not see half drawn.
+    pub fn finish(&self) {
+        let mut q = None;
+        // SAFETY: valid descriptor and out-param; the event query's data is one BOOL, written once it is done.
+        unsafe {
+            if self
+                .device
+                .CreateQuery(&D3D11_QUERY_DESC { Query: D3D11_QUERY_EVENT, MiscFlags: 0 }, Some(&mut q))
+                .is_err()
+            {
+                return;
+            }
+            let Some(q) = q else { return };
+            self.context.End(&q);
+            self.context.Flush();
+            let start = std::time::Instant::now();
+            let mut done = 0i32;
+            while start.elapsed() < std::time::Duration::from_millis(50) {
+                let _ = self.context.GetData(&q, Some((&raw mut done).cast()), size_of::<i32>() as u32, 0);
+                if done != 0 {
+                    return;
+                }
+                std::thread::yield_now();
+            }
+        }
     }
 }
 

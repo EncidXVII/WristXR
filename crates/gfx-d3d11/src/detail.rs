@@ -18,7 +18,7 @@ use windows::Win32::Foundation::E_POINTER;
 use windows::Win32::Graphics::Direct3D::Fxc::D3DCompile;
 use windows::Win32::Graphics::Direct3D::{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST, ID3DBlob};
 use windows::Win32::Graphics::Direct3D11::{
-    D3D11_BIND_CONSTANT_BUFFER, D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_BUFFER_DESC,
+    D3D11_BIND_CONSTANT_BUFFER, D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_BOX, D3D11_BUFFER_DESC,
     D3D11_COMPARISON_NEVER, D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_RESOURCE_MISC_GENERATE_MIPS,
     D3D11_RESOURCE_MISC_SHARED, D3D11_SAMPLER_DESC, D3D11_SUBRESOURCE_DATA, D3D11_TEXTURE_ADDRESS_CLAMP,
     D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, D3D11_VIEWPORT, ID3D11Buffer, ID3D11PixelShader, ID3D11RenderTargetView,
@@ -257,11 +257,12 @@ pub struct Detail {
     srv: ID3D11ShaderResourceView,
     pub w: u32,
     pub h: u32,
-    /// The overlay's texture, `width` wide.
+    /// The overlay's texture, the capture's size for good: the picture fills its top-left `width` x `out_h`
+    /// (`bounds`), so a new width never hands SteamVR a new texture (it showed one as a blink).
     pub out: ID3D11Texture2D,
     rtv: ID3D11RenderTargetView,
     pub width: u32,
-    out_h: u32,
+    pub out_h: u32,
     /// Set when `width` is below the capture's: the picture goes through the resample.
     across: Option<Across>,
     /// The mip chain is older than the capture (rebuilt by the next draw that reads it).
@@ -409,6 +410,19 @@ impl Sharpen {
                 let (lw, lh) = (level_size(d.w, a.level), level_size(d.h, a.level));
                 self.resample(gpu, &d.srv, a.level, (lw, lh), &a.rtv, (d.width, lh), false);
                 self.resample(gpu, &a.srv, 0, (d.width, lh), &d.rtv, (d.width, d.out_h), true);
+                // SteamVR's bilinear sample at the picture's right and bottom edge reaches one texel past it: that
+                // texel repeats the edge, as a texture's own edge would.
+                let copy = |(x, y): (u32, u32), (left, top, right, bottom): (u32, u32, u32, u32)| {
+                    let b = D3D11_BOX { left, top, front: 0, right, bottom, back: 1 };
+                    // SAFETY: both regions lie inside the texture and do not overlap.
+                    unsafe { gpu.context.CopySubresourceRegion(&d.out, 0, x, y, 0, &d.out, 0, Some(&b)) };
+                };
+                if d.width < d.w {
+                    copy((d.width, 0), (d.width - 1, 0, d.width, d.out_h));
+                }
+                if d.out_h < d.h {
+                    copy((0, d.out_h), (0, d.out_h - 1, (d.width + 1).min(d.w), d.out_h));
+                }
             }
             None => {
                 let mut p = [0u8; 16];
@@ -426,37 +440,34 @@ impl Detail {
     pub fn new(gpu: &Gpu, w: u32, h: u32, width: u32) -> Result<Self> {
         let src = texture(gpu, w, h, true, false)?;
         let srv = srv(gpu, &src)?;
-        let (out, rtv, width, out_h, across) = Self::output(gpu, w, h, width)?;
+        let out = texture(gpu, w, h, false, true)?;
+        let rtv = rtv(gpu, &out)?;
+        let (width, out_h, across) = Self::picture(gpu, w, h, width)?;
         Ok(Self { src, srv, w, h, out, rtv, width, out_h, across, mips_stale: Cell::new(true) })
     }
 
-    #[allow(clippy::type_complexity)]
-    fn output(
-        gpu: &Gpu,
-        w: u32,
-        h: u32,
-        width: u32,
-    ) -> Result<(ID3D11Texture2D, ID3D11RenderTargetView, u32, u32, Option<Across>)> {
+    /// The picture's size, and the resample's half-done texture when it goes through one.
+    fn picture(gpu: &Gpu, w: u32, h: u32, width: u32) -> Result<(u32, u32, Option<Across>)> {
         let width = width.clamp(1, w.max(1));
         if width >= w {
-            let out = texture(gpu, w, h, false, true)?;
-            let rtv = rtv(gpu, &out)?;
-            return Ok((out, rtv, w, h, None));
+            return Ok((w, h, None));
         }
         let out_h = ((width as u64 * h as u64).div_ceil(w as u64) as u32).max(1);
         let level = source_level(w, width);
         let mid = texture(gpu, width, level_size(h, level), false, false)?;
-        let across = Across { level, rtv: rtv(gpu, &mid)?, srv: srv(gpu, &mid)? };
-        let out = texture(gpu, width, out_h, false, true)?;
-        let rtv = rtv(gpu, &out)?;
-        Ok((out, rtv, width, out_h, Some(across)))
+        Ok((width, out_h, Some(Across { level, rtv: rtv(gpu, &mid)?, srv: srv(gpu, &mid)? })))
     }
 
-    /// Shows the screen `width` wide from now on: a new overlay texture, to draw before handing it to SteamVR.
+    /// Shows the screen `width` wide from now on, in the same overlay texture: draw, then hand SteamVR the new
+    /// `bounds`.
     pub fn set_width(&mut self, gpu: &Gpu, width: u32) -> Result<()> {
-        let (out, rtv, width, out_h, across) = Self::output(gpu, self.w, self.h, width)?;
-        (self.out, self.rtv, self.width, self.out_h, self.across) = (out, rtv, width, out_h, across);
+        (self.width, self.out_h, self.across) = Self::picture(gpu, self.w, self.h, width)?;
         Ok(())
+    }
+
+    /// The part of `out` the picture fills, as SteamVR's texture bounds: u and v, min then max.
+    pub fn bounds(&self) -> [f32; 4] {
+        [0.0, 0.0, self.width as f32 / self.w as f32, self.out_h as f32 / self.h as f32]
     }
 }
 
@@ -514,11 +525,12 @@ mod tests {
         };
         let mut staging = None;
         let mut px = vec![0u8; (w * h * 4) as usize];
-        // SAFETY: test-only readback of a same-size texture; the map covers h rows of RowPitch bytes.
+        // SAFETY: test-only readback of a texture's top-left w x h; the map covers h rows of RowPitch bytes.
         unsafe {
             gpu.device.CreateTexture2D(&desc, None, Some(&mut staging)).expect("staging");
             let staging = staging.expect("staging");
-            gpu.context.CopyResource(&staging, tex);
+            let b = D3D11_BOX { left: 0, top: 0, front: 0, right: w, bottom: h, back: 1 };
+            gpu.context.CopySubresourceRegion(&staging, 0, 0, 0, 0, tex, 0, Some(&b));
             let mut m = Default::default();
             gpu.context.Map(&staging, 0, D3D11_MAP_READ, 0, Some(&mut m)).expect("map");
             for y in 0..h as usize {
@@ -546,6 +558,34 @@ mod tests {
         for p in read(&gpu, &d.out, d.width, d.out_h).chunks(4) {
             assert!((p[0] as i32 - 200).abs() <= 2, "the capture, not a stale level: {p:?}");
         }
+    }
+
+    #[test]
+    fn a_new_detail_level_keeps_the_texture_and_says_which_part_it_fills() {
+        let Ok(gpu) = Gpu::new(None) else { return };
+        let pass = Sharpen::new(&gpu).expect("shaders compile");
+        let (w, h) = (96u32, 48u32);
+        let d = &mut Detail::new(&gpu, w, h, w).expect("detail");
+        let first = windows::core::Interface::as_raw(&d.out);
+        assert_eq!(d.bounds(), [0.0, 0.0, 1.0, 1.0]);
+        gpu.update(&d.src, &[90u8, 90, 90, 255].repeat((w * h) as usize), w);
+        pass.new_frame(&gpu, d);
+        d.set_width(&gpu, 24).expect("narrower");
+        pass.draw(&gpu, d);
+        assert_eq!(
+            windows::core::Interface::as_raw(&d.out),
+            first,
+            "SteamVR keeps the texture it has (a new one showed as a blink)"
+        );
+        assert_eq!(d.bounds(), [0.0, 0.0, 0.25, 0.25]);
+        // The texel past the picture's right and bottom edge repeats it, for SteamVR's bilinear sample there.
+        let px = read(&gpu, &d.out, d.width + 1, d.out_h + 1);
+        let at = |x: u32, y: u32| px[((y * (d.width + 1) + x) * 4) as usize];
+        assert_eq!(
+            (at(d.width, 3), at(5, d.out_h), at(d.width, d.out_h)),
+            (at(d.width - 1, 3), at(5, d.out_h - 1), 90)
+        );
+        gpu.finish();
     }
 
     #[test]
