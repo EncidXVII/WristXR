@@ -7,7 +7,7 @@
 
 mod detail;
 
-pub use detail::{Detail, SHARPEN, Sharpen, close_enough, width_for};
+pub use detail::{Detail, SHARPEN, Sharpen, keeps, width_for};
 use std::ffi::c_void;
 use windows::Win32::Foundation::{E_POINTER, HMODULE};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0};

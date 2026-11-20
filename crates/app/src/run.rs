@@ -5,9 +5,7 @@
 //! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
 //! X11 or the Wayland portal on Linux.
 use crate::bindings::APP_KEY;
-use crate::plat::{
-    self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, close_enough, width_for,
-};
+use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, keeps, width_for};
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use std::collections::HashMap;
@@ -999,20 +997,21 @@ pub fn run() -> Result<(), String> {
                 }
                 _ => {}
             }
-            // The width its size in view needs, exactly: a larger picture at once, a smaller one once it has stayed
-            // wanted a moment; within a few percent the picture stays.
+            // A new picture only once the one it has is too coarse (at once) or needlessly fine (once that has lasted
+            // a moment) for its size in view.
             if let (Some(d), Some(sh), Some(ppr)) = (&mut s.detail, &sharpen, ppr)
                 && p.shown()
             {
                 let distance = (world.pos - head_now.pos).length().max(0.1);
-                let want = width_for(d.w, p.width_m / distance * ppr);
-                let switch = if close_enough(d.width, want) {
+                let needed = p.width_m / distance * ppr;
+                let want = width_for(d.w, needed);
+                let switch = if want == d.width || keeps(d.width, needed) {
                     s.coarser = None;
                     false
                 } else if want > d.width {
                     true
                 } else {
-                    // Smaller by more than the margin: once it has stayed so a moment, at the width wanted then.
+                    // Needlessly fine: once it has stayed so a moment, at the width wanted then.
                     s.coarser.get_or_insert((want, Instant::now())).1.elapsed() >= COARSER_AFTER
                 };
                 if switch {

@@ -8,7 +8,7 @@ use wxr_core::panel::PixelRect;
 use wxr_vr::OpenVr;
 
 pub use wxr_capture_win::{Frame, Monitor};
-pub use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, close_enough, width_for};
+pub use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, keeps, width_for};
 pub use wxr_input_win::{
     Injector, admin_window_at, caps_lock, key_char, layout_id, layout_name, layouts, next_layout, select_layout,
 };

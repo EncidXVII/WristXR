@@ -6,10 +6,11 @@
 //! an overlay bilinearly, without mipmaps, so text would shimmer and smear. So the overlay gets a picture already at
 //! about the size it is shown:
 //!
-//! - Shrunk by 2x or more: the capture's mip chain, then a Kaiser-windowed sinc (a proper low-pass, as SimulaVR
-//!   filters its windows) from the nearest level straight to the shown width. SteamVR is left a near 1:1 sample,
-//!   letters keep smooth edges, and there is no sharpen (so no halos). Reading a mip level, not the full capture,
-//!   keeps it about as cheap as plain mipmaps.
+//! - Shrunk by 2.5x or more: the capture's mip chain, then a Kaiser-windowed sinc (a proper low-pass, as SimulaVR
+//!   filters its windows) from the nearest level straight to twice the shown width. SteamVR samples the overlay
+//!   twice more (into the eye view, then for the lens), which from a picture exactly the shown width would take
+//!   about a quarter of small text's detail; from twice it keeps nearly all of it. Letters keep smooth edges and
+//!   there is no sharpen (so no halos).
 //! - Shrunk less than that (close up): the capture as it is, with a light sharpen that offsets SteamVR's resample.
 use crate::Gpu;
 use windows::Win32::Foundation::E_POINTER;
@@ -28,11 +29,14 @@ use windows::core::{Error, PCSTR, Result, s};
 /// Close up: the picture plus this share of its difference from its four neighbours' average. Light, so edges firm
 /// up without halos.
 pub const SHARPEN: f32 = 0.2;
-/// Shrunk by at least this much, a screen goes through the Kaiser resample; less, it is shown as captured.
-const RESAMPLE_FROM: f32 = 2.0;
-/// A picture is kept while the width its screen needs stays within this share of it, so walking about does not
-/// make a new texture every frame; past it, the new one is made at exactly the needed width.
-const KEEP_WITHIN: f32 = 0.04;
+/// Shrunk by at least this much, a screen goes through the Kaiser resample; less, it is shown as captured (the top of
+/// `KEEP`, so the capture as it is never holds more than a resampled picture would).
+const RESAMPLE_FROM: f32 = 2.5;
+/// Further off, the picture is this many times the width the screen is shown at.
+const MARGIN: f32 = 2.0;
+/// A picture is kept while it is this many times the shown width (a new one, at `MARGIN`, past either end), so
+/// resizing a screen or walking about seldom makes a new texture, and a shrinking screen keeps its detail longer.
+const KEEP: std::ops::RangeInclusive<f32> = 1.5..=2.5;
 /// Lobes of the windowed sinc on each side, and the Kaiser window's shape (higher is smoother, with less ringing).
 const KAISER_LOBES: f32 = 2.0;
 const KAISER_BETA: f32 = 4.0;
@@ -97,19 +101,19 @@ float4 ps(V i) : SV_Target {
 ";
 
 /// The width to show a `src_w` pixel wide picture at when it spans `needed` headset pixels: the full width close up
-/// (shrunk less than `RESAMPLE_FROM`), otherwise exactly `needed`, so SteamVR is left a 1:1 sample. Never more than
-/// half the capture, so the resample always reads a mip level, never the full capture.
+/// (shrunk less than `RESAMPLE_FROM`), otherwise `MARGIN` times `needed`.
 pub fn width_for(src_w: u32, needed: f32) -> u32 {
     let needed = needed.max(1.0);
     if needed * RESAMPLE_FROM > src_w as f32 {
         return src_w;
     }
-    (needed.round() as u32).clamp(1, (src_w / 2).max(1))
+    ((needed * MARGIN).round() as u32).clamp(1, src_w.max(1))
 }
 
-/// True while a picture `current` wide is still right for a screen that needs `want`: keep it, no new texture.
-pub fn close_enough(current: u32, want: u32) -> bool {
-    (want as f32 - current as f32).abs() <= current as f32 * KEEP_WITHIN
+/// True while a picture `current` wide still suits a screen spanning `needed` headset pixels: keep it, no new
+/// texture.
+pub fn keeps(current: u32, needed: f32) -> bool {
+    KEEP.contains(&(current as f32 / needed.max(1.0)))
 }
 
 /// The mip level the resample reads for an output `out_w` wide: the smallest level still at least that wide, so it
@@ -456,18 +460,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn close_up_keeps_the_capture_and_further_off_gets_exactly_the_shown_width() {
-        // Shrunk less than 2x: as captured.
+    fn close_up_keeps_the_capture_and_further_off_gets_twice_the_shown_width() {
+        // Shrunk less than 2.5x: as captured.
         assert_eq!(width_for(3840, 3000.0), 3840);
-        assert_eq!(width_for(3840, 1921.0), 3840);
-        // Further: the shown width, never more than half the capture.
-        assert_eq!(width_for(3840, 1000.0), 1000);
-        assert_eq!(width_for(3840, 640.4), 640);
-        assert_eq!(width_for(3840, 1920.0), 1920);
+        assert_eq!(width_for(3840, 1537.0), 3840);
+        // Further: twice the shown width.
+        assert_eq!(width_for(3840, 1536.0), 3072);
+        assert_eq!(width_for(3840, 1000.0), 2000);
+        assert_eq!(width_for(3840, 640.4), 1281);
         assert!(width_for(3840, 0.0) >= 1);
-        // A small move keeps the picture; a bigger one makes a new one.
-        assert!(close_enough(1000, 1030) && close_enough(1000, 970));
-        assert!(!close_enough(1000, 1050) && !close_enough(1000, 950));
+        // A picture stays from 1.5x to 2.5x the shown width; past that a new one is made.
+        assert!(keeps(2000, 1000.0) && keeps(2000, 1333.0) && keeps(2000, 800.0));
+        assert!(!keeps(2000, 1400.0) && !keeps(2000, 790.0));
+        // Close up the full capture stays (width_for asks for it again).
+        assert_eq!(width_for(3840, 2500.0), 3840);
     }
 
     #[test]
