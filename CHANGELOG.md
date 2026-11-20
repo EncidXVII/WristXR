@@ -13,8 +13,9 @@ First public early-access release (Windows).
   and far distances. Screens shrunk 2.5x or more are resampled with a Kaiser-windowed filter (as SimulaVR filters
   its windows) from the nearest of a set of smaller copies, which keeps letter edges smooth with no sharpening
   halos; close ones get a light sharpen. A picture is kept until it is a quarter too coarse or too fine,
-  and each screen keeps one texture for good (a new detail level fills part of it), so moving or resizing a
-  screen never makes it blink. Under 0.2 ms of GPU per captured frame.
+  and each screen keeps one texture for good, with two picture slots: a new detail level is drawn into the
+  slot SteamVR is not showing, then shown, so moving or resizing a screen never blinks or flashes a wrong
+  picture. Under 0.2 ms of GPU per captured frame.
 - The open watch stays open 2.5 seconds after the laser leaves it (was 1.5).
 - Pointing at a panel takes from the game only the controls that do something there. The stick is taken only over
   a screen or window (it scrolls) or while holding a panel; A/X only over a screen or window; the menu button

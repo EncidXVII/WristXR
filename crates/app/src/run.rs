@@ -1053,22 +1053,34 @@ pub fn run() -> Result<(), String> {
                 dirty = Some(Instant::now());
             }
         }
+        // A screen's new detail level sits in the slot SteamVR is not showing: the texture first, then, with the GPU
+        // done with it, the bounds that point there. Either order SteamVR takes them in shows a whole picture.
+        let mut moved = Vec::new();
         for p in &engine.panels {
             let Some(s) = surfaces.get_mut(&p.id) else { continue };
             if !std::mem::take(&mut s.needs_submit) {
                 continue;
             }
-            let key = u64::from(p.id);
+            if let Err(e) = plat::submit(&gpu, &mut vr, u64::from(p.id), &s.tex) {
+                tracing::warn!(%e, panel = p.id, "panel texture rejected");
+            }
             if let Some(b) = s.detail.as_ref().map(Detail::bounds)
                 && b != s.bounds
             {
-                match vr.set_texture_bounds(key, b) {
-                    Ok(()) => s.bounds = b,
-                    Err(e) => tracing::warn!(%e, panel = p.id, "panel bounds rejected"),
-                }
+                moved.push((p.id, b));
             }
-            if let Err(e) = plat::submit(&gpu, &mut vr, key, &s.tex) {
-                tracing::warn!(%e, panel = p.id, "panel texture rejected");
+        }
+        if !moved.is_empty() {
+            plat::finish(&gpu);
+        }
+        for (id, b) in moved {
+            match vr.set_texture_bounds(u64::from(id), b) {
+                Ok(()) => {
+                    if let Some(s) = surfaces.get_mut(&id) {
+                        s.bounds = b;
+                    }
+                }
+                Err(e) => tracing::warn!(%e, panel = id, "panel bounds rejected"),
             }
         }
 

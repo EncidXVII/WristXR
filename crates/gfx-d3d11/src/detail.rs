@@ -72,7 +72,7 @@ const KAISER_SHADER: &str = r"
 Texture2D src : register(t0);
 Texture2D<float> weights : register(t1);
 SamplerState lin : register(s0);
-cbuffer K : register(b0) { float scale; float lobes; float axis; float pad0; int2 size; int level; int pad1; };
+cbuffer K : register(b0) { float scale; float lobes; float axis; float pad0; int2 size; int level; int top; };
 struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 V vs(uint id : SV_VertexID) {
     V o;
@@ -82,7 +82,7 @@ V vs(uint id : SV_VertexID) {
     return o;
 }
 float4 ps(V i) : SV_Target {
-    int2 p = int2(i.pos.xy);
+    int2 p = int2(i.pos.xy) - int2(0, top);
     float support = lobes * max(scale, 1.0);
     float center = ((axis < 0.5) ? (p.x + 0.5) : (p.y + 0.5)) * scale;
     int lo = (int)floor(center - support);
@@ -257,12 +257,14 @@ pub struct Detail {
     srv: ID3D11ShaderResourceView,
     pub w: u32,
     pub h: u32,
-    /// The overlay's texture, the capture's size for good: the picture fills its top-left `width` x `out_h`
-    /// (`bounds`), so a new width never hands SteamVR a new texture (it showed one as a blink).
+    /// The overlay's texture, for good (a new one showed as a blink): two slots the capture's size, one above the
+    /// other. The picture fills the top-left `width` x `out_h` of slot `top` (0 or `h`), and SteamVR is told that
+    /// part (`bounds`). A new width goes into the other slot, so the one SteamVR shows stays whole until it hears.
     pub out: ID3D11Texture2D,
     rtv: ID3D11RenderTargetView,
     pub width: u32,
     pub out_h: u32,
+    top: u32,
     /// Set when `width` is below the capture's: the picture goes through the resample.
     across: Option<Across>,
     /// The mip chain is older than the capture (rebuilt by the next draw that reads it).
@@ -348,6 +350,7 @@ impl Sharpen {
         from: &ID3D11ShaderResourceView,
         to: &ID3D11RenderTargetView,
         size: (u32, u32),
+        top: u32,
     ) {
         let c = &gpu.context;
         // SAFETY: every bound object belongs to this device; `constants` matches its buffer's size; the views are
@@ -364,7 +367,7 @@ impl Sharpen {
             c.OMSetRenderTargets(Some(&[Some(to.clone())]), None);
             c.RSSetViewports(Some(&[D3D11_VIEWPORT {
                 TopLeftX: 0.0,
-                TopLeftY: 0.0,
+                TopLeftY: top as f32,
                 Width: size.0 as f32,
                 Height: size.1 as f32,
                 MinDepth: 0.0,
@@ -376,7 +379,7 @@ impl Sharpen {
         }
     }
 
-    /// One axis of the resample: `from` (mip `level`, `size` pixels) into `to`, `out` pixels.
+    /// One axis of the resample: `from` (mip `level`, `size` pixels) into `to`, `out` pixels from row `top`.
     #[allow(clippy::too_many_arguments)]
     fn resample(
         &self,
@@ -386,6 +389,7 @@ impl Sharpen {
         size: (u32, u32),
         to: &ID3D11RenderTargetView,
         out: (u32, u32),
+        top: u32,
         down: bool,
     ) {
         let scale = if down { size.1 as f32 / out.1 as f32 } else { size.0 as f32 / out.0 as f32 };
@@ -393,10 +397,10 @@ impl Sharpen {
         for (i, v) in [scale, KAISER_LOBES, f32::from(u8::from(down)), 0.0].iter().enumerate() {
             k[i * 4..i * 4 + 4].copy_from_slice(&v.to_ne_bytes());
         }
-        for (i, v) in [size.0 as i32, size.1 as i32, level as i32, 0].iter().enumerate() {
+        for (i, v) in [size.0 as i32, size.1 as i32, level as i32, top as i32].iter().enumerate() {
             k[16 + i * 4..20 + i * 4].copy_from_slice(&v.to_ne_bytes());
         }
-        self.run(gpu, &self.kaiser, &self.kaiser_params, &k, from, to, out);
+        self.run(gpu, &self.kaiser, &self.kaiser_params, &k, from, to, out, top);
     }
 
     /// Draws `d.src` into `d.out`: resampled to `d.width`, or close up, sharpened as it is.
@@ -408,20 +412,21 @@ impl Sharpen {
                     unsafe { gpu.context.GenerateMips(&d.srv) };
                 }
                 let (lw, lh) = (level_size(d.w, a.level), level_size(d.h, a.level));
-                self.resample(gpu, &d.srv, a.level, (lw, lh), &a.rtv, (d.width, lh), false);
-                self.resample(gpu, &a.srv, 0, (d.width, lh), &d.rtv, (d.width, d.out_h), true);
+                self.resample(gpu, &d.srv, a.level, (lw, lh), &a.rtv, (d.width, lh), 0, false);
+                self.resample(gpu, &a.srv, 0, (d.width, lh), &d.rtv, (d.width, d.out_h), d.top, true);
                 // SteamVR's bilinear sample at the picture's right and bottom edge reaches one texel past it: that
                 // texel repeats the edge, as a texture's own edge would.
                 let copy = |(x, y): (u32, u32), (left, top, right, bottom): (u32, u32, u32, u32)| {
                     let b = D3D11_BOX { left, top, front: 0, right, bottom, back: 1 };
-                    // SAFETY: both regions lie inside the texture and do not overlap.
+                    // SAFETY: both regions lie inside the picture's slot and do not overlap.
                     unsafe { gpu.context.CopySubresourceRegion(&d.out, 0, x, y, 0, &d.out, 0, Some(&b)) };
                 };
+                let (t, bottom) = (d.top, d.top + d.out_h);
                 if d.width < d.w {
-                    copy((d.width, 0), (d.width - 1, 0, d.width, d.out_h));
+                    copy((d.width, t), (d.width - 1, t, d.width, bottom));
                 }
                 if d.out_h < d.h {
-                    copy((0, d.out_h), (0, d.out_h - 1, (d.width + 1).min(d.w), d.out_h));
+                    copy((0, bottom), (0, bottom - 1, (d.width + 1).min(d.w), bottom));
                 }
             }
             None => {
@@ -429,7 +434,7 @@ impl Sharpen {
                 for (i, v) in [0.0, SHARPEN, 1.0 / d.w as f32, 1.0 / d.h as f32].iter().enumerate() {
                     p[i * 4..i * 4 + 4].copy_from_slice(&v.to_ne_bytes());
                 }
-                self.run(gpu, &self.sharpen, &self.sharpen_params, &p, &d.srv, &d.rtv, (d.w, d.h));
+                self.run(gpu, &self.sharpen, &self.sharpen_params, &p, &d.srv, &d.rtv, (d.w, d.h), d.top);
             }
         }
     }
@@ -440,10 +445,10 @@ impl Detail {
     pub fn new(gpu: &Gpu, w: u32, h: u32, width: u32) -> Result<Self> {
         let src = texture(gpu, w, h, true, false)?;
         let srv = srv(gpu, &src)?;
-        let out = texture(gpu, w, h, false, true)?;
+        let out = texture(gpu, w, h * 2, false, true)?;
         let rtv = rtv(gpu, &out)?;
         let (width, out_h, across) = Self::picture(gpu, w, h, width)?;
-        Ok(Self { src, srv, w, h, out, rtv, width, out_h, across, mips_stale: Cell::new(true) })
+        Ok(Self { src, srv, w, h, out, rtv, width, out_h, top: 0, across, mips_stale: Cell::new(true) })
     }
 
     /// The picture's size, and the resample's half-done texture when it goes through one.
@@ -458,16 +463,18 @@ impl Detail {
         Ok((width, out_h, Some(Across { level, rtv: rtv(gpu, &mid)?, srv: srv(gpu, &mid)? })))
     }
 
-    /// Shows the screen `width` wide from now on, in the same overlay texture: draw, then hand SteamVR the new
-    /// `bounds`.
+    /// Shows the screen `width` wide from now on, in the other slot of the same texture. Draw it, hand SteamVR the
+    /// texture, and only once the GPU is done with both, the new `bounds`.
     pub fn set_width(&mut self, gpu: &Gpu, width: u32) -> Result<()> {
         (self.width, self.out_h, self.across) = Self::picture(gpu, self.w, self.h, width)?;
+        self.top = if self.top == 0 { self.h } else { 0 };
         Ok(())
     }
 
     /// The part of `out` the picture fills, as SteamVR's texture bounds: u and v, min then max.
     pub fn bounds(&self) -> [f32; 4] {
-        [0.0, 0.0, self.width as f32 / self.w as f32, self.out_h as f32 / self.h as f32]
+        let rows = (2 * self.h) as f32;
+        [0.0, self.top as f32 / rows, self.width as f32 / self.w as f32, (self.top + self.out_h) as f32 / rows]
     }
 }
 
@@ -510,6 +517,12 @@ mod tests {
     }
 
     /// Reads a texture back (BGRA rows).
+    /// The picture as SteamVR is told to show it: its slot's top-left `width` x `out_h`.
+    fn picture(gpu: &Gpu, d: &Detail) -> Vec<u8> {
+        let all = read(gpu, &d.out, d.width, d.top + d.out_h);
+        all[(d.top * d.width * 4) as usize..].to_vec()
+    }
+
     fn read(gpu: &Gpu, tex: &ID3D11Texture2D, w: u32, h: u32) -> Vec<u8> {
         use windows::Win32::Graphics::Direct3D11::{D3D11_CPU_ACCESS_READ, D3D11_MAP_READ, D3D11_USAGE_STAGING};
         let desc = D3D11_TEXTURE2D_DESC {
@@ -555,7 +568,7 @@ mod tests {
         pass.draw(&gpu, d);
         d.set_width(&gpu, 12).expect("narrower");
         pass.draw(&gpu, d);
-        for p in read(&gpu, &d.out, d.width, d.out_h).chunks(4) {
+        for p in picture(&gpu, d).chunks(4) {
             assert!((p[0] as i32 - 200).abs() <= 2, "the capture, not a stale level: {p:?}");
         }
     }
@@ -567,7 +580,7 @@ mod tests {
         let (w, h) = (96u32, 48u32);
         let d = &mut Detail::new(&gpu, w, h, w).expect("detail");
         let first = windows::core::Interface::as_raw(&d.out);
-        assert_eq!(d.bounds(), [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(d.bounds(), [0.0, 0.0, 1.0, 0.5]);
         gpu.update(&d.src, &[90u8, 90, 90, 255].repeat((w * h) as usize), w);
         pass.new_frame(&gpu, d);
         d.set_width(&gpu, 24).expect("narrower");
@@ -577,10 +590,11 @@ mod tests {
             first,
             "SteamVR keeps the texture it has (a new one showed as a blink)"
         );
-        assert_eq!(d.bounds(), [0.0, 0.0, 0.25, 0.25]);
+        // In the other slot: the one SteamVR showed is untouched until it hears the new bounds.
+        assert_eq!(d.bounds(), [0.0, 0.5, 0.25, 0.625]);
         // The texel past the picture's right and bottom edge repeats it, for SteamVR's bilinear sample there.
-        let px = read(&gpu, &d.out, d.width + 1, d.out_h + 1);
-        let at = |x: u32, y: u32| px[((y * (d.width + 1) + x) * 4) as usize];
+        let px = read(&gpu, &d.out, d.width + 1, h + d.out_h + 1);
+        let at = |x: u32, y: u32| px[(((h + y) * (d.width + 1) + x) * 4) as usize];
         assert_eq!(
             (at(d.width, 3), at(5, d.out_h), at(d.width, d.out_h)),
             (at(d.width - 1, 3), at(5, d.out_h - 1), 90)
@@ -605,7 +619,7 @@ mod tests {
         gpu.update(&d.src, &checker, w);
         pass.new_frame(&gpu, &d);
         pass.draw(&gpu, &d);
-        let px = read(&gpu, &d.out, 32, 16);
+        let px = picture(&gpu, &d);
         for p in px.chunks(4) {
             assert!((p[0] as i32 - 128).abs() <= 3 && p[3] == 255, "grey, opaque: {p:?}");
         }
@@ -628,7 +642,7 @@ mod tests {
             pass.new_frame(&gpu, &d);
             pass.draw(&gpu, &d);
             let name = format!("pass-{shown}-{}x{}.bgra", d.width, d.out_h);
-            std::fs::write(out.join(name), read(&gpu, &d.out, d.width, d.out_h)).expect("write");
+            std::fs::write(out.join(name), picture(&gpu, &d)).expect("write");
         }
     }
 
