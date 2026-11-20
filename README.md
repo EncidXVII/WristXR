@@ -20,8 +20,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 ![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
 
 > **Status: early access (0.1).** The Windows build works end to end with SteamVR. The Linux build (X11 and
-> Wayland) is new and not yet tested on hardware: reports welcome. Not yet tested on every headset: please send a
-> self-test report (below).
+> Wayland) is new and not yet tested on hardware, and not every headset has been tried. Linux testers and headset
+> self-test reports are what it needs most: see [Status and help wanted](#status-and-help-wanted).
 
 ## At a glance
 
@@ -33,6 +33,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 | **Headsets** | Anything on SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link, Virtual Desktop, Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame |
 | **Cost in a game** | Under 0.1 ms of GPU time per frame, shown live |
 | **Price** | Free. No account, no telemetry, no paid tier |
+| **Status** | Early access (0.1): Windows works end to end; Linux is new and needs testers; English only so far |
 | **Comes from** | XSOverlay, OVR Toolkit and Desktop+ users can switch in a minute: settings import and the same notification API |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
@@ -185,6 +186,21 @@ the worst case (60 fps capture):
 
 The same numbers are shown live in Setup and on the open watch, so you can check them on your own
 machine.
+
+## Status and help wanted
+
+WristXR is in early access (0.1). Where each part stands, and what moves it forward:
+
+| Area | Where it stands | What helps |
+|---|---|---|
+| **Windows** | Works end to end with SteamVR. This is the build it is developed and measured on | A [bug report](https://github.com/EncidXVII/WristXR/issues/new/choose) with `selftest-report.zip` when something is off |
+| **Linux (X11 and Wayland)** | New: written and compiled, not yet run on a Linux machine with a headset. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
+| **Headsets and controllers** | Default bindings for Valve Index, Meta Quest (Touch), HTC Vive, Windows Mixed Reality and Steam Frame controllers. Not every one has been tried on the real device | A self-test report from your headset, even when everything worked: say which headset, controllers and streaming method |
+| **Steam Frame** | Bindings and the Linux build are written for it; no reports yet | The "Steam Frame test report" issue template |
+| **Languages** | English only. Every string is in one file, `crates/ui/locales/en-US.ftl`; loading other languages is the next step | Open an issue to claim a language |
+| **Code signing** | Builds are not signed yet, so Windows SmartScreen warns on first run | Nothing: see the [code signing policy](docs/code-signing-policy.md) |
+
+How to send any of these: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## FAQ
 
