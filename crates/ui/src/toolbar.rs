@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Toolbar shown under the panel the laser points at: the panel's name, then grouped controls (lock and curve,
 //! size, opacity slider, Room / Hand / Head, reset, close). The app builds it with [`ToolbarLayout`], which places
 //! every control; this view only draws them and reports clicks and slider positions.

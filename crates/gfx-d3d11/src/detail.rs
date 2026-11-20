@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Screens at the detail the headset can show. A captured screen is usually shown much smaller than its pixel
 //! count (a 4K desktop a metre wide at arm's length spans perhaps a thousand headset pixels), and SteamVR samples
 //! an overlay bilinearly, without mipmaps, so text would shimmer and smear. So the overlay gets a picture already at
@@ -539,15 +542,15 @@ mod tests {
         }
     }
 
-    /// What the overlay gets for a picture (`DVR_TEXT_SRC`, BGRA, `DVR_TEXT_W` x `DVR_TEXT_H`) shown 1000 and 640
-    /// pixels wide, written to `DVR_TEXT_OUT`, for looking at side by side.
+    /// What the overlay gets for a picture (`WXR_TEXT_SRC`, BGRA, `WXR_TEXT_W` x `WXR_TEXT_H`) shown 1000 and 640
+    /// pixels wide, written to `WXR_TEXT_OUT`, for looking at side by side.
     #[test]
     #[ignore = "writes comparison images; run on demand"]
     fn text_through_the_pass() {
         let var = |k: &str| std::env::var(k).expect(k);
-        let (w, h): (u32, u32) = (var("DVR_TEXT_W").parse().expect("w"), var("DVR_TEXT_H").parse().expect("h"));
-        let px = std::fs::read(var("DVR_TEXT_SRC")).expect("source");
-        let out = std::path::PathBuf::from(var("DVR_TEXT_OUT"));
+        let (w, h): (u32, u32) = (var("WXR_TEXT_W").parse().expect("w"), var("WXR_TEXT_H").parse().expect("h"));
+        let px = std::fs::read(var("WXR_TEXT_SRC")).expect("source");
+        let out = std::path::PathBuf::from(var("WXR_TEXT_OUT"));
         let gpu = Gpu::new(None).expect("gpu");
         let pass = Sharpen::new(&gpu).expect("shaders");
         for shown in [1000u32, 640] {

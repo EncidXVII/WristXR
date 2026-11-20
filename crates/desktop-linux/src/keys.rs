@@ -1,5 +1,8 @@
-//! Keys: DesktopVR's set-1 scancodes to Linux evdev key codes, and what a key types on a US layout.
-use dvr_core::keyboard::EXT;
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Keys: WristXR's set-1 scancodes to Linux evdev key codes, and what a key types on a US layout.
+use wxr_core::keyboard::EXT;
 
 /// The evdev key code for a set-1 scancode. The main block is the same in both; extended keys differ.
 pub fn evdev(scancode: u16) -> Option<u16> {
@@ -93,7 +96,7 @@ pub fn us_char(scancode: u16, shift: bool, caps: bool) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dvr_core::keyboard::{DEL, ESC, LWIN, SPACE, UP};
+    use wxr_core::keyboard::{DEL, ESC, LWIN, SPACE, UP};
 
     #[test]
     fn scancodes_map_to_evdev() {

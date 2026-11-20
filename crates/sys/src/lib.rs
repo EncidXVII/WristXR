@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The operating system around the VR session: load and time for the watch, media and app notifications, one
 //! instance, dialogs. Windows (`win`) and Linux (`linux`) offer the same API.
 #![allow(unsafe_code)]

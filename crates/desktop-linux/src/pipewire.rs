@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! PipeWire, loaded at run time (`libpipewire-0.3.so.0`), so building needs no PipeWire headers and the app still
 //! runs on X11 machines without it. Only what screen capture needs: one connection on the portal's remote, and one
 //! stream per shared monitor or window that keeps the newest frame.
@@ -181,7 +184,7 @@ impl PipeWire {
         // SAFETY: PipeWire's documented start-up sequence; the remote fd is handed over (PipeWire closes it).
         unsafe {
             (lib.init)(std::ptr::null_mut(), std::ptr::null_mut());
-            let thread_loop = (lib.thread_loop_new)(c"dvr-capture".as_ptr(), std::ptr::null());
+            let thread_loop = (lib.thread_loop_new)(c"wxr-capture".as_ptr(), std::ptr::null());
             if thread_loop.is_null() {
                 return Err("pw_thread_loop_new failed".into());
             }
@@ -255,7 +258,7 @@ impl Stream {
             (pw.lib.thread_loop_lock)(pw.thread_loop);
             let props =
                 (pw.lib.properties_new_string)(c"media.type=Video media.category=Capture media.role=Screen".as_ptr());
-            let stream = (pw.lib.stream_new)(pw.core, c"DesktopVR".as_ptr(), props);
+            let stream = (pw.lib.stream_new)(pw.core, c"WristXR".as_ptr(), props);
             if stream.is_null() {
                 (pw.lib.thread_loop_unlock)(pw.thread_loop);
                 return Err("pw_stream_new failed".into());

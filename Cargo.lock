@@ -952,132 +952,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dvr-app"
-version = "0.1.0"
-dependencies = [
- "dvr-capture-win",
- "dvr-core",
- "dvr-desktop-linux",
- "dvr-gfx-d3d11",
- "dvr-gfx-vk",
- "dvr-input-win",
- "dvr-notify-api",
- "dvr-osc",
- "dvr-sys",
- "dvr-ui",
- "dvr-vr",
- "insta",
- "ksni",
- "png",
- "rosc",
- "serde",
- "serde_json",
- "tracing",
- "tray-icon",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "dvr-capture-win"
-version = "0.1.0"
-dependencies = [
- "dvr-core",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "dvr-core"
-version = "0.1.0"
-dependencies = [
- "directories",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "dvr-desktop-linux"
-version = "0.1.0"
-dependencies = [
- "ashpd",
- "dvr-core",
- "futures-lite",
- "libc",
- "tracing",
- "x11rb",
-]
-
-[[package]]
-name = "dvr-gfx-d3d11"
-version = "0.1.0"
-dependencies = [
- "dvr-core",
- "tracing",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "dvr-gfx-vk"
-version = "0.1.0"
-dependencies = [
- "ash",
- "dvr-core",
- "dvr-vr",
- "tracing",
-]
-
-[[package]]
-name = "dvr-input-win"
-version = "0.1.0"
-dependencies = [
- "dvr-core",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "dvr-notify-api"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
-name = "dvr-osc"
-version = "0.1.0"
-dependencies = [
- "rosc",
-]
-
-[[package]]
-name = "dvr-sys"
-version = "0.1.0"
-dependencies = [
- "libc",
- "windows 0.61.3",
- "zbus",
-]
-
-[[package]]
-name = "dvr-ui"
-version = "0.1.0"
-dependencies = [
- "dvr-core",
- "fluent",
- "slint",
-]
-
-[[package]]
-name = "dvr-vr"
-version = "0.1.0"
-dependencies = [
- "dvr-core",
- "serde_json",
- "tracing",
-]
-
-[[package]]
 name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5725,6 +5599,132 @@ name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
+
+[[package]]
+name = "wxr-app"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "ksni",
+ "png",
+ "rosc",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tray-icon",
+ "windows 0.61.3",
+ "wxr-capture-win",
+ "wxr-core",
+ "wxr-desktop-linux",
+ "wxr-gfx-d3d11",
+ "wxr-gfx-vk",
+ "wxr-input-win",
+ "wxr-notify-api",
+ "wxr-osc",
+ "wxr-sys",
+ "wxr-ui",
+ "wxr-vr",
+]
+
+[[package]]
+name = "wxr-capture-win"
+version = "0.1.0"
+dependencies = [
+ "windows 0.61.3",
+ "wxr-core",
+]
+
+[[package]]
+name = "wxr-core"
+version = "0.1.0"
+dependencies = [
+ "directories",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "wxr-desktop-linux"
+version = "0.1.0"
+dependencies = [
+ "ashpd",
+ "futures-lite",
+ "libc",
+ "tracing",
+ "wxr-core",
+ "x11rb",
+]
+
+[[package]]
+name = "wxr-gfx-d3d11"
+version = "0.1.0"
+dependencies = [
+ "tracing",
+ "windows 0.61.3",
+ "wxr-core",
+]
+
+[[package]]
+name = "wxr-gfx-vk"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "tracing",
+ "wxr-core",
+ "wxr-vr",
+]
+
+[[package]]
+name = "wxr-input-win"
+version = "0.1.0"
+dependencies = [
+ "windows 0.61.3",
+ "wxr-core",
+]
+
+[[package]]
+name = "wxr-notify-api"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "wxr-osc"
+version = "0.1.0"
+dependencies = [
+ "rosc",
+]
+
+[[package]]
+name = "wxr-sys"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "windows 0.61.3",
+ "zbus",
+]
+
+[[package]]
+name = "wxr-ui"
+version = "0.1.0"
+dependencies = [
+ "fluent",
+ "slint",
+ "wxr-core",
+]
+
+[[package]]
+name = "wxr-vr"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tracing",
+ "wxr-core",
+]
 
 [[package]]
 name = "x11rb"

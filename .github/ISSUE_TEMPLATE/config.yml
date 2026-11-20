@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or idea
-    url: https://github.com/EncidXVII/DesktopVR/discussions
+    url: https://github.com/EncidXVII/WristXR/discussions
     about: Ask questions and share setups in Discussions.
   - name: Security vulnerability
-    url: https://github.com/EncidXVII/DesktopVR/security/advisories/new
+    url: https://github.com/EncidXVII/WristXR/security/advisories/new
     about: Report privately, not as an issue.

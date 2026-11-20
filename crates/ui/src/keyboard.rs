@@ -1,8 +1,11 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! VR keyboard view: same toolkit and fonts as the menu (lowercase, Cyrillic, even sizes). Input stays in the core
 //! engine; this view only shows state: labels, lit keys (latched modifiers, held keys, Chat mode) and laser hover.
 use crate::{Canvas, ensure_platform};
-use dvr_core::keyboard::{ROW_UNITS, ROWS};
 use slint::{ComponentHandle, ModelRc, VecModel};
+use wxr_core::keyboard::{ROW_UNITS, ROWS};
 
 slint::slint! {
     import "../fonts/Barlow-Regular.ttf";
@@ -43,7 +46,7 @@ slint::slint! {
 pub const KEYBOARD_SIZE: (u32, u32) = (1500, 600);
 const UNIT: f32 = 100.0;
 
-/// What one key shows, in `dvr_core::keyboard::ROWS` order.
+/// What one key shows, in `wxr_core::keyboard::ROWS` order.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct KeyFace {
     pub label: String,

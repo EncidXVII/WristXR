@@ -1,26 +1,40 @@
-<img src="packaging/brand/desktopvr-mark.svg" width="72" alt="DesktopVR logo">
+<img src="packaging/brand/wristxr-mark.svg" width="72" alt="WristXR logo">
 
-# DesktopVR: free, open-source desktop overlay for SteamVR
+# WristXR: free VR desktop overlay with wrist clock for SteamVR
 
-[![CI](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/DesktopVR/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/EncidXVII/DesktopVR?include_prereleases&label=download)](https://github.com/EncidXVII/DesktopVR/releases/latest)
+[![CI](https://github.com/EncidXVII/WristXR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/WristXR/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/EncidXVII/WristXR?include_prereleases&label=download)](https://github.com/EncidXVII/WristXR/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
-**Use your Windows desktop in VR without taking the headset off.** DesktopVR is a lightweight SteamVR overlay:
+**Use your desktop in VR without taking the headset off.** WristXR is a free, open-source SteamVR desktop overlay
+for Windows and Linux:
 point at your screens and click, type on a two-hand VR keyboard, send messages to the VRChat chatbox, glance at
 your wrist for time, batteries and load, then get back to the game.
 
 It costs under **0.1 ms of GPU time per frame** and shows its own cost live. Everything stays out of your
 way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
 
-[**Download for Windows**](https://github.com/EncidXVII/DesktopVR/releases/latest) ·
-[Report a bug](https://github.com/EncidXVII/DesktopVR/issues/new/choose)
+[**Download for Windows and Linux**](https://github.com/EncidXVII/WristXR/releases/latest) ·
+[Report a bug](https://github.com/EncidXVII/WristXR/issues/new/choose)
 
-![DesktopVR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
+![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
 
 > **Status: early access (0.1).** The Windows build works end to end with SteamVR. The Linux build (X11 and
 > Wayland) is new and not yet tested on hardware: reports welcome. Not yet tested on every headset: please send a
 > self-test report (below).
+
+## At a glance
+
+| | |
+|---|---|
+| **What it is** | A SteamVR overlay that puts your desktop screens and windows in VR, with a wrist watch for the time, controller batteries, music, messages and frame rate |
+| **Use it for** | Using the desktop without taking the headset off, typing into VRChat, reading Discord messages in VR, checking battery and fps at a glance |
+| **Platforms** | Windows 10 and 11; Linux on X11 and Wayland (new, not yet tested on hardware) |
+| **Headsets** | Anything on SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link, Virtual Desktop, Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame |
+| **Cost in a game** | Under 0.1 ms of GPU time per frame, shown live |
+| **Price** | Free. No account, no telemetry, no paid tier |
+| **Comes from** | XSOverlay, OVR Toolkit and Desktop+ users can switch in a minute: settings import and the same notification API |
+| **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
 ## Features
 
@@ -74,24 +88,24 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 ## Install (3 steps)
 
 1. Have [SteamVR](https://store.steampowered.com/app/250820/SteamVR/) installed.
-2. [Download the latest release](https://github.com/EncidXVII/DesktopVR/releases/latest), unzip it and run
-   `DesktopVR.exe`. There's no installer and nothing else to set up.
+2. [Download the latest release](https://github.com/EncidXVII/WristXR/releases/latest), unzip it and run
+   `WristXR.exe`. There's no installer and nothing else to set up.
 3. Put on your headset and follow the 4-step first run (hand, main screen, keyboard test, tips). It takes
    under a minute.
 
 It starts with SteamVR from then on; untick **Start with SteamVR** in the tray icon to stop that.
 
-**Uninstall:** quit DesktopVR (tray icon > Quit), run `Uninstall DesktopVR.cmd` in its folder (or
-`DesktopVR.exe --uninstall`) and confirm. That takes it off SteamVR's list and deletes its settings and layout;
+**Uninstall:** quit WristXR (tray icon > Quit), run `Uninstall WristXR.cmd` in its folder (or
+`WristXR.exe --uninstall`) and confirm. That takes it off SteamVR's list and deletes its settings and layout;
 then delete the folder.
 
 ### Linux
 
-Unpack the Linux archive, run `./install.sh`, start SteamVR, then run `~/.local/share/desktopvr/desktopvr`. It
+Unpack the Linux archive, run `./install.sh`, start SteamVR, then run `~/.local/share/wristxr/wristxr`. It
 registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes it all.
 
 - **Wayland** (GNOME, KDE Plasma, and others with a desktop portal): the first run asks once, on the desktop, which
-  screens and windows to share and whether DesktopVR may use the keyboard and pointer. Take the headset off to
+  screens and windows to share and whether WristXR may use the keyboard and pointer. Take the headset off to
   answer; later runs remember it. Windows show as "Shared window 1, 2..." (Wayland gives no titles), and a window
   cannot be pulled out of a screen.
 - **X11**: everything works as on Windows, with no prompt.
@@ -102,7 +116,7 @@ registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes 
 
 ## Switching from XSOverlay, OVR Toolkit or Desktop+
 
-On first run DesktopVR reads your XSOverlay settings file (your own `overlaySettings.json`) and keeps your
+On first run WristXR reads your XSOverlay settings file (your own `overlaySettings.json`) and keeps your
 pointing hand, typing sounds, curved screens and default opacity. Nothing in XSOverlay is changed.
 
 | You did this before | Do this here |
@@ -135,7 +149,7 @@ Run one overlay at a time: two overlays fight over the same controller input and
   stays on that wrist and keeps its spot and tilt. Menu > Reset layout puts it back.
 - **Toolbar size**: - and + step through round sizes (1.0, 1.2, 1.5, 2.0 m...) and ease there.
 - **Setup > Controls** lists all of this in VR; Rebind buttons there opens SteamVR's binding screen for
-  DesktopVR, where every action can go on another button.
+  WristXR, where every action can go on another button.
 - **Point at a panel**: its toolbar appears underneath (name, lock, curve, free angle, size, opacity, Room / Hand /
   Head, reset, close). The keyboard's toolbar has your input languages and Put away.
 - **Left menu button**: double-tap to hide screens, windows and keyboard; again to bring them back, as arranged,
@@ -193,9 +207,9 @@ core. Hidden panels stop capturing entirely. Setup shows the real cost on your m
 
 ## Self-test and bug reports
 
-`DesktopVR.exe --selftest` runs the automatic checks on your machine and writes `selftest-report.zip` (results,
+`WristXR.exe --selftest` runs the automatic checks on your machine and writes `selftest-report.zip` (results,
 GPU model, monitor resolutions; no names, paths or identifiers). Attach it to a
-[bug report](https://github.com/EncidXVII/DesktopVR/issues/new/choose).
+[bug report](https://github.com/EncidXVII/WristXR/issues/new/choose).
 
 ## Privacy
 
@@ -205,13 +219,35 @@ on the watch; they are never stored on disk or sent anywhere. Switch it off in M
 
 ## Building from source
 
-Rust stable (1.85+). `cargo test --workspace`, `cargo run -p dvr-app -- --selftest`. Linux needs
+Rust stable (1.85+). `cargo test --workspace`, `cargo run -p wxr-app -- --selftest`. Linux needs
 `libfontconfig1-dev pkg-config`; Vulkan and PipeWire are loaded at run time, so their headers are not needed. Live checks against
-SteamVR's null driver: `harness/null-driver.ps1 target/release/dvr-app.exe --selftest --vr` (backs up and
+SteamVR's null driver: `harness/null-driver.ps1 target/release/wxr-app.exe --selftest --vr` (backs up and
 restores your SteamVR settings). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## License
+## More PC VR tools from the same author
 
-[GPL-3.0-or-later](LICENSE). Third-party licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-DesktopVR is not affiliated with Valve, VRChat, XSOverlay, OVR Toolkit or Desktop+; names are used only to
+Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working:
+
+| | |
+|---|---|
+| **WristXR (this one)** | VR desktop overlay with wrist clock |
+| **[PortXR](https://github.com/EncidXVII/PortXR)** | Play flat PC games in VR |
+| **[FoveaXR](https://github.com/EncidXVII/FoveaXR)** | Foveated rendering for any PC VR game |
+| **[SweatXR](https://github.com/EncidXVII/SweatXR)** | VR fitness and calorie tracker |
+
+## License and credit
+
+Copyright © 2026 [EncidXVII](https://github.com/EncidXVII). WristXR is free software under the [GNU General Public License, version 3 or later](LICENSE)
+(`GPL-3.0-or-later`), with the attribution and naming terms in [NOTICE](NOTICE).
+
+- **You may** use it for anything, read the code, change it and share it.
+- **If you share it, or anything built from its code,** you must publish your source under the same license, keep
+  the copyright lines and the NOTICE file, and say clearly that yours is a changed version.
+- **You may not** put its code in a closed-source product, remove the credit, or call a changed version "WristXR" or
+  use its logo: see [TRADEMARKS.md](TRADEMARKS.md).
+
+Third-party components and their licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). To cite WristXR:
+[CITATION.cff](CITATION.cff).
+
+WristXR is not affiliated with Valve, VRChat, XSOverlay, OVR Toolkit or Desktop+; names are used only to
 describe compatibility.

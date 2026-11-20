@@ -28,4 +28,4 @@ Toggle "With SteamVR" "" ""
 Toggle "Check updates" "" "" [on]
 Toggle "Curved" "" ""
 Action "Theme" "" "Lime ›"
-Danger "Quit DesktopVR" "" ""
+Danger "Quit WristXR" "" ""

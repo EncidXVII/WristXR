@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! VR UI: Slint components rendered offscreen with the software renderer, only when something changed.
 //! Strings come from Fluent (`locales/`), English shipped.
 
@@ -227,6 +230,8 @@ slint::slint! {
         in property <float> volume;
         in property <bool> muted;
         in property <string> volume-text;
+        // The song runs an hour or more.
+        in property <bool> long-times;
         // Top of what opens below the top row (the player, else the list).
         in property <int> body-y;
         in property <int> list-y;
@@ -256,6 +261,8 @@ slint::slint! {
         background: transparent;
 
         property <bool> compact: root.layout == 6;
+        // The seek bar's time columns: wider when the times carry hours (h:mm:ss).
+        property <length> time-w: root.long-times ? 100px : 64px;
         property <bool> big: root.layout == 4 || root.layout == 8;
         property <bool> tagged: root.layout == 3;
         property <bool> date-right: root.layout == 1 || root.layout == 2 || root.layout == 7 || root.layout == 8;
@@ -311,7 +318,11 @@ slint::slint! {
                     commands: r.arc; stroke: r.low ? #FF5A3C : Theme.accent; stroke-width: root.compact ? 5px : 8px;
                     fill: transparent;
                 }
-                Text { text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : r.dim ? #88888F : #F5F5F7; }
+                Text {
+                    text: r.label; font-size: 24px; font-weight: 700; color: r.low ? #FF5A3C : r.dim ? #88888F : #F5F5F7;
+                    // Three digits in the compact bar's small ring: drawn tighter, so they stay inside it.
+                    letter-spacing: root.compact && r.label == "100" ? -2px : 0px;
+                }
                 if r.tag != "" : Text {
                     x: 0px; y: 82px; width: parent.width; height: 28px; text: r.tag; font-size: 24px; color: #88888F;
                     horizontal-alignment: center;
@@ -382,7 +393,8 @@ slint::slint! {
                     Text {
                         text: root.strip-title; font-size: 24px; font-weight: root.strip == 2 ? 700 : 400;
                         color: root.strip == 3 ? #FF8A6E : #F5F5F7; vertical-alignment: center; overflow: elide;
-                        max-width: root.strip == 3 ? 10000px : 260px;
+                        // A message: the sender gets a third of the line, what they wrote the rest.
+                        max-width: root.strip == 3 ? 10000px : root.strip == 2 ? 170px : 260px;
                     }
                     if root.strip-text != "" : Text {
                         text: root.strip-text; font-size: 24px; color: #A8A8AF; vertical-alignment: center;
@@ -491,13 +503,13 @@ slint::slint! {
                     x: 104px; y: 52px; width: 414px; height: 32px; text: root.media-sub; font-size: 24px; color: #A8A8AF;
                     overflow: elide; vertical-alignment: center;
                 }
-                Text { x: 18px; y: 102px; width: 64px; height: 28px; text: root.position; font-size: 24px; color: #A8A8AF; }
+                Text { x: 18px; y: 102px; width: root.time-w; height: 28px; text: root.position; font-size: 24px; color: #A8A8AF; }
                 Text {
-                    x: 454px; y: 102px; width: 64px; height: 28px; text: root.duration; font-size: 24px; color: #A8A8AF;
-                    horizontal-alignment: right;
+                    x: 536px - 18px - root.time-w; y: 102px; width: root.time-w; height: 28px; text: root.duration; font-size: 24px;
+                    color: #A8A8AF; horizontal-alignment: right;
                 }
-                Rectangle {
-                    x: 94px; y: 112px; width: 348px; height: 8px; border-radius: 4px; background: #2A2A2E;
+                bar := Rectangle {
+                    x: 18px + root.time-w + 12px; y: 112px; width: 536px - 2 * self.x; height: 8px; border-radius: 4px; background: #2A2A2E;
                     Rectangle { x: 0px; width: parent.width * clamp(root.progress, 0, 1); height: 8px; border-radius: 4px; background: #F5F5F7; }
                     if root.can-seek : Rectangle {
                         x: parent.width * clamp(root.progress, 0, 1) - 10px; y: -6px; width: 20px; height: 20px;
@@ -505,8 +517,8 @@ slint::slint! {
                     }
                 }
                 TouchArea {
-                    x: 88px; y: 96px; width: 360px; height: 40px; enabled: root.can-seek;
-                    clicked => { root.seek((self.mouse-x - 6px) / 348px); }
+                    x: bar.x - 6px; y: 96px; width: bar.width + 12px; height: 40px; enabled: root.can-seek;
+                    clicked => { root.seek((self.mouse-x - 6px) / bar.width); }
                 }
                 Round {
                     x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
@@ -640,7 +652,7 @@ pub const WRIST_ADD_WINDOWS: usize = 4;
 /// Share of the headset's rate under which the Performance layout shows fps in red (a bar turns red above 90 %).
 const LOW_FPS: f32 = 0.9;
 
-pub use dvr_core::state::WatchLayout;
+pub use wxr_core::state::WatchLayout;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WristInput {
@@ -879,9 +891,10 @@ fn percent(v: Option<f32>) -> String {
     v.map_or_else(|| "–".to_owned(), |v| format!("{:.0}%", v * 100.0))
 }
 
-fn clock(s: f32) -> String {
+/// m:ss, or h:mm:ss when the song runs an hour or more (`hours`), so position and length read alike.
+fn clock(s: f32, hours: bool) -> String {
     let s = s.max(0.0) as u32;
-    format!("{}:{:02}", s / 60, s % 60)
+    if hours { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) }
 }
 
 /// SVG arc for a battery ring (radius 34 on an 80 grid), clockwise from the top.
@@ -1071,8 +1084,10 @@ impl Wrist {
         v.set_media_sub(sub.into());
         let can_seek = media.duration > 0.0;
         v.set_can_seek(can_seek);
-        v.set_position(if can_seek { clock(media.position).into() } else { Default::default() });
-        v.set_duration(if can_seek { clock(media.duration).into() } else { Default::default() });
+        let hours = media.duration >= 3600.0;
+        v.set_long_times(hours);
+        v.set_position(if can_seek { clock(media.position, hours).into() } else { Default::default() });
+        v.set_duration(if can_seek { clock(media.duration, hours).into() } else { Default::default() });
         v.set_progress(if can_seek { media.position / media.duration } else { 0.0 });
         v.set_shuffle(media.shuffle);
         let (volume, muted) = w.volume.unwrap_or((0.0, false));
@@ -1622,7 +1637,7 @@ mod a11y {
             assert!(c >= 4.5, "{what}: contrast {c:.2} < 4.5");
         }
         // Every theme accent works where lime does: as text on groups, rows and presses, and under dark text.
-        for a in dvr_core::state::Accent::ALL.map(dvr_core::state::Accent::rgb) {
+        for a in wxr_core::state::Accent::ALL.map(wxr_core::state::Accent::rgb) {
             for bg in [0x0B0B0C, 0x1D1D20, 0x2A2A2E, 0x36363B] {
                 assert!(contrast(a, bg) >= 4.5, "accent {a:06X} on {bg:06X}");
             }

@@ -1,9 +1,11 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Windows.Graphics.Capture: monitor frames stay on the GPU (no CPU readback).
 //! WGC only produces frames when content changes; dropping a `Capture` stops it (hidden panel = no cost).
 #![cfg(windows)]
 #![allow(unsafe_code)]
 
-use dvr_core::panel::PixelRect;
 use windows::Graphics::Capture::{Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCaptureSession};
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
@@ -25,6 +27,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SetForegroundWindow, WS_EX_TOOLWINDOW, WindowFromPoint,
 };
 use windows::core::{BOOL, Interface, Result, factory};
+use wxr_core::panel::PixelRect;
 
 /// Per-monitor DPI awareness (all rects and input in physical pixels) and WinRT apartment.
 pub fn init_process() {

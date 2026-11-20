@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Gate 4c (first run < 60 s), menu, toolbar and hide-all, driven through the real Slint views with scripted
 //! pointers. Controls are found by their label, as a user would.
 use crate::gates::{GateResult, HEAD, Rig, key_sc, press_key, us_char};
@@ -5,10 +8,10 @@ use crate::session::{
     Effect, MonitorInfo, Page, Pin, PointerInput, Session, TAB_INBOX, TAB_KEYS, TAB_PANELS, TAB_SETUP, TAB_WATCH,
     TEST_WORD, Tool,
 };
-use dvr_core::engine::Event;
-use dvr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
-use dvr_core::state::{NotifyFrom, State};
-use dvr_ui::{
+use wxr_core::engine::Event;
+use wxr_core::panel::{Anchor, DIM_HIDDEN, Hand, MENU_ID, PixelRect, Source, TOOLBAR_ID};
+use wxr_core::state::{NotifyFrom, State};
+use wxr_ui::{
     MENU_SIZE, Menu, MenuModel, SlotKind, Strings, TOOLBAR_SIZE, Toolbar, ToolbarModel, close_center, tab_center,
 };
 
@@ -139,7 +142,7 @@ impl Ctx {
         self.pump();
     }
 
-    fn panel(&self, source: Source) -> Option<dvr_core::panel::Panel> {
+    fn panel(&self, source: Source) -> Option<wxr_core::panel::Panel> {
         self.rig.engine.panels.iter().find(|p| p.source == source).copied()
     }
 
@@ -254,7 +257,7 @@ pub fn first_run_and_menu() -> GateResult {
     c.tool(Tool::Pin(Pin::Room))?;
     // Reset puts it back at its default place and size.
     if let Some(m) = c.rig.engine.panels.iter_mut().find(|p| p.source == Source::Monitor(0)) {
-        m.pose.pos = m.pose.pos + dvr_core::math::Vec3::new(0.4, 0.3, 0.0);
+        m.pose.pos = m.pose.pos + wxr_core::math::Vec3::new(0.4, 0.3, 0.0);
     }
     c.point_at(screen_id, [0.5, 0.9])?;
     c.tool(Tool::Reset)?;
@@ -418,15 +421,15 @@ mod tests {
         assert_eq!(super::first_run_and_menu(), Ok(()));
     }
 
-    fn setup() -> (Session, Vec<dvr_core::panel::Panel>, [MonitorInfo; 2]) {
+    fn setup() -> (Session, Vec<wxr_core::panel::Panel>, [MonitorInfo; 2]) {
         let screens = [
             MonitorInfo { rect: PixelRect { x: 0, y: 0, w: 2560, h: 1440 }, primary: true },
             MonitorInfo { rect: PixelRect { x: 2560, y: 0, w: 1920, h: 1080 }, primary: false },
         ];
         let mut panels = Vec::new();
         let mut session = Session::new(State::default(), &mut panels, HEAD);
-        panels.push(dvr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
-        let window = dvr_core::panel::Panel::in_front_of(10, Source::Window(1), HEAD, 0.75);
+        panels.push(wxr_core::panel::Panel::in_front_of(9, Source::Monitor(0), HEAD, 0.5625));
+        let window = wxr_core::panel::Panel::in_front_of(10, Source::Window(1), HEAD, 0.75);
         panels.push(window);
         session.window_names.insert(1, "Vesktop".into());
         session.language = "EN".into();
@@ -439,13 +442,13 @@ mod tests {
 
     #[test]
     fn theme_and_watch_layout_are_picked_in_the_menu() {
-        use dvr_core::state::{Accent, WatchLayout};
+        use wxr_core::state::{Accent, WatchLayout};
         let strings = Strings::english().expect("strings");
         let (mut session, mut panels, screens) = setup();
         let click = |session: &mut Session, panels: &mut Vec<_>, label: &str| {
             let m = session.model(panels, &screens, &strings, (0.0, 0.0));
             let i = m.find(label).unwrap_or_else(|| panic!("{label} not on {}", m.title));
-            session.input(dvr_ui::MenuInput::Slot(i), panels, HEAD, &screens)
+            session.input(wxr_ui::MenuInput::Slot(i), panels, HEAD, &screens)
         };
         session.page = Page::Tab(TAB_SETUP);
         click(&mut session, &mut panels, "Theme");
@@ -519,11 +522,11 @@ mod tests {
     }
 
     /// Writes the README screenshots from the real views:
-    /// `cargo test -p dvr-app --release screenshots -- --ignored`.
+    /// `cargo test -p wxr-app --release screenshots -- --ignored`.
     #[test]
     #[ignore = "writes docs/img; run on demand"]
     fn screenshots() {
-        use dvr_ui::{KeyFace, Keyboard, Wrist, WristInfo, WristLoad, WristMedia};
+        use wxr_ui::{KeyFace, Keyboard, Wrist, WristInfo, WristLoad, WristMedia};
         fn save(name: &str, size: (u32, u32), bgra: &[u8], height: u32) {
             let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/img");
             std::fs::create_dir_all(&dir).expect("img dir");
@@ -568,7 +571,7 @@ mod tests {
             let px = toolbar.render().expect("toolbar render").to_vec();
             save(name, TOOLBAR_SIZE, &px, TOOLBAR_SIZE.1);
         }
-        let mut banner = dvr_ui::Banner::new().expect("banner");
+        let mut banner = wxr_ui::Banner::new().expect("banner");
         banner.set(
             "Discord",
             "Alex",
@@ -576,7 +579,7 @@ mod tests {
             "now",
         );
         let px = banner.render().expect("banner render").to_vec();
-        save("banner", dvr_ui::BANNER_SIZE, &px, dvr_ui::BANNER_SIZE.1);
+        save("banner", wxr_ui::BANNER_SIZE, &px, wxr_ui::BANNER_SIZE.1);
         let mut wrist = Wrist::new().expect("wrist");
         let song = WristMedia {
             title: "Night Drive".into(),
@@ -634,40 +637,40 @@ mod tests {
             change(&mut shot);
             wrist.set(&shot);
             let px = wrist.render().expect("wrist render").to_vec();
-            save(name, dvr_ui::WRIST_SIZE, &px, height);
+            save(name, wxr_ui::WRIST_SIZE, &px, height);
         }
         // Every closed layout with a song playing, and the open watch's Add list.
-        for layout in dvr_ui::WatchLayout::ALL {
+        for layout in wxr_ui::WatchLayout::ALL {
             let shot = WristInfo { layout, media: Some(song.clone()), lowest_tracker: Some(0.9), ..info.clone() };
             wrist.set(&shot);
             let px = wrist.render().expect("wrist render").to_vec();
             let name = format!("wrist-layout-{}", strings.get(layout.ids().0, &[]).to_lowercase().replace(' ', "-"));
-            save(&name, dvr_ui::WRIST_SIZE, &px, 240);
+            save(&name, wxr_ui::WRIST_SIZE, &px, 240);
             // And with nothing playing, the way the watch looks most of the time.
             wrist.set(&WristInfo { media: None, ..shot });
             let px = wrist.render().expect("wrist render").to_vec();
-            save(&format!("{name}-quiet"), dvr_ui::WRIST_SIZE, &px, 240);
+            save(&format!("{name}-quiet"), wxr_ui::WRIST_SIZE, &px, 240);
         }
         wrist.set(&WristInfo { expanded: true, ..info.clone() });
         let px = wrist.render().expect("wrist render").to_vec();
-        save("wrist-expanded-quiet", dvr_ui::WRIST_SIZE, &px, 840);
+        save("wrist-expanded-quiet", wxr_ui::WRIST_SIZE, &px, 840);
         let windows = ["Steam", "notes.txt - Notepad", "Vesktop"]
             .iter()
             .enumerate()
-            .map(|(i, t)| dvr_ui::WristWindow { id: i as u64, title: (*t).into(), shown: i == 2 })
+            .map(|(i, t)| wxr_ui::WristWindow { id: i as u64, title: (*t).into(), shown: i == 2 })
             .collect();
-        let add = dvr_ui::WristAdd { adding: true, screen: Some(2), windows };
+        let add = wxr_ui::WristAdd { adding: true, screen: Some(2), windows };
         wrist.set(&WristInfo { expanded: true, add, ..info.clone() });
         let px = wrist.render().expect("wrist render").to_vec();
-        save("wrist-add", dvr_ui::WRIST_SIZE, &px, 520);
+        save("wrist-add", wxr_ui::WRIST_SIZE, &px, 520);
         info.expanded = false;
         let mut kb = Keyboard::new().expect("keyboard");
-        let faces: Vec<KeyFace> = dvr_core::keyboard::ROWS
+        let faces: Vec<KeyFace> = wxr_core::keyboard::ROWS
             .iter()
             .flat_map(|r| r.iter())
             .map(|k| KeyFace {
                 label: match k.sc {
-                    dvr_core::keyboard::LANG => "EN".to_owned(),
+                    wxr_core::keyboard::LANG => "EN".to_owned(),
                     _ if k.label.chars().count() == 1 => k.label.to_uppercase(),
                     _ => k.label.to_owned(),
                 },
@@ -677,6 +680,117 @@ mod tests {
             .collect();
         kb.set(&faces);
         let px = kb.render().expect("keyboard render").to_vec();
-        save("keyboard", dvr_ui::KEYBOARD_SIZE, &px, dvr_ui::KEYBOARD_SIZE.1);
+        save("keyboard", wxr_ui::KEYBOARD_SIZE, &px, wxr_ui::KEYBOARD_SIZE.1);
+    }
+
+    /// The views with the longest text real use brings (song and window titles, messages, every battery low), for
+    /// looking over: nothing may run out of its box. Writes `target/long-text/*.png`:
+    /// `cargo test -p wxr-app --release long_text -- --ignored`.
+    #[test]
+    #[ignore = "writes target/long-text; run on demand"]
+    fn long_text() {
+        use wxr_ui::{Wrist, WristInfo, WristLoad, WristMedia};
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/long-text");
+        std::fs::create_dir_all(&dir).expect("out dir");
+        let save = |name: &str, size: (u32, u32), bgra: &[u8], height: u32| {
+            let rows = (height.min(size.1) * size.0 * 4) as usize;
+            let rgba: Vec<u8> = bgra[..rows].as_chunks::<4>().0.iter().flat_map(|&[b, g, r, a]| [r, g, b, a]).collect();
+            let file = std::fs::File::create(dir.join(format!("{name}.png"))).expect("png file");
+            let mut enc = png::Encoder::new(std::io::BufWriter::new(file), size.0, height.min(size.1));
+            enc.set_color(png::ColorType::Rgba);
+            enc.set_depth(png::BitDepth::Eight);
+            enc.write_header().and_then(|mut w| w.write_image_data(&rgba)).expect("png write");
+        };
+        const SONG: &str =
+            "Symphony No. 9 in D minor, Op. 125 \"Choral\": IV. Presto - Allegro assai (Remastered 2019)";
+        const ARTIST: &str = "Berliner Philharmoniker, Herbert von Karajan & Wiener Singverein";
+        const WINDOW: &str =
+            "How to configure a very long window title that never seems to end - Mozilla Firefox Developer Edition";
+        const MESSAGE: &str =
+            "ok everyone is here, pull in 2 min. bring the fire resist pots and someone please mark the adds";
+        let strings = Strings::english().expect("strings");
+        let (mut session, mut panels, screens) = setup();
+        session.windows = vec![(1, WINDOW.into()), (2, "Steam".into()), (3, WINDOW.to_uppercase())];
+        session.window_names.insert(1, WINDOW.into());
+        panels.push(wxr_core::panel::Panel::in_front_of(11, Source::Window(3), HEAD, 0.75));
+        session.window_names.insert(3, WINDOW.to_uppercase());
+        session.notified("Vesktop", "A Very Long Display Name · #a-very-long-channel-name-for-raids", MESSAGE);
+        let mut menu = Menu::new().expect("menu");
+        for (name, page) in [
+            ("menu-panels", Page::Tab(TAB_PANELS)),
+            ("menu-inbox", Page::Tab(TAB_INBOX)),
+            ("menu-windows", Page::Windows(0)),
+            ("menu-setup", Page::Tab(TAB_SETUP)),
+        ] {
+            session.page = page;
+            menu.set(&session.model(&panels, &screens, &strings, (12.345, 123.4)));
+            let px = menu.render().expect("menu render").to_vec();
+            save(name, MENU_SIZE, &px, MENU_SIZE.1);
+        }
+        let mut toolbar = Toolbar::new().expect("toolbar");
+        let hover = [Event::Hover { hand: Hand::Right, panel: 11, uv: [0.5, 0.5], cursor: true }];
+        session.pointer(
+            PointerInput { events: &hover, now: 0, rays: [None; 2], anchors: Default::default() },
+            &panels,
+            &menu,
+            &toolbar,
+        );
+        toolbar.set(&session.toolbar_model(&panels, &strings));
+        let px = toolbar.render().expect("toolbar render").to_vec();
+        save("toolbar", TOOLBAR_SIZE, &px, TOOLBAR_SIZE.1);
+        let song = WristMedia {
+            title: SONG.into(),
+            artist: ARTIST.into(),
+            app: "YouTube Music Desktop App".into(),
+            playing: true,
+            position: 4000.0,
+            duration: 36_000.0,
+            shuffle: true,
+        };
+        let info = WristInfo {
+            hour: 23,
+            minute: 59,
+            weekday: 3,
+            day: 30,
+            month: 9,
+            controllers: [Some(1.0), Some(0.04)],
+            lowest_tracker: Some(0.03),
+            load: Some(WristLoad {
+                game_fps: Some(144.0),
+                target_fps: Some(144.0),
+                cpu: Some(1.0),
+                gpu: Some(1.0),
+                own_gpu_ms: 12.345,
+            }),
+            volume: Some((1.0, true)),
+            unread: 128,
+            keyboard: true,
+            media: Some(song),
+            ..WristInfo::default()
+        };
+        let mut wrist = Wrist::new().expect("wrist");
+        for layout in wxr_ui::WatchLayout::ALL {
+            wrist.set(&WristInfo { layout, ..info.clone() });
+            let px = wrist.render().expect("wrist render").to_vec();
+            let name = format!("wrist-{}", strings.get(layout.ids().0, &[]).to_lowercase().replace(' ', "-"));
+            save(&name, wxr_ui::WRIST_SIZE, &px, 240);
+        }
+        let toast = Some(("Vesktop".into(), "A Very Long Display Name".into(), MESSAGE.into()));
+        wrist.set(&WristInfo { toast, ..info.clone() });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist-message", wxr_ui::WRIST_SIZE, &px, 240);
+        let mut add = wxr_ui::WristAdd { screen: Some(2), ..Default::default() };
+        wrist.set(&WristInfo { expanded: true, add: add.clone(), ..info.clone() });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist-expanded", wxr_ui::WRIST_SIZE, &px, 840);
+        add.adding = true;
+        add.windows = [WINDOW, "Steam", &WINDOW.to_uppercase()]
+            .iter()
+            .enumerate()
+            .map(|(i, t)| wxr_ui::WristWindow { id: i as u64, title: (*t).into(), shown: i == 2 })
+            .collect();
+        wrist.set(&WristInfo { expanded: true, add, ..info });
+        let px = wrist.render().expect("wrist render").to_vec();
+        save("wrist-add", wxr_ui::WRIST_SIZE, &px, 520);
     }
 }

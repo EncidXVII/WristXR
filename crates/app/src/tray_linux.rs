@@ -1,10 +1,13 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Tray icon on Linux (StatusNotifierItem, shown by KDE, GNOME with the AppIndicator extension, XFCE, ...): open the
 //! menu in VR, hide or show everything, start with SteamVR, quit. The same commands as the Windows tray.
-use dvr_ui::Strings;
 use ksni::blocking::{Handle, TrayMethods};
 use ksni::menu::{CheckmarkItem, StandardItem};
 use ksni::{Icon, MenuItem, ToolTip};
 use std::sync::mpsc::{Receiver, Sender, channel};
+use wxr_ui::Strings;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCommand {
@@ -34,8 +37,8 @@ struct Item {
 /// The app icon (the mark on its tile, which reads on light and dark panels alike) as ARGB32, network order.
 fn icons() -> Vec<Icon> {
     [
-        &include_bytes!("../../../packaging/brand/desktopvr-32.png")[..],
-        &include_bytes!("../../../packaging/brand/desktopvr-64.png")[..],
+        &include_bytes!("../../../packaging/brand/wristxr-32.png")[..],
+        &include_bytes!("../../../packaging/brand/wristxr-64.png")[..],
     ]
     .into_iter()
     .filter_map(|bytes| {
@@ -54,11 +57,11 @@ fn icons() -> Vec<Icon> {
 
 impl ksni::Tray for Item {
     fn id(&self) -> String {
-        "desktopvr".into()
+        "wristxr".into()
     }
 
     fn title(&self) -> String {
-        "DesktopVR".into()
+        "WristXR".into()
     }
 
     fn icon_pixmap(&self) -> Vec<Icon> {

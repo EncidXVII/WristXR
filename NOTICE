@@ -1,0 +1,30 @@
+WristXR
+Copyright (C) 2026 EncidXVII (https://github.com/EncidXVII)
+
+WristXR is free software: you can redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation, version 3 or (at your option) any later version.
+
+WristXR is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+License in the file LICENSE for more details.
+
+
+Additional terms under section 7 of the GNU General Public License, version 3
+
+These terms apply to WristXR and to every work based on it. Sections 7(b), 7(c) and 7(e) of the license
+allow them; anything else in the license stands as written.
+
+1. Attribution (section 7(b)). Every copy of WristXR, and of any work based on it, must keep this NOTICE
+   file and the copyright and license lines at the top of each source file, unchanged. A work based
+   on WristXR that has a user interface must say in its About text or legal notices "Based on WristXR by
+   EncidXVII" and give the address https://github.com/EncidXVII/WristXR.
+
+2. No misrepresentation (section 7(c)). The origin of WristXR must not be misrepresented: you must not
+   claim that you wrote the original software. A modified version must be marked, where its users
+   will see it, as changed from the original, and must not be presented as the original WristXR.
+
+3. Names and logos (section 7(e)). This license grants no right to use the name "WristXR" or its logo
+   (the files in packaging/brand) for a modified version. A modified version distributed to others
+   must carry another name and another icon. See TRADEMARKS.md.
+
+Third-party components keep their own copyright and licenses: see THIRD_PARTY_NOTICES.md.

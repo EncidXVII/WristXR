@@ -1,15 +1,18 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! AUTO GATES that need no VR runtime. Shared by `cargo test` and `--selftest`.
 use crate::bindings::{FILES, MANIFEST};
-use dvr_core::chat::{ChatAction, ChatLine};
-use dvr_core::engine::{Engine, Event, FrameInput, HandInput, MouseButton};
-use dvr_core::keyboard::{self, LCTRL, LSHIFT};
-use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{Anchor, Hand, Panel, PixelRect, Source};
-use dvr_core::state::State;
 use serde_json::Value;
 use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2};
 use std::net::UdpSocket;
 use std::time::{Duration, Instant};
+use wxr_core::chat::{ChatAction, ChatLine};
+use wxr_core::engine::{Engine, Event, FrameInput, HandInput, MouseButton};
+use wxr_core::keyboard::{self, LCTRL, LSHIFT};
+use wxr_core::math::{Pose, Quat, Vec3};
+use wxr_core::panel::{Anchor, Hand, Panel, PixelRect, Source};
+use wxr_core::state::State;
 
 pub type GateResult = Result<(), String>;
 pub type Gate = (&'static str, fn() -> GateResult);
@@ -136,7 +139,7 @@ pub(crate) fn err(e: impl std::fmt::Display) -> String {
 fn panels() -> GateResult {
     let p = Panel::in_front_of(1, Source::Monitor(0), HEAD, 9.0 / 16.0);
     ensure!((p.width_m - 1.2).abs() < 1e-6, "default width {}", p.width_m);
-    let ahead = dvr_core::panel::DEFAULT_DISTANCE_M;
+    let ahead = wxr_core::panel::DEFAULT_DISTANCE_M;
     ensure!((p.pose.pos - Vec3::new(0.0, 1.45, -ahead)).length() < 1e-4, "default position {:?}", p.pose.pos);
     ensure!((p.pose.rot.rotate(Vec3::Z) - Vec3::Z).length() < 1e-4, "panel must face the user");
 
@@ -166,7 +169,7 @@ fn panels() -> GateResult {
         "head-locked panel must stay put in view"
     );
 
-    let dir = std::env::temp_dir().join(format!("dvr-selftest-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("wxr-selftest-{}", std::process::id()));
     let path = dir.join("state.json");
     let state = State { panels: vec![p, q, kb, w], chatbox: true, ..State::default() };
     state.save(&path).map_err(err)?;
@@ -354,10 +357,10 @@ fn keyboard_typing() -> GateResult {
 }
 
 /// Mock VRChat: a local UDP socket plus a chatbox client pointed at it.
-fn mock_vrchat() -> Result<(UdpSocket, dvr_osc::Chatbox), String> {
+fn mock_vrchat() -> Result<(UdpSocket, wxr_osc::Chatbox), String> {
     let server = UdpSocket::bind("127.0.0.1:0").map_err(err)?;
     server.set_read_timeout(Some(Duration::from_secs(2))).map_err(err)?;
-    let chat = dvr_osc::Chatbox::new(server.local_addr().map_err(err)?).map_err(err)?;
+    let chat = wxr_osc::Chatbox::new(server.local_addr().map_err(err)?).map_err(err)?;
     Ok((server, chat))
 }
 
@@ -378,7 +381,7 @@ fn received_chat(server: &UdpSocket) -> Result<String, String> {
 fn osc_chatbox() -> GateResult {
     let (server, chat) = mock_vrchat()?;
     let long = "x".repeat(200);
-    for (text, want) in [("hello vr", 8), (long.as_str(), dvr_osc::CHATBOX_MAX_CHARS)] {
+    for (text, want) in [("hello vr", 8), (long.as_str(), wxr_osc::CHATBOX_MAX_CHARS)] {
         chat.send(text).map_err(err)?;
         let s = received_chat(&server)?;
         ensure!(s.chars().count() == want && text.starts_with(s.as_str()), "chatbox text {s:?}");
@@ -570,7 +573,7 @@ fn grab() -> GateResult {
 }
 
 fn notifications() -> GateResult {
-    let mut listener = dvr_notify_api::Listener::bind(0).map_err(err)?;
+    let mut listener = wxr_notify_api::Listener::bind(0).map_err(err)?;
     let port = listener.port().map_err(err)?;
     let client = UdpSocket::bind("127.0.0.1:0").map_err(err)?;
     let msg = br#"{"messageType":1,"index":0,"timeout":4.0,"height":175.0,"opacity":1.0,"volume":0.7,"audioPath":"default","title":"Selftest","content":"Hello from a compatible app","useBase64Icon":false,"icon":"default","sourceApp":"selftest"}"#;

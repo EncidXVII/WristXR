@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use crate::engine::FrameInput;
 use crate::math::Pose;
 use crate::panel::{Hand, Panel};

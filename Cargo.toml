@@ -6,22 +6,22 @@ members = ["crates/*"]
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/EncidXVII/DesktopVR"
-homepage = "https://github.com/EncidXVII/DesktopVR"
+repository = "https://github.com/EncidXVII/WristXR"
+homepage = "https://github.com/EncidXVII/WristXR"
 rust-version = "1.85"
 
 [workspace.dependencies]
-dvr-core = { path = "crates/core" }
-dvr-osc = { path = "crates/osc" }
-dvr-notify-api = { path = "crates/notify-api" }
-dvr-vr = { path = "crates/vr" }
-dvr-sys = { path = "crates/sys" }
-dvr-ui = { path = "crates/ui" }
-dvr-gfx-d3d11 = { path = "crates/gfx-d3d11" }
-dvr-capture-win = { path = "crates/capture-win" }
-dvr-input-win = { path = "crates/input-win" }
-dvr-gfx-vk = { path = "crates/gfx-vk" }
-dvr-desktop-linux = { path = "crates/desktop-linux" }
+wxr-core = { path = "crates/core" }
+wxr-osc = { path = "crates/osc" }
+wxr-notify-api = { path = "crates/notify-api" }
+wxr-vr = { path = "crates/vr" }
+wxr-sys = { path = "crates/sys" }
+wxr-ui = { path = "crates/ui" }
+wxr-gfx-d3d11 = { path = "crates/gfx-d3d11" }
+wxr-capture-win = { path = "crates/capture-win" }
+wxr-input-win = { path = "crates/input-win" }
+wxr-gfx-vk = { path = "crates/gfx-vk" }
+wxr-desktop-linux = { path = "crates/desktop-linux" }
 ash = "0.38"
 x11rb = { version = "0.13", features = ["randr", "shm", "composite", "xtest", "xfixes"] }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }

@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Something you want to do in VR that DesktopVR doesn't make easy yet
+about: Something you want to do in VR that WristXR doesn't make easy yet
 labels: enhancement
 ---
 

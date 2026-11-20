@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! CPU images for static textures (keyboard, cursor, placeholder). Uploaded once, never per frame.
 
 /// BGRA8, the format desktop capture delivers.

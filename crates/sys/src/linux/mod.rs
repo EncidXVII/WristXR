@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Linux: system numbers for the watch and the cost meter (from /proc and sysfs), local time, one instance,
 //! SteamVR's server watch, dialogs (zenity or kdialog when installed), media (MPRIS) and app notifications
 //! (a D-Bus monitor of the notification service).
@@ -133,7 +136,7 @@ impl Sampler {
 /// No key click on Linux: there is no sound API every desktop has.
 pub fn play_click() {}
 
-/// Nothing to pump: Linux needs no window message loop for what DesktopVR uses.
+/// Nothing to pump: Linux needs no window message loop for what WristXR uses.
 pub fn pump_messages() {}
 
 /// Started from a terminal, output already goes there.

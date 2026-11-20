@@ -1,12 +1,11 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Live input gate (`--selftest --input`): scripted pointer/keyboard through the real SendInput path into a
 //! topmost test window owned by this process. Briefly moves the mouse; restores it afterwards.
 #![allow(unsafe_code)]
 
 use crate::gates::{GateResult, HEAD, Rig, err, key_sc, press_key};
-use dvr_core::keyboard;
-use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{Hand, Panel, PixelRect, Source};
-use dvr_input_win::Injector;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -23,6 +22,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 use windows::core::w;
+use wxr_core::keyboard;
+use wxr_core::math::{Pose, Quat, Vec3};
+use wxr_core::panel::{Hand, Panel, PixelRect, Source};
+use wxr_input_win::Injector;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Seen {
@@ -100,7 +103,7 @@ impl TestWindow {
         let thread = std::thread::spawn(move || {
             let class = WNDCLASSW {
                 lpfnWndProc: Some(wndproc),
-                lpszClassName: w!("dvr-selftest-target"),
+                lpszClassName: w!("wxr-selftest-target"),
                 ..Default::default()
             };
             // SAFETY: class and window are owned by this thread, which pumps their messages until WM_QUIT.
@@ -108,8 +111,8 @@ impl TestWindow {
                 RegisterClassW(&class);
                 let hwnd = CreateWindowExW(
                     WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-                    w!("dvr-selftest-target"),
-                    w!("DesktopVR self-test"),
+                    w!("wxr-selftest-target"),
+                    w!("WristXR self-test"),
                     WS_POPUP | WS_VISIBLE,
                     r.x,
                     r.y,
@@ -161,7 +164,7 @@ fn settle() -> Vec<Seen> {
 }
 
 pub fn input_live() -> GateResult {
-    let monitors = dvr_capture_win::monitors();
+    let monitors = wxr_capture_win::monitors();
     let (index, m) = monitors.iter().enumerate().find(|(_, m)| m.primary).ok_or("no primary monitor")?;
     let screen = m.rect;
     let win = PixelRect { x: screen.x + screen.w as i32 / 4, y: screen.y + screen.h as i32 / 4, w: 640, h: 400 };
@@ -210,7 +213,7 @@ fn run(monitor: u32, screen: PixelRect, win: PixelRect) -> GateResult {
         .iter()
         .any(|s| matches!(*s, Seen::Down { x, y, right: false } if (x - cx).abs() <= 1 && (y - cy).abs() <= 1));
     if !hit {
-        let under = dvr_capture_win::window_at((win.x + cx, win.y + cy));
+        let under = wxr_capture_win::window_at((win.x + cx, win.y + cy));
         return Err(format!(
             "left click did not land at ({cx},{cy}) in the test window {}: saw {got:?}, window under target {under:?}",
             window.hwnd
@@ -250,12 +253,12 @@ fn run(monitor: u32, screen: PixelRect, win: PixelRect) -> GateResult {
     let mut expected = String::new();
     for (i, l) in word.iter().enumerate() {
         let sc = key_sc(l)?;
-        expected.extend(dvr_input_win::key_char(sc, false, false));
+        expected.extend(wxr_input_win::key_char(sc, false, false));
         press_key(&mut rig, if i % 2 == 0 { Hand::Left } else { r }, sc)?;
     }
     press_key(&mut rig, r, key_sc("Shift")?)?;
     press_key(&mut rig, Hand::Left, key_sc("a")?)?;
-    expected.extend(dvr_input_win::key_char(key_sc("a")?, true, false));
+    expected.extend(wxr_input_win::key_char(key_sc("a")?, true, false));
     press_key(&mut rig, r, keyboard::CHAT)?;
     apply(&mut rig);
     let typed: String = settle().iter().filter_map(|s| if let Seen::Char(c) = s { Some(*c) } else { None }).collect();
@@ -277,26 +280,26 @@ fn run(monitor: u32, screen: PixelRect, win: PixelRect) -> GateResult {
     rig.hand(r).grip = false;
     rig.frames(1);
     let pop = rig.take().into_iter().find_map(|e| match e {
-        dvr_core::engine::Event::PopOut { panel, uv, .. } => Some((panel, uv)),
+        wxr_core::engine::Event::PopOut { panel, uv, .. } => Some((panel, uv)),
         _ => None,
     });
     let (panel, at) = pop.ok_or("yank did not pop out")?;
-    let hwnd = (panel == DESK).then(|| dvr_capture_win::window_at(screen.pixel_at(at))).flatten();
+    let hwnd = (panel == DESK).then(|| wxr_capture_win::window_at(screen.pixel_at(at))).flatten();
     if hwnd != Some(window.hwnd) {
         return Err(format!("popped window {hwnd:?} is not the test window {}", window.hwnd));
     }
-    let gpu = dvr_gfx_d3d11::Gpu::new(None).map_err(err)?;
-    let rect = dvr_capture_win::window_rect(window.hwnd).ok_or("test window has no rectangle")?;
+    let gpu = wxr_gfx_d3d11::Gpu::new(None).map_err(err)?;
+    let rect = wxr_capture_win::window_rect(window.hwnd).ok_or("test window has no rectangle")?;
     if (rect.w, rect.h) != (win.w, win.h) {
         return Err(format!("window rectangle {rect:?} does not match {win:?}"));
     }
     let mut tex = gpu.texture(rect.w, rect.h, None).map_err(err)?;
-    let mut capture = dvr_capture_win::Capture::window(&gpu.device, window.hwnd).map_err(err)?;
+    let mut capture = wxr_capture_win::Capture::window(&gpu.device, window.hwnd).map_err(err)?;
     for _ in 0..100 {
         match capture.copy_latest(&gpu.context, &tex).map_err(err)? {
-            dvr_capture_win::Frame::Copied => return Ok(()),
-            dvr_capture_win::Frame::Resized(w, h) => tex = gpu.texture(w, h, None).map_err(err)?,
-            dvr_capture_win::Frame::Unchanged => std::thread::sleep(Duration::from_millis(10)),
+            wxr_capture_win::Frame::Copied => return Ok(()),
+            wxr_capture_win::Frame::Resized(w, h) => tex = gpu.texture(w, h, None).map_err(err)?,
+            wxr_capture_win::Frame::Unchanged => std::thread::sleep(Duration::from_millis(10)),
         }
     }
     Err("popped-out window produced no capture frame".into())

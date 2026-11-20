@@ -1,11 +1,14 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Gate 8 (partial): the per-frame hot loop performs zero heap allocations.
 #![allow(unsafe_code)]
 
-use dvr_core::engine::{Engine, FrameInput, HandInput};
-use dvr_core::math::{Pose, Vec3};
-use dvr_core::panel::{Panel, Source};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use wxr_core::engine::{Engine, FrameInput, HandInput};
+use wxr_core::math::{Pose, Vec3};
+use wxr_core::panel::{Panel, Source};
 
 struct Counting;
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);

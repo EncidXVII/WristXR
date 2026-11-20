@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to DesktopVR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+All notable changes to WristXR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions: [Semantic Versioning](https://semver.org/).
 
 ## [0.1.0] - unreleased
@@ -20,7 +20,7 @@ First public early-access release (Windows).
   never. So over the keyboard, the toolbar or the watch, you still turn and walk in the game. A control changes
   hands only once you let it go: a stick you are turning with, or a grip holding something in the game, stays the
   game's until released, so the game no longer keeps turning you when the laser lands on a panel. Custom SteamVR
-  bindings for DesktopVR need setting again (the controls are in new groups).
+  bindings for WristXR need setting again (the controls are in new groups).
 - The watch sits on the back of the wrist, facing out of it, where a real watch is (it was on the controller's top,
   facing your chest when you turned the wrist). Grip it with the other hand to slide it along the wrist and, by
   turning that hand, tilt it; it keeps the spot and the tilt after a restart. A spot kept by an older build is
@@ -32,9 +32,9 @@ First public early-access release (Windows).
 - Pointing at a panel takes its toolbar even while your other laser rests on another one: the toolbar goes to the
   panel a laser came onto last (a laser resting on the keyboard used to keep a screen's toolbar from showing, and
   the other way round).
-- New logo: a screen on a stand, leaning forward, in the same family as FitnessVR's and Parallax's. It is the app
+- New logo: a screen on a stand, leaning forward, in the same family as SweatXR's and PortXR's. It is the app
   icon (Explorer, taskbar), the tray icon (lime on a dark taskbar, dark on a light one, switching with Windows)
-  and the picture SteamVR shows next to DesktopVR. Every icon is drawn from one script,
+  and the picture SteamVR shows next to WristXR. Every icon is drawn from one script,
   packaging/brand/marks.py.
 - A held panel keeps the spot you grabbed under the laser and turns to face you, level, easing there instead of
   copying every twist of the wrist; two hands resize it without rolling it.
@@ -51,11 +51,11 @@ First public early-access release (Windows).
   after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
-- Linux: DesktopVR runs on Linux with SteamVR for Linux, on X11 and on Wayland. On Wayland, screens, windows,
+- Linux: WristXR runs on Linux with SteamVR for Linux, on X11 and on Wayland. On Wayland, screens, windows,
   keyboard and pointer go through the desktop portal (asked once, remembered after); frames come from PipeWire.
   Panels reach SteamVR through Vulkan. The tray, Discord and other app notifications on the watch, media controls
   (MPRIS), the update check and `--uninstall` work there too. New, and not yet tested on hardware.
-- Uninstall: `Uninstall DesktopVR.cmd` in the folder (or `DesktopVR.exe --uninstall`) takes DesktopVR off
+- Uninstall: `Uninstall WristXR.cmd` in the folder (or `WristXR.exe --uninstall`) takes WristXR off
   SteamVR's list, so it no longer starts with SteamVR, and deletes its settings and layout, after asking. It
   works with SteamVR running or not, and never starts it.
 - Two watch layouts: Game (time, date, FPS, CPU and GPU) and Player (time, date and the small player), for
@@ -69,7 +69,7 @@ First public early-access release (Windows).
   around you. Screens no longer appear across the room when a playspace mover had moved you.
 - Free angle (toolbar): a held screen or window turns with your hand and keeps the angle you leave it at, instead
   of turning to face you, level.
-- Setup > Controls > Rebind buttons opens SteamVR's binding screen for DesktopVR.
+- Setup > Controls > Rebind buttons opens SteamVR's binding screen for WristXR.
 - Screens and windows fade out as you lean into them (from 30 cm, gone at 8 cm) instead of being cut off by the
   headset's near clip.
 - Right click on A / X (the lower half of the trackpad on Vive and WMR wands), held for right-drag. Holding the
@@ -139,7 +139,7 @@ First public early-access release (Windows).
 - Default bindings for Index, Quest Touch, Vive, WMR and Steam Frame controllers.
 - Release check against GitHub (no identifiers), `--selftest` report.
 
-[0.1.0]: https://github.com/EncidXVII/DesktopVR/releases/tag/v0.1.0
+[0.1.0]: https://github.com/EncidXVII/WristXR/releases/tag/v0.1.0
 
 ### Fixed
 - Clicking a window of a program that runs as administrator now explains, once, why nothing happens (Windows drops

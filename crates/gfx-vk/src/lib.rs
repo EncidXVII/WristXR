@@ -1,4 +1,7 @@
-//! Linux: panel textures for SteamVR through Vulkan, the counterpart of `dvr-gfx-d3d11`.
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Linux: panel textures for SteamVR through Vulkan, the counterpart of `wxr-gfx-d3d11`.
 //!
 //! Every texture is a device-local image with its own persistently mapped staging buffer. `update` only copies
 //! pixels into the staging memory; `flush` records the copies for every texture changed this frame into one
@@ -9,11 +12,11 @@
 #![allow(unsafe_code)]
 
 use ash::vk::{self, Handle};
-use dvr_core::raster::Image;
-use dvr_vr::{OpenVr, VulkanTexture};
 use std::cell::{Cell, RefCell};
 use std::ffi::{CString, c_void};
 use std::rc::Rc;
+use wxr_core::raster::Image;
+use wxr_vr::{OpenVr, VulkanTexture};
 
 /// Captures and UI pixels are BGRA bytes, shown as they are (`ColorSpace_Auto`), as on Windows.
 const FORMAT: vk::Format = vk::Format::B8G8R8A8_UNORM;

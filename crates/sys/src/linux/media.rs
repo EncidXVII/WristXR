@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! What is playing, and its buttons, through MPRIS: the D-Bus interface Linux media players share (Spotify,
 //! browsers, VLC, mpv with its plugin, ...). Polled once a second on its own thread, like the Windows version.
 use std::collections::HashMap;

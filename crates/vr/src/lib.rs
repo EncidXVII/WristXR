@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! OpenVR overlay backend. Talks to the runtime's `vrclient` directly through the C function
 //! tables, so no `openvr_api` library has to ship with the app.
 #![allow(unsafe_code)]
@@ -6,10 +9,6 @@ mod ffi;
 
 pub use ffi::VulkanTexture;
 
-use dvr_core::backend::VrBackend;
-use dvr_core::engine::{Claims, FrameInput};
-use dvr_core::math::Pose;
-use dvr_core::panel::{Anchor, Hand, Panel, Source};
 use ffi::{
     ActiveActionSet, AnalogData, ClientCore, DigitalData, FrameTiming, Mat34, PoseData, Table, TrackedPose, VrEvent,
     applications, compositor, input, overlay, system,
@@ -18,6 +17,10 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::mem::size_of;
 use std::path::{Path, PathBuf};
+use wxr_core::backend::VrBackend;
+use wxr_core::engine::{Claims, FrameInput};
+use wxr_core::math::Pose;
+use wxr_core::panel::{Anchor, Hand, Panel, Source};
 
 const CURSOR_WIDTH_M: f32 = 0.015;
 /// `k_nActionSetOverlayGlobalPriorityMin`: input bound at this priority is not delivered to the game.
@@ -298,7 +301,7 @@ impl OpenVr {
         };
         for hand in Hand::BOTH {
             let key = cursor_key(hand);
-            let name = format!("dvr.cursor.{}", hand.index());
+            let name = format!("wxr.cursor.{}", hand.index());
             let h = vr.overlay_handle(key, &name)?;
             call!(vr.overlay, overlay::SET_OVERLAY_WIDTH_IN_METERS, fn(u64, f32) -> i32, h, CURSOR_WIDTH_M);
             call!(vr.overlay, overlay::SET_OVERLAY_SORT_ORDER, fn(u64, u32) -> i32, h, CURSOR_SORT);
@@ -803,7 +806,7 @@ impl VrBackend for OpenVr {
         let key = u64::from(panel.id);
         let handle = match self.overlays.get(&key) {
             Some(p) => p.handle,
-            None => match self.overlay_handle(key, &format!("dvr.panel.{}", panel.id)) {
+            None => match self.overlay_handle(key, &format!("wxr.panel.{}", panel.id)) {
                 Ok(h) => {
                     if matches!(panel.source, Source::Keyboard | Source::Toolbar | Source::Banner) {
                         call!(self.overlay, overlay::SET_OVERLAY_SORT_ORDER, fn(u64, u32) -> i32, h, KEYBOARD_SORT);
@@ -883,10 +886,10 @@ mod tests {
 
     #[test]
     fn uninstalling_drops_only_our_manifest_from_steamvrs_list() {
-        let dir = std::env::temp_dir().join(format!("dvr-appconfig-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("wxr-appconfig-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("dir");
         let file = dir.join("appconfig.json");
-        let ours = r"C:\Users\Someone\AppData\Roaming\DesktopVR\config\desktopvr.vrmanifest";
+        let ours = r"C:\Users\Someone\AppData\Roaming\WristXR\config\wristxr.vrmanifest";
         let theirs = r"C:\Program Files\Other\other.vrmanifest";
         let list = serde_json::json!({ "manifest_paths": [ours.to_uppercase().replace('\\', "/"), theirs] });
         std::fs::write(&file, list.to_string()).expect("write");

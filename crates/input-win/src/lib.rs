@@ -1,10 +1,10 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Mouse and keyboard injection with SendInput (physical pixels, set-1 scancodes).
 #![cfg(windows)]
 #![allow(unsafe_code)]
 
-use dvr_core::engine::{Event, MouseButton};
-use dvr_core::keyboard::EXT;
-use dvr_core::panel::PixelRect;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::Globalization::{LCIDToLocaleName, MAX_LOCALE_NAME};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -17,6 +17,9 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL, VK
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowThreadProcessId, PostMessageW, SetCursorPos, WM_INPUTLANGCHANGEREQUEST,
 };
+use wxr_core::engine::{Event, MouseButton};
+use wxr_core::keyboard::EXT;
+use wxr_core::panel::PixelRect;
 
 const WHEEL_DELTA: i32 = 120;
 

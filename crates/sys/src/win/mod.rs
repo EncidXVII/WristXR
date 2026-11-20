@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Windows: system numbers for the wrist and the cost meter (CPU/RAM/GPU load, this process's CPU, local time),
 //! media, app notifications, one instance, dialogs.
 

@@ -1,4 +1,7 @@
-//! One DesktopVR per user, SteamVR's server watch, and ending the process.
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! One WristXR per user, SteamVR's server watch, and ending the process.
 use std::fs::File;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
@@ -9,13 +12,13 @@ pub struct Instance(#[allow(dead_code)] File);
 
 fn lock_path() -> PathBuf {
     match std::env::var_os("XDG_RUNTIME_DIR") {
-        Some(d) => PathBuf::from(d).join("desktopvr.lock"),
+        Some(d) => PathBuf::from(d).join("wristxr.lock"),
         // SAFETY: getuid has no preconditions.
-        None => std::env::temp_dir().join(format!("desktopvr-{}.lock", unsafe { libc::getuid() })),
+        None => std::env::temp_dir().join(format!("wristxr-{}.lock", unsafe { libc::getuid() })),
     }
 }
 
-/// Claims "the" DesktopVR for this user; `None` when another copy holds it. The kernel drops the lock when the
+/// Claims "the" WristXR for this user; `None` when another copy holds it. The kernel drops the lock when the
 /// process ends, however it ends.
 pub fn single_instance() -> Option<Instance> {
     let file = File::options().create(true).truncate(false).write(true).open(lock_path()).ok()?;

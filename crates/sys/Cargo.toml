@@ -1,5 +1,5 @@
 [package]
-name = "dvr-sys"
+name = "wxr-sys"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

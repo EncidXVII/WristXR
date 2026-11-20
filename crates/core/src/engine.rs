@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Per-frame interaction logic: laser pointer, keyboard typing, grab/scale.
 //! Rules: hover never clicks, trigger clicks, A/X right-clicks, grip only grabs, locked panels ignore grip.
 //! A held panel keeps the spot you grabbed under the laser and turns to face you, level; it never copies the

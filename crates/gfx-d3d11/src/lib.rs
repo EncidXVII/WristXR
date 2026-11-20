@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! D3D11 device on SteamVR's adapter and the BGRA textures panels are drawn from.
 #![cfg(windows)]
 #![allow(unsafe_code)]
@@ -5,7 +8,6 @@
 mod detail;
 
 pub use detail::{Detail, SHARPEN, Sharpen, close_enough, width_for};
-use dvr_core::raster::Image;
 use std::ffi::c_void;
 use windows::Win32::Foundation::{E_POINTER, HMODULE};
 use windows::Win32::Graphics::Direct3D::{D3D_DRIVER_TYPE_HARDWARE, D3D_DRIVER_TYPE_UNKNOWN, D3D_FEATURE_LEVEL_11_0};
@@ -18,6 +20,7 @@ use windows::Win32::Graphics::Direct3D11::{
 use windows::Win32::Graphics::Dxgi::Common::{DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_SAMPLE_DESC};
 use windows::Win32::Graphics::Dxgi::{CreateDXGIFactory1, IDXGIAdapter, IDXGIFactory1};
 use windows::core::{Error, Interface, Result};
+use wxr_core::raster::Image;
 
 pub struct Gpu {
     pub device: ID3D11Device,

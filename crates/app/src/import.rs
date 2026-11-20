@@ -1,9 +1,12 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Switch-over import: reads the user's own XSOverlay settings file (plain JSON) on first run.
 //! Only keys that map to our features are read; identifiers and analytics fields are ignored.
 //! Format observed from a user settings file (VersionNumber 680); never from the app's binaries.
-use dvr_core::panel::Hand;
-use dvr_core::state::State;
 use serde::Deserialize;
+use wxr_core::panel::Hand;
+use wxr_core::state::State;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Imported {

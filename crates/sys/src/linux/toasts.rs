@@ -1,5 +1,8 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Notifications from other apps (Discord, ...): Linux apps send them to the desktop's notification service over
-//! the session bus, so DesktopVR watches those calls as a bus monitor (no permission prompt; the desktop still shows
+//! the session bus, so WristXR watches those calls as a bus monitor (no permission prompt; the desktop still shows
 //! them as usual).
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Receiver, Sender};

@@ -1,20 +1,23 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Menu, toolbar, hide-all and first-run logic, independent of SteamVR and the GPU so gates can drive it.
 //! Panels live in the engine's list; the menu (`MENU_ID`) and toolbar (`TOOLBAR_ID`) are among them and are never
 //! persisted.
-use dvr_core::chat::ChatLine;
-use dvr_core::engine::{Event, MouseButton};
-use dvr_core::math::Pose;
-use dvr_core::panel::{
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
+use wxr_core::chat::ChatLine;
+use wxr_core::engine::{Event, MouseButton};
+use wxr_core::math::Pose;
+use wxr_core::panel::{
     Anchor, Anchors, BANNER_ID, DEFAULT_DISTANCE_M, DEFAULT_WIDTH_M, Hand, MAX_WIDTH_M, MENU_ID, MIN_WIDTH_M, Panel,
     PixelRect, Source, TOOLBAR_ID, TOOLBAR_WIDTH_M, yaw_frame,
 };
-use dvr_core::state::{Accent, NotifyFrom, State, WatchLayout};
-use dvr_ui::{
+use wxr_core::state::{Accent, NotifyFrom, State, WatchLayout};
+use wxr_ui::{
     BANNER_SIZE, Col, Layout, MENU_SIZE, Menu, MenuInput, MenuModel, ROW_H, Slot, SlotKind, Strings, TOOLBAR_SIZE, Tab,
     Tone, ToolButton, ToolInput, ToolKind, Toolbar, ToolbarLayout, ToolbarModel, WRIST_SIZE, icons,
 };
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
 
 /// The opacity slider runs from this to fully opaque.
 const MIN_OPACITY: f32 = 0.2;
@@ -114,7 +117,7 @@ pub enum Effect {
     NotifyFrom(NotifyFrom),
     /// The accent changed: recolour every view.
     Accent,
-    /// Open SteamVR's binding screen for DesktopVR.
+    /// Open SteamVR's binding screen for WristXR.
     Rebind,
 }
 
@@ -1494,13 +1497,13 @@ mod tests {
 
     #[test]
     fn a_moved_watch_keeps_its_spot_until_reset() {
-        let head = Pose::new(dvr_core::math::Vec3::new(0.0, 1.6, 0.0), dvr_core::math::Quat::IDENTITY);
+        let head = Pose::new(wxr_core::math::Vec3::new(0.0, 1.6, 0.0), wxr_core::math::Quat::IDENTITY);
         let mut panels = Vec::new();
         let s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, head);
         let w = panels.iter_mut().find(|p| p.source == Source::Wrist).expect("watch");
         let default = w.pose;
-        w.pose.pos = w.pose.pos + dvr_core::math::Vec3::new(0.0, 0.0, 0.05);
-        w.pose.rot = dvr_core::math::Quat::from_axis_angle(dvr_core::math::Vec3::Z, 0.3) * w.pose.rot;
+        w.pose.pos = w.pose.pos + wxr_core::math::Vec3::new(0.0, 0.0, 0.05);
+        w.pose.rot = wxr_core::math::Quat::from_axis_angle(wxr_core::math::Vec3::Z, 0.3) * w.pose.rot;
         let moved = w.pose;
         // Restart: the moved and tilted watch stays as it was.
         let state = State { wrist_moved: true, panels: panels.clone(), ..s.state };
@@ -1547,7 +1550,7 @@ mod tests {
 
     #[test]
     fn showing_again_brings_the_layout_to_where_you_face() {
-        use dvr_core::math::{Quat, Vec3};
+        use wxr_core::math::{Quat, Vec3};
         let mut panels = Vec::new();
         let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
         let screen = Pose::new(Vec3::new(0.3, 1.5, -1.2), Quat::default());
@@ -1575,7 +1578,7 @@ mod tests {
 
     #[test]
     fn a_restart_brings_the_saved_layout_to_the_wearer() {
-        use dvr_core::math::{Quat, Vec3};
+        use wxr_core::math::{Quat, Vec3};
         let mut panels = Vec::new();
         let mut s = Session::new(State { onboarded: true, ..State::default() }, &mut panels, Pose::IDENTITY);
         let screen = Pose::new(Vec3::new(0.3, 1.5, -1.2), Quat::default());

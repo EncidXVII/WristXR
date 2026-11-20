@@ -1,4 +1,7 @@
-"""The Slant marks (DesktopVR, FitnessVR, Parallax, FoveaXR, EveryVR): one geometry, every icon file.
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""The Slant marks (WristXR, SweatXR, PortXR, FoveaXR, EveryVR): one geometry, every icon file.
 
 The same script lives in every repository. It draws the marks from their construction (upright bars on a 32-unit
 grid, leaned 1:4, sharp corners cut at 45 degrees) and writes, for one app:
@@ -20,7 +23,7 @@ With --web, also the files a website needs, in OUT_DIR/web:
   icon-maskable-512.png          full-bleed, the mark inside the 80% safe circle, for Android's own shapes
   site.webmanifest, head.html    the manifest and the <link> tags that use all of the above
 
-Usage: python marks.py desktopvr|fitnessvr|parallax|foveaxr|everyvr OUT_DIR [--web]
+Usage: python marks.py wristxr|sweatxr|portxr|foveaxr|everyvr OUT_DIR [--web]
 Needs Pillow.
 """
 
@@ -42,16 +45,16 @@ K = 0.25  # lean: one across for every four up, about the centre line (y = 16)
 # Each mark as polygons on the upright 32-unit grid, cuts already applied. Holes are listed after the shape they
 # sit in and drawn with the even-odd rule. Flat bars are 4 units, upright bars 5; joints are cut 3, bar ends 2.
 MARKS = {
-    "desktopvr": [
+    "wristxr": [
         [(4, 4), (24.25, 4), (28, 7), (28, 20), (7.75, 20), (4, 17)],  # screen
         [(9, 8), (23, 8), (23, 16), (9, 16)],  # its opening
         [(10, 24), (19.5, 24), (22, 26), (22, 28), (12.5, 28), (10, 26)],  # stand
     ],
-    "fitnessvr": [
+    "sweatxr": [
         [(5, 4), (15.25, 4), (19, 7), (19, 24), (23, 24), (23, 16), (28.5, 16), (31, 18), (31, 20), (28, 20),
          (28, 28), (17.75, 28), (14, 25), (14, 8), (10, 8), (10, 20), (4.5, 20), (2, 18), (2, 16), (5, 16)],
     ],
-    "parallax": [
+    "portxr": [
         [(3, 12), (15.25, 12), (19, 15), (19, 28), (6.75, 28), (3, 25)],  # front frame
         [(8, 16), (14, 16), (14, 24), (8, 24)],  # its opening
         [(11, 4), (24.25, 4), (28, 7), (28, 20), (25.5, 20), (23, 18), (23, 8), (13.5, 8), (11, 6)],  # frame behind
@@ -74,8 +77,8 @@ MARKS = {
          (7.75, 8), (5.25, 6)],
     ],
 }
-HOLES = {"desktopvr": {1}, "fitnessvr": set(), "parallax": {1}, "foveaxr": set(), "everyvr": set()}
-NAMES = {"desktopvr": "DesktopVR", "fitnessvr": "FitnessVR", "parallax": "Parallax", "foveaxr": "FoveaXR",
+HOLES = {"wristxr": {1}, "sweatxr": set(), "portxr": {1}, "foveaxr": set(), "everyvr": set()}
+NAMES = {"wristxr": "WristXR", "sweatxr": "SweatXR", "portxr": "PortXR", "foveaxr": "FoveaXR",
          "everyvr": "EveryVR"}
 
 

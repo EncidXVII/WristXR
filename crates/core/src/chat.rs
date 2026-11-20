@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Text line for "send to VRChat chatbox": built from the keyboard's key events.
 //! Characters come from the OS layout (`to_char`), so UA/DE text works as typed.
 use crate::keyboard::{BACKSPACE, CAPS, ENTER, LALT, LCTRL, LSHIFT, RSHIFT};

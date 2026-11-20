@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 
 const EN_US: &str = include_str!("../locales/en-US.ftl");

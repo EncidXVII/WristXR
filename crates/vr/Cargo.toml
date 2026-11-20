@@ -1,11 +1,11 @@
 [package]
-name = "dvr-vr"
+name = "wxr-vr"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-dvr-core.workspace = true
+wxr-core.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 

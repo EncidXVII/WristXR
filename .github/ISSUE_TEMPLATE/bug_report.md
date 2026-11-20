@@ -18,4 +18,4 @@ labels: bug
 - Game running (if any):
 
 **Self-test**
-Run `DesktopVR.exe --selftest` and attach `selftest-report.zip` (no personal data inside).
+Run `WristXR.exe --selftest` and attach `selftest-report.zip` (no personal data inside).

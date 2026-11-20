@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Wayland: one desktop-portal session for screens, windows and input together (RemoteDesktop with ScreenCast
 //! sources), so the user answers one prompt. Its restore token is kept, so later runs start without asking again.
 //! The session lives on its own thread; input reaches it over a channel.
@@ -48,7 +51,7 @@ fn token_file() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))?;
-    Some(base.join("desktopvr").join("portal-token"))
+    Some(base.join("wristxr").join("portal-token"))
 }
 
 fn start() -> Option<Portal> {
@@ -94,7 +97,7 @@ async fn session(ready: Sender<Result<Vec<Source>, String>>, input: Receiver<Inp
             )
             .await
             .map_err(|e| e.to_string())?;
-        // DesktopVR draws its own laser cursor, so the shared pixels leave the system one out.
+        // WristXR draws its own laser cursor, so the shared pixels leave the system one out.
         let cursor = match cast.available_cursor_modes().await {
             Ok(m) if m.contains(CursorMode::Hidden) => CursorMode::Hidden,
             _ => CursorMode::Embedded,

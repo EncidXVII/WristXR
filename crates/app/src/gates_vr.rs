@@ -1,16 +1,19 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Live gates against a running SteamVR (real headset or the null driver). `--selftest --vr`.
-//! Uses the same meters as the wrist cost readout (dvr_sys::Sampler, GpuTimer), so gate P and the UI agree.
+//! Uses the same meters as the wrist cost readout (wxr_sys::Sampler, GpuTimer), so gate P and the UI agree.
 
 use crate::gates::GateResult;
-use dvr_capture_win::{Capture, Frame};
-use dvr_core::backend::VrBackend;
-use dvr_core::engine::{Claims, FrameInput};
-use dvr_core::math::Vec3;
-use dvr_core::panel::{Anchor, Hand, Panel, Source};
-use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, raw};
-use dvr_ui::{WRIST_SIZE, Wrist, WristInfo, WristLoad};
-use dvr_vr::OpenVr;
 use std::time::{Duration, Instant};
+use wxr_capture_win::{Capture, Frame};
+use wxr_core::backend::VrBackend;
+use wxr_core::engine::{Claims, FrameInput};
+use wxr_core::math::Vec3;
+use wxr_core::panel::{Anchor, Hand, Panel, Source};
+use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, raw};
+use wxr_ui::{WRIST_SIZE, Wrist, WristInfo, WristLoad};
+use wxr_vr::OpenVr;
 
 /// Startup (SteamVR settling, first PDH collection, font loading) is excluded from the measurement.
 const WARMUP: Duration = Duration::from_secs(2);
@@ -26,7 +29,7 @@ fn err(e: impl std::fmt::Display) -> String {
 /// Gates 1 + 2 + 5 + P (partial): captured primary monitor and a wrist panel are shown; the loop is paced by
 /// the compositor; our GPU and CPU cost stay under budget.
 pub fn overlay_live() -> GateResult {
-    let dir = std::env::temp_dir().join(format!("dvr-selftest-vr-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("wxr-selftest-vr-{}", std::process::id()));
     let manifest = crate::bindings::install(&dir).map_err(err)?;
     let result = run(&manifest);
     // Best effort: a leftover temp dir is harmless.
@@ -51,7 +54,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
     }
     let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
     let head = vr.head_pose().ok_or("HMD pose not valid")?;
-    let monitors = dvr_capture_win::monitors();
+    let monitors = wxr_capture_win::monitors();
     let (index, monitor) = monitors.iter().enumerate().find(|(_, m)| m.primary).ok_or("no primary monitor")?;
     let panel =
         Panel::in_front_of(1, Source::Monitor(index as u32), head, monitor.rect.h as f32 / monitor.rect.w as f32);
@@ -68,7 +71,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
     let mut capture = Capture::monitor(&gpu.device, monitor.handle).map_err(err)?;
     let mut wrist = Wrist::new()?;
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
-    let mut sampler = dvr_sys::Sampler::new();
+    let mut sampler = wxr_sys::Sampler::new();
 
     let mut input = FrameInput::default();
     // Per-hand, per-group overlay priority (some of a hand's controls taken from the game) must be accepted.
@@ -85,7 +88,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
     let mut measured: Option<(Instant, std::time::Duration)> = None;
     while measured.is_none_or(|(t0, _)| t0.elapsed() < RUN) {
         if measured.is_none() && start.elapsed() >= WARMUP {
-            measured = Some((Instant::now(), dvr_sys::process_cpu_time()));
+            measured = Some((Instant::now(), wxr_sys::process_cpu_time()));
             (frames, captured, wrist_frames) = (0, 0, 0);
         }
         if !vr.poll(start.elapsed().as_millis() as u64, &mut input) {
@@ -94,7 +97,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
         if tick.elapsed() >= Duration::from_secs(1) {
             tick = Instant::now();
             let load = sampler.sample();
-            let (hour, minute) = dvr_sys::local_time();
+            let (hour, minute) = wxr_sys::local_time();
             wrist.set(&WristInfo {
                 hour,
                 minute,
@@ -141,7 +144,7 @@ fn run(manifest: &std::path::Path) -> GateResult {
     }
     let (t0, cpu0) = measured.ok_or("no measurement window")?;
     let wall = t0.elapsed();
-    let cpu = (dvr_sys::process_cpu_time() - cpu0).as_secs_f32() / wall.as_secs_f32() * 100.0;
+    let cpu = (wxr_sys::process_cpu_time() - cpu0).as_secs_f32() / wall.as_secs_f32() * 100.0;
     let gpu_ms = timer.last_ms();
     let hz = f64::from(frames) / wall.as_secs_f64();
     println!(
@@ -176,7 +179,7 @@ const RAM_BUDGET: u64 = 150 * 1024 * 1024;
 /// Gate 8 + P (S1): every monitor captured, wrist and keyboard rendering, for `minutes`. Checks errors, memory
 /// growth, frames where our own work overran a 90 Hz frame, and the CPU/GPU/RAM budgets.
 pub fn soak(minutes: u64) -> GateResult {
-    let dir = std::env::temp_dir().join(format!("dvr-soak-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("wxr-soak-{}", std::process::id()));
     let manifest = crate::bindings::install(&dir).map_err(err)?;
     let result = soak_run(&manifest, Duration::from_secs(minutes * 60));
     // Best effort: a leftover temp dir is harmless.
@@ -188,7 +191,7 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
     let mut vr = OpenVr::init(manifest)?;
     let gpu = Gpu::new(vr.adapter_index()).map_err(err)?;
     let head = vr.head_pose().ok_or("HMD pose not valid")?;
-    let monitors = dvr_capture_win::monitors();
+    let monitors = wxr_capture_win::monitors();
     // S1: one panel per monitor, side by side in front of the user.
     let mut screens = Vec::new();
     for (i, m) in monitors.iter().enumerate() {
@@ -203,16 +206,16 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
     let mut wrist_panel = Panel::on_wrist(51, Hand::Left, WRIST_SIZE.1 as f32 / WRIST_SIZE.0 as f32);
     wrist_panel.anchor = Anchor::World;
     wrist_panel.pose.pos = head.pos + Vec3::new(0.5, -0.4, -0.6);
-    let kb_tex = gpu.texture(dvr_ui::KEYBOARD_SIZE.0, dvr_ui::KEYBOARD_SIZE.1, None).map_err(err)?;
+    let kb_tex = gpu.texture(wxr_ui::KEYBOARD_SIZE.0, wxr_ui::KEYBOARD_SIZE.1, None).map_err(err)?;
     let wrist_tex = gpu.texture(WRIST_SIZE.0, WRIST_SIZE.1, None).map_err(err)?;
-    let mut keyboard = dvr_ui::Keyboard::new()?;
+    let mut keyboard = wxr_ui::Keyboard::new()?;
     let mut wrist = Wrist::new()?;
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
-    let mut sampler = dvr_sys::Sampler::new();
-    let faces: Vec<dvr_ui::KeyFace> = dvr_core::keyboard::ROWS
+    let mut sampler = wxr_sys::Sampler::new();
+    let faces: Vec<wxr_ui::KeyFace> = wxr_core::keyboard::ROWS
         .iter()
         .flat_map(|r| r.iter())
-        .map(|k| dvr_ui::KeyFace { label: k.label.to_owned(), ..dvr_ui::KeyFace::default() })
+        .map(|k| wxr_ui::KeyFace { label: k.label.to_owned(), ..wxr_ui::KeyFace::default() })
         .collect();
 
     let mut input = FrameInput::default();
@@ -223,7 +226,7 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
     let mut fresh: Vec<u32> = Vec::with_capacity(8);
     while baseline.is_none_or(|(t0, _, _)| t0.elapsed() < length) {
         if baseline.is_none() && start.elapsed() >= SOAK_WARMUP {
-            baseline = Some((Instant::now(), dvr_sys::process_cpu_time(), dvr_sys::working_set_bytes()));
+            baseline = Some((Instant::now(), wxr_sys::process_cpu_time(), wxr_sys::working_set_bytes()));
             (frames, overruns, worst) = (0, 0, Duration::ZERO);
         }
         if !vr.poll(start.elapsed().as_millis() as u64, &mut input) {
@@ -233,7 +236,7 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
         if tick.elapsed() >= Duration::from_secs(1) {
             tick = Instant::now();
             let load = sampler.sample();
-            let (hour, minute) = dvr_sys::local_time();
+            let (hour, minute) = wxr_sys::local_time();
             wrist.set(&WristInfo {
                 hour,
                 minute,
@@ -248,7 +251,7 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
                 }),
                 ..WristInfo::default()
             });
-            peak_ram = peak_ram.max(dvr_sys::working_set_bytes());
+            peak_ram = peak_ram.max(wxr_sys::working_set_bytes());
         }
         keyboard.set(&faces);
         for (p, _, _) in &screens {
@@ -258,7 +261,7 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
         vr.place_panel(&wrist_panel, wrist_panel.pose);
         timer.begin(&gpu);
         let wrist_new = wrist.render().map(|px| gpu.update(&wrist_tex, px, WRIST_SIZE.0)).is_some();
-        let kb_new = keyboard.render().map(|px| gpu.update(&kb_tex, px, dvr_ui::KEYBOARD_SIZE.0)).is_some();
+        let kb_new = keyboard.render().map(|px| gpu.update(&kb_tex, px, wxr_ui::KEYBOARD_SIZE.0)).is_some();
         fresh.clear();
         for (p, tex, capture) in &mut screens {
             if capture.copy_latest(&gpu.context, tex).map_err(err)? == Frame::Copied {
@@ -288,9 +291,9 @@ fn soak_run(manifest: &std::path::Path, length: Duration) -> GateResult {
     }
     let (t0, cpu0, ram0) = baseline.ok_or("no measurement window")?;
     let wall = t0.elapsed();
-    let ram1 = dvr_sys::working_set_bytes();
+    let ram1 = wxr_sys::working_set_bytes();
     let growth = ram1.saturating_sub(ram0);
-    let cpu = (dvr_sys::process_cpu_time() - cpu0).as_secs_f32() / wall.as_secs_f32() * 100.0;
+    let cpu = (wxr_sys::process_cpu_time() - cpu0).as_secs_f32() / wall.as_secs_f32() * 100.0;
     let gpu_ms = timer.last_ms();
     let mb = |b: u64| b as f64 / 1_048_576.0;
     println!(

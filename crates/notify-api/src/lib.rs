@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Local notification endpoint compatible with the public XSOverlay UDP notification
 //! protocol (JSON datagram on 127.0.0.1:42069, `messageType` 1 = popup).
 use serde::Deserialize;

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use crate::keyboard;
 use crate::math::{Pose, Quat, Vec3};
 use serde::{Deserialize, Serialize};

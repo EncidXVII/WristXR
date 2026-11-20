@@ -1,19 +1,22 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! What the VR session needs from the platform, on Windows: Direct3D 11 textures, Windows Graphics Capture,
 //! SendInput. Linux has the same names in `plat_linux.rs`, so `run.rs` is the same file for both.
-use dvr_core::panel::PixelRect;
-use dvr_vr::OpenVr;
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
+use wxr_core::panel::PixelRect;
+use wxr_vr::OpenVr;
 
-pub use dvr_capture_win::{Frame, Monitor};
-pub use dvr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, close_enough, width_for};
-pub use dvr_input_win::{
+pub use wxr_capture_win::{Frame, Monitor};
+pub use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, close_enough, width_for};
+pub use wxr_input_win::{
     Injector, admin_window_at, caps_lock, key_char, layout_id, layout_name, layouts, next_layout, select_layout,
 };
 
 /// A panel texture.
 pub type Tex = ID3D11Texture2D;
 
-/// The process name of SteamVR's server, watched so DesktopVR leaves with it.
+/// The process name of SteamVR's server, watched so WristXR leaves with it.
 pub const STEAMVR_SERVER: &str = "vrserver.exe";
 
 /// On the adapter SteamVR renders on.
@@ -23,45 +26,45 @@ pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
 
 /// Hands a texture to an overlay. Call after `Gpu::flush`.
 pub fn submit(_gpu: &Gpu, vr: &mut OpenVr, key: u64, tex: &Tex) -> Result<(), String> {
-    vr.set_texture_d3d11(key, dvr_gfx_d3d11::raw(tex))
+    vr.set_texture_d3d11(key, wxr_gfx_d3d11::raw(tex))
 }
 
 pub fn monitors() -> Vec<Monitor> {
-    dvr_capture_win::monitors()
+    wxr_capture_win::monitors()
 }
 
 /// Windows the user can add, front to back.
 pub fn windows() -> Vec<(u64, String)> {
-    dvr_capture_win::windows().into_iter().map(|(h, title)| (h as u64, title)).collect()
+    wxr_capture_win::windows().into_iter().map(|(h, title)| (h as u64, title)).collect()
 }
 
 pub fn window_rect(id: u64) -> Option<PixelRect> {
-    dvr_capture_win::window_rect(id as isize)
+    wxr_capture_win::window_rect(id as isize)
 }
 
 pub fn window_at(p: (i32, i32)) -> Option<u64> {
-    dvr_capture_win::window_at(p).map(|h| h as u64)
+    wxr_capture_win::window_at(p).map(|h| h as u64)
 }
 
 pub fn focus(id: u64) {
-    dvr_capture_win::focus(id as isize);
+    wxr_capture_win::focus(id as isize);
 }
 
 /// The GPU names, for the self-test report.
 pub fn adapter_names() -> Vec<String> {
-    dvr_gfx_d3d11::adapter_names()
+    wxr_gfx_d3d11::adapter_names()
 }
 
 /// A live capture of a screen or window, copied into a panel texture.
-pub struct Capture(dvr_capture_win::Capture);
+pub struct Capture(wxr_capture_win::Capture);
 
 impl Capture {
     pub fn monitor(gpu: &Gpu, m: &Monitor) -> Result<Self, String> {
-        dvr_capture_win::Capture::monitor(&gpu.device, m.handle).map(Self).map_err(|e| e.to_string())
+        wxr_capture_win::Capture::monitor(&gpu.device, m.handle).map(Self).map_err(|e| e.to_string())
     }
 
     pub fn window(gpu: &Gpu, id: u64) -> Result<Self, String> {
-        dvr_capture_win::Capture::window(&gpu.device, id as isize).map(Self).map_err(|e| e.to_string())
+        wxr_capture_win::Capture::window(&gpu.device, id as isize).map(Self).map_err(|e| e.to_string())
     }
 
     pub fn copy_latest(&mut self, gpu: &Gpu, target: &Tex) -> Result<Frame, String> {

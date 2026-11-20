@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Keyboard geometry and modifier logic. Keys are PC set-1 scancodes so the OS layout
 //! (US, UA, DE, ...) decides the produced character. Linux evdev codes equal set-1 for
 //! the main block; extended keys carry the `EXT` flag.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Notification banner, low in your view: the app's tile, the app and when, the title, and up to three lines of
 //! the message. The card stands on the texture's bottom edge, so a shorter message keeps that edge where it is
 //! and the card only grows upward. The app moves and fades the overlay itself; this view only draws the card.

@@ -1,6 +1,6 @@
 ## Watch
 wrist-no-game = no game
-wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · DVR { $own } ms
+wrist-load = { $fps } fps · CPU { $cpu } · GPU { $gpu } · WXR { $own } ms
 wrist-date = { $weekday } { $day } { $month }
 wrist-media-sub = { $artist } · { $app }
 wrist-low = { $device } { $level } · charge soon
@@ -9,7 +9,7 @@ wrist-right-controller = Right controller
 wrist-tracker = Tracker
 wrist-now = now
 admin-title = Can't click { $app }
-admin-body = It runs as administrator, and Windows blocks clicks from other apps. Run DesktopVR as administrator too, or { $app } without it.
+admin-body = It runs as administrator, and Windows blocks clicks from other apps. Run WristXR as administrator too, or { $app } without it.
 admin-this-window = this window
 wrist-menu = Menu
 wrist-keyboard = Keyboard
@@ -196,7 +196,7 @@ menu-autostart = With SteamVR
 menu-update-check = Check updates
 menu-new-screens = New screens
 menu-curved-default = Curved
-menu-quit = Quit DesktopVR
+menu-quit = Quit WristXR
 
 ## Toolbar
 tool-keyboard = Keyboard
@@ -230,7 +230,7 @@ first-tips-body =
 first-got-it = Got it
 
 ## Tray and chat
-tray-tooltip = DesktopVR
+tray-tooltip = WristXR
 tray-open = Open menu in VR
 tray-hide = Hide / show overlays
 tray-autostart = Start with SteamVR

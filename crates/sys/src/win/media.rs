@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Now-playing info, transport controls and the Windows volume, on a background thread so the blocking WinRT and
 //! COM calls never touch the render loop. Media goes through Windows' media session (SMTC), the volume through the
 //! default output device's endpoint volume.

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 use std::ops::{Add, Mul, Neg, Sub};

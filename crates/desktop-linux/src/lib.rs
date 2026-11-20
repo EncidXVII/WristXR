@@ -1,4 +1,7 @@
-//! Linux: screens, windows and input for DesktopVR, the counterpart of `dvr-capture-win` and `dvr-input-win`.
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Linux: screens, windows and input for WristXR, the counterpart of `wxr-capture-win` and `wxr-input-win`.
 //!
 //! On a Wayland session everything goes through one desktop-portal session (screens and windows the user shares,
 //! keyboard and pointer), with frames from PipeWire; if the portal is missing or refused it falls back to X11, which
@@ -14,11 +17,11 @@ mod pipewire;
 mod portal;
 mod x11;
 
-use dvr_core::engine::{Event, MouseButton};
-use dvr_core::keyboard::CAPS;
-use dvr_core::panel::PixelRect;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use wxr_core::engine::{Event, MouseButton};
+use wxr_core::keyboard::CAPS;
+use wxr_core::panel::PixelRect;
 
 pub use keys::evdev;
 
@@ -198,7 +201,7 @@ impl Capture {
 
 static CAPS_ON: AtomicBool = AtomicBool::new(false);
 
-/// Mouse and keyboard into the desktop, from DesktopVR's engine events (desktop pixels, set-1 scancodes).
+/// Mouse and keyboard into the desktop, from WristXR's engine events (desktop pixels, set-1 scancodes).
 #[derive(Default)]
 pub struct Injector {
     last: Option<(i32, i32)>,
@@ -339,7 +342,7 @@ pub fn key_char(scancode: u16, shift: bool, caps: bool) -> Option<char> {
     keys::us_char(scancode, shift, caps)
 }
 
-/// Caps Lock as DesktopVR last set it (Linux has no common way to read it on Wayland).
+/// Caps Lock as WristXR last set it (Linux has no common way to read it on Wayland).
 pub fn caps_lock() -> bool {
     CAPS_ON.load(Ordering::Relaxed)
 }

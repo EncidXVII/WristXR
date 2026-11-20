@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The VR session: OpenVR overlays, screen and window capture, input into the desktop, Slint menu and wrist. The
 //! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
 //! X11 or the Wayland portal on Linux.
@@ -7,24 +10,24 @@ use crate::plat::{
 };
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
-use dvr_core::backend::VrBackend;
-use dvr_core::chat::{ChatAction, ChatLine};
-use dvr_core::engine::{Claims, Engine, Event, FrameInput, MouseButton};
-use dvr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
-use dvr_core::math::{Pose, Quat, Vec3};
-use dvr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
-use dvr_core::raster;
-use dvr_core::state::{NotifyFrom, State, is_discord_app};
-use dvr_notify_api::{Listener, Toast};
-use dvr_osc::{Chatbox, VRCHAT_ADDR};
-use dvr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
-use dvr_ui::{
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use wxr_core::backend::VrBackend;
+use wxr_core::chat::{ChatAction, ChatLine};
+use wxr_core::engine::{Claims, Engine, Event, FrameInput, MouseButton};
+use wxr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
+use wxr_core::math::{Pose, Quat, Vec3};
+use wxr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
+use wxr_core::raster;
+use wxr_core::state::{NotifyFrom, State, is_discord_app};
+use wxr_notify_api::{Listener, Toast};
+use wxr_osc::{Chatbox, VRCHAT_ADDR};
+use wxr_sys::{AppToasts, Media, MediaCommand, MediaInfo, ToastAccess};
+use wxr_ui::{
     BANNER_SIZE, Banner, KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE,
     Toolbar, WRIST_SIZE, Wrist, WristAdd, WristInfo, WristInput, WristLoad, WristMedia, WristWindow,
 };
-use dvr_vr::{OpenVr, cursor_key};
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use wxr_vr::{OpenVr, cursor_key};
 
 const SAVE_DELAY: Duration = Duration::from_secs(1);
 const CURSOR_LIFT_M: f32 = 0.003;
@@ -168,13 +171,13 @@ fn wrist_info(
     vr: &OpenVr,
     state: &State,
     expanded: bool,
-    load: &dvr_sys::Load,
+    load: &wxr_sys::Load,
     own_gpu_ms: f32,
     toast: Option<&(Toast, Instant)>,
     media: Option<&MediaInfo>,
 ) -> WristInfo {
-    let (hour, minute) = dvr_sys::local_time();
-    let (weekday, day, month) = dvr_sys::local_date();
+    let (hour, minute) = wxr_sys::local_time();
+    let (weekday, day, month) = wxr_sys::local_date();
     let stats = vr.stats();
     let battery = state.wrist_battery;
     let layout = state.wrist_layout;
@@ -321,8 +324,8 @@ pub fn run() -> Result<(), String> {
     let mut dirty: Option<Instant> = None;
     let mut resized: Vec<(u32, u32, u32)> = Vec::with_capacity(8);
     // Follow Windows' "Animation effects" setting: the watch grows, switches slide, the menu fades in.
-    let motion = dvr_sys::animations_enabled();
-    dvr_ui::set_motion(motion);
+    let motion = wxr_sys::animations_enabled();
+    wxr_ui::set_motion(motion);
     session.motion = motion;
     let mut wrist = Wrist::new()?;
     let media = Media::start();
@@ -338,12 +341,12 @@ pub fn run() -> Result<(), String> {
     let mut wrist_flags = (false, false);
     let mut last_ms = 0u64;
     let mut glance = Glance::default();
-    let mut sampler = dvr_sys::Sampler::new();
-    let mut load = dvr_sys::Load::default();
+    let mut sampler = wxr_sys::Sampler::new();
+    let mut load = wxr_sys::Load::default();
     let mut timer = GpuTimer::new(&gpu).map_err(err)?;
     // Another app (e.g. XSOverlay) may own the port; the overlay still runs without toasts.
     let mut notifications =
-        Listener::bind(dvr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
+        Listener::bind(wxr_notify_api::PORT).inspect_err(|e| tracing::warn!(%e, "notification API unavailable")).ok();
     session.notifications_ok = notifications.is_some();
     let mut toast: Option<(Toast, Instant)> = None;
     // Administrator windows already explained (see `admin_window_at`).
@@ -377,13 +380,13 @@ pub fn run() -> Result<(), String> {
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
     let mut release = None;
     // SteamVR normally says goodbye with a quit event; if its server dies instead, we notice here and leave too.
-    let steamvr = dvr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER);
+    let steamvr = wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER);
     // Backstop: even if a SteamVR call never returns once SteamVR is gone, the process still ends.
-    if let Some(w) = dvr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER) {
+    if let Some(w) = wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER) {
         w.exit_when_gone(Duration::from_secs(5));
     }
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
-        dvr_sys::pump_messages();
+        wxr_sys::pump_messages();
         if let Ok(r) = updates.try_recv() {
             if let Some(t) = tray.as_mut() {
                 t.offer_update(&strings, &r.version);
@@ -574,7 +577,7 @@ pub fn run() -> Result<(), String> {
                 Event::Hover { hand, panel, uv, .. } => {
                     cursors[hand.index()] = Some((panel, uv));
                     if engine.panels.iter().any(|p| p.id == panel && p.source == Source::Keyboard) {
-                        key_hover[hand.index()] = dvr_core::keyboard::key_at(uv).map(|k| k.sc);
+                        key_hover[hand.index()] = wxr_core::keyboard::key_at(uv).map(|k| k.sc);
                     }
                 }
                 Event::Key { scancode, down: true } if !held.contains(&scancode) => held.push(scancode),
@@ -597,8 +600,8 @@ pub fn run() -> Result<(), String> {
                 let app = if title.is_empty() { strings.get("admin-this-window", &[]) } else { title };
                 let (head, body) =
                     (strings.get("admin-title", &[("app", app.clone())]), strings.get("admin-body", &[("app", app)]));
-                banner.set("DesktopVR", &head, &body, &strings.get("wrist-now", &[]));
-                let t = Toast { title: head, content: body, source_app: "DesktopVR".into(), timeout_s: APP_TOAST_S };
+                banner.set("WristXR", &head, &body, &strings.get("wrist-now", &[]));
+                let t = Toast { title: head, content: body, source_app: "WristXR".into(), timeout_s: APP_TOAST_S };
                 toast = Some((t, Instant::now()));
                 refresh_wrist = true;
             }
@@ -650,7 +653,7 @@ pub fn run() -> Result<(), String> {
                 Event::Moved { .. } => dirty = Some(Instant::now()),
             }
             if session.state.typing_sounds && matches!(*e, Event::Key { down: true, .. }) {
-                dvr_sys::play_click();
+                wxr_sys::play_click();
             }
         }
 
@@ -1063,7 +1066,7 @@ pub fn run() -> Result<(), String> {
         }
         vr.wait_frame(20);
     }
-    dvr_sys::exit_watchdog(EXIT_GRACE);
+    wxr_sys::exit_watchdog(EXIT_GRACE);
     session.persist(&engine.panels, worn_head);
     session.state.save(&state_path).map_err(err)
 }

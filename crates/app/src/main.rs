@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // No console window when started by double-click or by SteamVR; --selftest re-attaches to the caller's console.
 #![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
 
@@ -36,10 +39,10 @@ const REPORT: &str = "selftest-report.json";
 fn main() -> ExitCode {
     // Physical pixels everywhere (capture, input, monitor rects) — must precede any window or monitor call.
     #[cfg(windows)]
-    dvr_capture_win::init_process();
+    wxr_capture_win::init_process();
     if std::env::args().any(|a| a == "--selftest") {
         #[cfg(windows)]
-        dvr_sys::attach_parent_console();
+        wxr_sys::attach_parent_console();
         return selftest();
     }
     #[cfg(any(windows, target_os = "linux"))]
@@ -48,14 +51,14 @@ fn main() -> ExitCode {
     }
     // A second copy would fight the first over the controllers and the notification port.
     #[cfg(any(windows, target_os = "linux"))]
-    let Some(_instance) = dvr_sys::single_instance() else {
-        fatal("DesktopVR is already running. Use its tray icon to open the menu or quit.");
+    let Some(_instance) = wxr_sys::single_instance() else {
+        fatal("WristXR is already running. Use its tray icon to open the menu or quit.");
         return ExitCode::FAILURE;
     };
     #[cfg(any(windows, target_os = "linux"))]
     let result = run::run();
     #[cfg(not(any(windows, target_os = "linux")))]
-    let result: Result<(), String> = Err("DesktopVR runs on Windows and Linux.".into());
+    let result: Result<(), String> = Err("WristXR runs on Windows and Linux.".into());
     let code = match result {
         Ok(()) => 0,
         Err(e) => {
@@ -65,7 +68,7 @@ fn main() -> ExitCode {
     };
     // Settings are saved; skip library teardown, which can hang with background threads still running.
     #[cfg(any(windows, target_os = "linux"))]
-    dvr_sys::terminate(code);
+    wxr_sys::terminate(code);
     #[cfg(not(any(windows, target_os = "linux")))]
     ExitCode::from(code as u8)
 }
@@ -75,7 +78,7 @@ fn main() -> ExitCode {
 fn fatal(message: &str) {
     eprintln!("{message}");
     #[cfg(any(windows, target_os = "linux"))]
-    dvr_sys::error_dialog("DesktopVR", message);
+    wxr_sys::error_dialog("WristXR", message);
 }
 
 fn selftest() -> ExitCode {

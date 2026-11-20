@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Process lifetime: one instance at a time, noticing when SteamVR is gone, and an exit that cannot hang.
 use std::time::Duration;
 use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, WAIT_TIMEOUT};
@@ -12,11 +15,11 @@ use windows::core::w;
 /// Holds the single-instance mutex for the life of the process.
 pub struct Instance(HANDLE);
 
-/// Claims "the" DesktopVR instance for this user session; `None` when another copy is already running.
+/// Claims "the" WristXR instance for this user session; `None` when another copy is already running.
 pub fn single_instance() -> Option<Instance> {
     // SAFETY: plain named-mutex creation; the handle is owned by the returned guard (or closed right here).
     unsafe {
-        let h = CreateMutexW(None, false, w!("Local\\DesktopVR.instance")).ok()?;
+        let h = CreateMutexW(None, false, w!("Local\\WristXR.instance")).ok()?;
         if GetLastError() == ERROR_ALREADY_EXISTS {
             let _ = CloseHandle(h);
             return None;

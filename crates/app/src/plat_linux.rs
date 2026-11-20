@@ -1,14 +1,17 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! What the VR session needs from the platform, on Linux: Vulkan textures, X11 or Wayland-portal capture and
 //! input. The same names as `plat_win.rs`, so `run.rs` is the same file for both.
-use dvr_vr::OpenVr;
+use wxr_vr::OpenVr;
 
-pub use dvr_desktop_linux::{
+pub use wxr_desktop_linux::{
     Injector, Monitor, admin_window_at, caps_lock, focus, key_char, layout_id, layout_name, layouts, monitors,
     next_layout, select_layout, window_at, window_rect, windows,
 };
-pub use dvr_gfx_vk::{Gpu, GpuTimer, Tex};
+pub use wxr_gfx_vk::{Gpu, GpuTimer, Tex};
 
-/// The process name of SteamVR's server, watched so DesktopVR leaves with it.
+/// The process name of SteamVR's server, watched so WristXR leaves with it.
 pub const STEAMVR_SERVER: &str = "vrserver";
 
 /// On the GPU the headset is on.
@@ -36,15 +39,15 @@ pub enum Frame {
 }
 
 /// A live capture of a screen or window, copied into a panel texture.
-pub struct Capture(dvr_desktop_linux::Capture);
+pub struct Capture(wxr_desktop_linux::Capture);
 
 impl Capture {
     pub fn monitor(_gpu: &Gpu, m: &Monitor) -> Result<Self, String> {
-        dvr_desktop_linux::Capture::monitor(m).map(Self)
+        wxr_desktop_linux::Capture::monitor(m).map(Self)
     }
 
     pub fn window(_gpu: &Gpu, id: u64) -> Result<Self, String> {
-        dvr_desktop_linux::Capture::window(id).map(Self)
+        wxr_desktop_linux::Capture::window(id).map(Self)
     }
 
     pub fn copy_latest(&mut self, gpu: &Gpu, target: &Tex) -> Result<Frame, String> {
@@ -59,7 +62,7 @@ impl Capture {
     }
 }
 
-// The detail pass (mip levels and a sharpen shader, see dvr-gfx-d3d11) is Direct3D only for now: on Linux screens
+// The detail pass (mip levels and a sharpen shader, see wxr-gfx-d3d11) is Direct3D only for now: on Linux screens
 // are shown as captured. These stand-ins keep `run.rs` one file; `Sharpen::new` failing turns the pass off there.
 
 pub struct Sharpen;

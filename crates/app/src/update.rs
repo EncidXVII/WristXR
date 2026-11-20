@@ -1,10 +1,13 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Update check for GitHub builds: latest release vs this version. Never installs anything; the tray offers a
 //! one-click download link. Network only to api.github.com, generic User-Agent, no identifiers.
 use serde::Deserialize;
 
 /// `owner/name` of the release repository; empty disables the check.
 #[cfg(any(windows, target_os = "linux"))]
-pub const REPO: &str = "EncidXVII/DesktopVR";
+pub const REPO: &str = "EncidXVII/WristXR";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Release {
@@ -43,7 +46,7 @@ pub fn check_in_background() -> std::sync::mpsc::Receiver<Release> {
             let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
             // curl ships with Windows 10+ and with every Linux desktop; no HTTP client crate needed.
             let mut cmd = std::process::Command::new(if cfg!(windows) { "curl.exe" } else { "curl" });
-            cmd.args(["-sfL", "--max-time", "10", "-H", "User-Agent: DesktopVR-update-check", &url]);
+            cmd.args(["-sfL", "--max-time", "10", "-H", "User-Agent: WristXR-update-check", &url]);
             // CREATE_NO_WINDOW: the app has no console, so without it curl would flash one at startup.
             #[cfg(windows)]
             std::os::windows::process::CommandExt::creation_flags(&mut cmd, 0x0800_0000);

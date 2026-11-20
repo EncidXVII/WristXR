@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! SteamVR action manifest and default bindings, embedded so the app runs from any folder.
 use std::io;
 use std::path::{Path, PathBuf};
@@ -28,11 +31,11 @@ pub fn install(dir: &Path) -> io::Result<PathBuf> {
 
 /// SteamVR application key for the `.vrmanifest` (auto-launch with SteamVR).
 #[cfg(any(windows, target_os = "linux"))]
-pub const APP_KEY: &str = "desktopvr.overlay";
+pub const APP_KEY: &str = "wristxr.overlay";
 
-/// The app icon SteamVR shows next to DesktopVR in its startup and overlay lists.
+/// The app icon SteamVR shows next to WristXR in its startup and overlay lists.
 #[cfg(any(windows, target_os = "linux"))]
-const STEAMVR_IMAGE: &[u8] = include_bytes!("../../../packaging/brand/desktopvr-256.png");
+const STEAMVR_IMAGE: &[u8] = include_bytes!("../../../packaging/brand/wristxr-256.png");
 
 /// Writes the SteamVR application manifest pointing at `exe` into `dir`, with the app icon beside it.
 #[cfg(any(windows, target_os = "linux"))]
@@ -42,7 +45,7 @@ pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
     #[cfg(target_os = "linux")]
     const BINARY_PATH: &str = "binary_path_linux";
     std::fs::create_dir_all(dir)?;
-    let image = dir.join("desktopvr.png");
+    let image = dir.join("wristxr.png");
     std::fs::write(&image, STEAMVR_IMAGE)?;
     let manifest = serde_json::json!({
         "source": "builtin",
@@ -52,10 +55,10 @@ pub fn install_vrmanifest(dir: &Path, exe: &Path) -> io::Result<PathBuf> {
             BINARY_PATH: exe.to_string_lossy(),
             "image_path": image.to_string_lossy(),
             "is_dashboard_overlay": true,
-            "strings": { "en_us": { "name": "DesktopVR", "description": "Your desktop in VR" } }
+            "strings": { "en_us": { "name": "WristXR", "description": "Your desktop in VR" } }
         }]
     });
-    let path = dir.join("desktopvr.vrmanifest");
+    let path = dir.join("wristxr.vrmanifest");
     std::fs::write(&path, serde_json::to_vec_pretty(&manifest).map_err(io::Error::other)?)?;
     Ok(path)
 }

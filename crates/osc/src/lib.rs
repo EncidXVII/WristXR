@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! VRChat OSC chatbox (public OSC docs: `/chatbox/input s b b`, `/chatbox/typing b`).
 use rosc::{OscMessage, OscPacket, OscType, encoder};
 use std::io;

@@ -1,8 +1,11 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! X11: monitors from RandR, windows from the window manager's stacking list, capture through MIT-SHM (plain
 //! GetImage where SHM is missing), windows from their Composite pixmap (their own pixels, even when covered), and
 //! input through XTest.
-use dvr_core::panel::PixelRect;
 use std::sync::OnceLock;
+use wxr_core::panel::PixelRect;
 use x11rb::connection::Connection;
 use x11rb::protocol::composite::{ConnectionExt as _, Redirect};
 use x11rb::protocol::randr::ConnectionExt as _;

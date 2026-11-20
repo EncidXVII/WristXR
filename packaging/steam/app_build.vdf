@@ -1,7 +1,7 @@
 "AppBuild"
 {
 	"AppID" "APP_ID"
-	"Desc" "DesktopVR release"
+	"Desc" "WristXR release"
 	"ContentRoot" "content"
 	"BuildOutput" "output"
 	"SetLive" "beta"

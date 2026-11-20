@@ -1,11 +1,11 @@
 [package]
-name = "dvr-input-win"
+name = "wxr-input-win"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-dvr-core.workspace = true
+wxr-core.workspace = true
 windows.workspace = true
 
 [lints]

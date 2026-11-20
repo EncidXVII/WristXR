@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Windows notifications from other apps (Discord, ...) read through `UserNotificationListener` on a background
 //! thread: new toasts in the notification center are forwarded once, as (app, title, body). Windows asks the user
 //! once for access ("Let apps access your notifications"); without it nothing is read.
@@ -118,7 +121,7 @@ fn listen(tx: &Sender<AppToast>, access: &Mutex<Access>) -> windows::core::Resul
 mod tests {
     use super::*;
 
-    /// Run by hand: `cargo test -p dvr-sys toasts -- --ignored --nocapture`, then send yourself a Discord DM.
+    /// Run by hand: `cargo test -p wxr-sys toasts -- --ignored --nocapture`, then send yourself a Discord DM.
     #[test]
     #[ignore = "needs a desktop session and Windows notification access"]
     fn probe_notification_access() {
@@ -138,7 +141,7 @@ mod tests {
 
 #[cfg(test)]
 mod probe {
-    /// Lists what is in the notification center now: `cargo test -p dvr-sys dump -- --ignored --nocapture`.
+    /// Lists what is in the notification center now: `cargo test -p wxr-sys dump -- --ignored --nocapture`.
     #[test]
     #[ignore = "reads this PC's notification center"]
     fn dump_notification_center() {

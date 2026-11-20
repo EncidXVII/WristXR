@@ -1,10 +1,13 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Puts the icons into the Windows executable. Group 1 is the app icon (Explorer, taskbar, Alt+Tab); 2 and 3 are
 //! the tray icon for dark and light taskbars. They come from packaging/brand (drawn by marks.py) and go in as a
 //! compiled resource file, which the MSVC linker takes as an input, so no resource compiler is needed.
 
 use std::path::{Path, PathBuf};
 
-const ICONS: [(u16, &str); 3] = [(1, "desktopvr.ico"), (2, "desktopvr-tray.ico"), (3, "desktopvr-tray-ink.ico")];
+const ICONS: [(u16, &str); 3] = [(1, "wristxr.ico"), (2, "wristxr-tray.ico"), (3, "wristxr-tray-ink.ico")];
 const RT_ICON: u16 = 3;
 const RT_GROUP_ICON: u16 = 14;
 

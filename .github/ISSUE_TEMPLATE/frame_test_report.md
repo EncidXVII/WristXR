@@ -7,7 +7,7 @@ labels: frame
 **Mode:** on-device (SteamOS) / streamed from PC
 
 **Self-test**
-Attach `selftest-report.zip` from `./desktopvr --selftest` (on-device) or `DesktopVR.exe --selftest` (PC).
+Attach `selftest-report.zip` from `./wristxr --selftest` (on-device) or `WristXR.exe --selftest` (PC).
 
 **Checklist**
 - [ ] Overlay starts with SteamVR

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Minimal OpenVR C ABI, from third_party/openvr/openvr_capi.h (BSD-3).
 //! Function tables are indexed; `table_indices_match_header` checks every index against the header.
 use std::ffi::{CStr, c_char, c_void};

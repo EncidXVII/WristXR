@@ -1,3 +1,6 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 use crate::math::Pose;
 use crate::panel::{Hand, Panel};
 use serde::{Deserialize, Serialize};
@@ -5,7 +8,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub const APP_DIR_NAME: &str = "DesktopVR";
+pub const APP_DIR_NAME: &str = "WristXR";
 
 /// Discord and the popular Discord clients (Vesktop / Vencord, Equibop, Legcord, WebCord, Dorion), by app name.
 const DISCORD_APPS: [&str; 7] = ["discord", "vesktop", "vencord", "equibop", "legcord", "webcord", "dorion"];

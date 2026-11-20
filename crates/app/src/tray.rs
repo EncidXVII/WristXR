@@ -1,12 +1,15 @@
+// Copyright (C) 2026 EncidXVII
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Tray icon: open the menu in VR, hide or show everything, start with SteamVR, quit. Events arrive through the
 //! main thread's message pump.
 use std::time::{Duration, Instant};
 
-use dvr_core::raster::{ACCENT, BG, Image};
-use dvr_sys::light_taskbar;
-use dvr_ui::Strings;
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
+use wxr_core::raster::{ACCENT, BG, Image};
+use wxr_sys::light_taskbar;
+use wxr_ui::Strings;
 
 /// How often the tray checks whether the taskbar turned light or dark.
 const THEME_CHECK: Duration = Duration::from_secs(2);
@@ -32,10 +35,10 @@ pub struct Tray {
     quit: MenuItem,
 }
 
-/// The DesktopVR mark from the exe's icons (see build.rs) at the tray's size: lime on a dark taskbar, dark ink on
+/// The WristXR mark from the exe's icons (see build.rs) at the tray's size: lime on a dark taskbar, dark ink on
 /// a light one, where lime would be too faint. A build without the icons gets a drawn accent tile instead.
 fn icon(light: bool) -> Result<Icon, String> {
-    let size = dvr_sys::small_icon_px();
+    let size = wxr_sys::small_icon_px();
     Icon::from_resource(if light { 3 } else { 2 }, Some((size, size))).or_else(|_| {
         let mut img = Image::new(32, 32, ACCENT);
         img.text(16, 16, 3, "D", BG);

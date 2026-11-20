@@ -1,3 +1,6 @@
+# Copyright (C) 2026 EncidXVII
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Runs a command against SteamVR's null HMD driver (no headset needed), then restores the user's settings.
 # Usage: harness/null-driver.ps1 <exe> [args...]
 param([Parameter(Mandatory)][string]$Command, [Parameter(ValueFromRemainingArguments)][string[]]$Arguments = @())
@@ -6,15 +9,15 @@ if (Get-Process vrserver -ErrorAction SilentlyContinue) { throw 'SteamVR is runn
 $paths = Get-Content (Join-Path $env:LOCALAPPDATA 'openvr\openvrpaths.vrpath') -Raw | ConvertFrom-Json
 $settings = Join-Path $paths.config[0] 'steamvr.vrsettings'
 # A previous run cut short (crash, power loss) leaves backups behind: put the user's files back first.
-foreach ($leftover in Get-ChildItem $paths.config[0] -Filter '*.dvr-backup' -ErrorAction SilentlyContinue) {
-    Move-Item $leftover.FullName ($leftover.FullName -replace '\.dvr-backup$', '') -Force
+foreach ($leftover in Get-ChildItem $paths.config[0] -Filter '*.wxr-backup' -ErrorAction SilentlyContinue) {
+    Move-Item $leftover.FullName ($leftover.FullName -replace '\.wxr-backup$', '') -Force
     Write-Output "restored leftover $($leftover.Name)"
 }
-$backup = "$settings.dvr-backup"
+$backup = "$settings.wxr-backup"
 Copy-Item $settings $backup -Force
 # App registrations (vrmanifest paths) live here; tests register the dev build, so restore it too.
 $appconfig = Join-Path $paths.config[0] 'appconfig.json'
-$appBackup = "$appconfig.dvr-backup"
+$appBackup = "$appconfig.wxr-backup"
 $hadAppconfig = Test-Path $appconfig
 if ($hadAppconfig) { Copy-Item $appconfig $appBackup -Force }
 $code = 1
