@@ -61,7 +61,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   "share now playing".
 - **Wrist watch that stays out of the way**: the time, date and battery rings, shown only while you look at your
   wrist, plus one line for what is playing (with a pause button), a new message or a low battery. Point at the
-  time to open it: seek bar, play / skip / shuffle, share the song to VRChat, Windows volume and mute, switches
+  time to open it: seek bar, play / skip / shuffle, share the song to VRChat, the player's volume and mute, switches
   for Show overlay and Keyboard, Add (a window or the next screen, right there on the watch), the Inbox, the menu,
   and fps / load / this overlay's own cost.
 - **Seven watch layouts** for the glance: Standard, Clock, No batteries, Batteries, Music (a small player with

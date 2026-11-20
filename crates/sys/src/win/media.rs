@@ -1,9 +1,12 @@
 // Copyright (C) 2026 EncidXVII
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Now-playing info, transport controls and the Windows volume, on a background thread so the blocking WinRT and
-//! COM calls never touch the render loop. Media goes through Windows' media session (SMTC), the volume through the
-//! default output device's endpoint volume.
+//! Now-playing info, transport controls and the player's volume, on a background thread so the blocking WinRT and
+//! COM calls never touch the render loop. Media goes through Windows' media session (SMTC). The volume is the
+//! player's own (its Volume mixer entry), on whichever output device it plays through: a player sent to a device
+//! of its own (Spotify to an audio interface while Windows' default is the headset) is not turned down by the
+//! default device's volume, and devices that take volume themselves (Virtual Desktop's) may not apply it at all. A
+//! player with no audio of its own (or an id that names no program) falls back to the default device's volume.
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -11,10 +14,18 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session, GlobalSystemMediaTransportControlsSessionManager as Manager,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
 };
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender};
+use windows::Win32::Media::Audio::{
+    DEVICE_STATE_ACTIVE, IAudioSessionControl2, IAudioSessionManager2, IMMDevice, IMMDeviceEnumerator,
+    ISimpleAudioVolume, MMDeviceEnumerator, eConsole, eRender,
+};
 use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx};
 use windows::Win32::System::SystemInformation::GetSystemTimeAsFileTime;
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+};
+use windows::core::{Interface, PWSTR};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MediaInfo {
@@ -46,7 +57,7 @@ pub enum MediaCommand {
     ToggleShuffle,
     /// Seconds into the song.
     Seek(f32),
-    /// Windows output volume, 0..1.
+    /// The player's volume, 0..1 (the output device's when the player has no audio of its own there).
     Volume(f32),
     ToggleMute,
 }
@@ -123,35 +134,133 @@ fn read(manager: &Manager) -> Option<MediaInfo> {
     })
 }
 
-fn endpoint() -> Option<IAudioEndpointVolume> {
-    // SAFETY: COM is initialised on this thread; the interfaces are released when dropped.
-    unsafe {
-        let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
-        let device = devices.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
-        device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok()
+/// What the volume slider and mute act on.
+enum Volume {
+    /// The player's audio sessions (a browser can have several, a player one per device); all are set, the first
+    /// is read.
+    App(Vec<ISimpleAudioVolume>),
+    /// The output device, for a player with no session of its own.
+    Device(IAudioEndpointVolume),
+}
+
+impl Volume {
+    /// For the player with media session id `player`, on every output device it plays through.
+    fn of(player: &str) -> Option<Self> {
+        // SAFETY: COM is initialised on this thread; the interfaces are released when dropped.
+        unsafe {
+            let devices: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).ok()?;
+            let mut apps = Vec::new();
+            if let Ok(all) = devices.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) {
+                for i in 0..all.GetCount().unwrap_or(0) {
+                    if let Ok(d) = all.Item(i) {
+                        apps.extend(app_sessions(&d, player));
+                    }
+                }
+            }
+            let device = devices.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
+            if apps.is_empty() {
+                device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None).ok().map(Self::Device)
+            } else {
+                Some(Self::App(apps))
+            }
+        }
+    }
+
+    fn read(&self) -> Option<(f32, bool)> {
+        // SAFETY: plain queries on live interfaces.
+        unsafe {
+            match self {
+                Self::App(v) => v.first().and_then(|v| Some((v.GetMasterVolume().ok()?, v.GetMute().ok()?.as_bool()))),
+                Self::Device(v) => Some((v.GetMasterVolumeLevelScalar().ok()?, v.GetMute().ok()?.as_bool())),
+            }
+        }
+    }
+
+    // A session or device that refuses a change is not an error worth surfacing.
+    fn set(&self, level: f32) {
+        let level = level.clamp(0.0, 1.0);
+        // SAFETY: plain setters on live interfaces; a null event context is allowed.
+        unsafe {
+            match self {
+                Self::App(v) => v.iter().for_each(|v| drop(v.SetMasterVolume(level, std::ptr::null()))),
+                Self::Device(v) => drop(v.SetMasterVolumeLevelScalar(level, std::ptr::null())),
+            }
+        }
+    }
+
+    fn toggle_mute(&self) {
+        let Some((_, muted)) = self.read() else { return };
+        // SAFETY: as above.
+        unsafe {
+            match self {
+                Self::App(v) => v.iter().for_each(|v| drop(v.SetMute(!muted, std::ptr::null()))),
+                Self::Device(v) => drop(v.SetMute(!muted, std::ptr::null())),
+            }
+        }
     }
 }
 
-fn read_volume(v: &IAudioEndpointVolume) -> Option<(f32, bool)> {
-    // SAFETY: plain queries on a live interface.
-    unsafe { Some((v.GetMasterVolumeLevelScalar().ok()?, v.GetMute().ok()?.as_bool())) }
+/// The volume controls of `player`'s audio sessions on `device`: those of a program `plays_as` it.
+fn app_sessions(device: &IMMDevice, player: &str) -> Vec<ISimpleAudioVolume> {
+    let mut out = Vec::new();
+    if player.is_empty() {
+        return out;
+    }
+    // SAFETY: COM calls on live interfaces; the process handle is closed on every path.
+    unsafe {
+        let Ok(list) =
+            device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None).and_then(|m| m.GetSessionEnumerator())
+        else {
+            return out;
+        };
+        for i in 0..list.GetCount().unwrap_or(0) {
+            let Ok(session) = list.GetSession(i) else { continue };
+            let Ok(pid) = session.cast::<IAudioSessionControl2>().and_then(|s| s.GetProcessId()) else { continue };
+            // 0 is Windows' own sounds.
+            if pid != 0
+                && exe_of(pid).is_some_and(|exe| plays_as(&exe, player))
+                && let Ok(v) = session.cast::<ISimpleAudioVolume>()
+            {
+                out.push(v);
+            }
+        }
+    }
+    out
 }
 
-fn control(session: Option<&Session>, volume: Option<&IAudioEndpointVolume>, cmd: MediaCommand) {
-    // A player or device that refuses a command is not an error worth surfacing.
+/// The full path of process `pid`'s program.
+fn exe_of(pid: u32) -> Option<String> {
+    // SAFETY: the buffer outlives the call and its length is passed; the handle is closed before returning.
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok();
+        let _ = CloseHandle(h);
+        ok.then(|| String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+/// True when the program at `exe` is the player whose media session id is `player`: "chrome" for chrome.exe,
+/// "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify" for Spotify.exe. An opaque id (Firefox's) matches nothing.
+fn plays_as(exe: &str, player: &str) -> bool {
+    let file = exe.rsplit(['\\', '/']).next().unwrap_or(exe).to_lowercase();
+    let stem = file.strip_suffix(".exe").unwrap_or(&file);
+    let name = app_name(player).to_lowercase();
+    !stem.is_empty() && (stem == name || (stem.len() >= 4 && player.to_lowercase().contains(stem)))
+}
+
+fn control(session: Option<&Session>, volume: Option<&Volume>, cmd: MediaCommand) {
+    // A player that refuses a command is not an error worth surfacing.
     match cmd {
         MediaCommand::Volume(f) => {
             if let Some(v) = volume {
-                // SAFETY: plain setter on a live interface; a null event context is allowed.
-                let _ = unsafe { v.SetMasterVolumeLevelScalar(f.clamp(0.0, 1.0), std::ptr::null()) };
+                v.set(f);
             }
         }
         MediaCommand::ToggleMute => {
-            if let Some(v) = volume
-                && let Some((_, muted)) = read_volume(v)
-            {
-                // SAFETY: as above.
-                let _ = unsafe { v.SetMute(!muted, std::ptr::null()) };
+            if let Some(v) = volume {
+                v.toggle_mute();
             }
         }
         _ => {
@@ -183,17 +292,18 @@ impl Media {
         let (commands, rx) = mpsc::channel();
         let out = shared.clone();
         std::thread::spawn(move || {
-            // SAFETY: initialises COM for this thread only (needed for the endpoint volume).
+            // SAFETY: initialises COM for this thread only (needed for the volume).
             let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             let manager = Manager::RequestAsync().and_then(|op| op.get()).ok();
             loop {
                 let media = manager.as_ref().and_then(read);
-                let volume = endpoint();
+                let session = manager.as_ref().and_then(|m| m.GetCurrentSession().ok());
+                let player = session.as_ref().and_then(|s| s.SourceAppUserModelId().ok()).unwrap_or_default();
+                let volume = Volume::of(&player.to_string_lossy());
                 if let Ok(mut s) = out.lock() {
                     s.media = media;
-                    s.volume = volume.as_ref().and_then(read_volume);
+                    s.volume = volume.as_ref().and_then(Volume::read);
                 }
-                let session = manager.as_ref().and_then(|m| m.GetCurrentSession().ok());
                 match rx.recv_timeout(POLL) {
                     Ok(cmd) => {
                         control(session.as_ref(), volume.as_ref(), cmd);
@@ -222,7 +332,7 @@ impl Media {
         self.shared.lock().ok().and_then(|s| s.media.clone())
     }
 
-    /// Windows output volume (0..1) and mute.
+    /// The player's volume (0..1) and mute, or the output device's (see `MediaCommand::Volume`).
     pub fn volume(&self) -> Option<(f32, bool)> {
         self.shared.lock().ok().and_then(|s| s.volume)
     }
@@ -242,6 +352,22 @@ impl Media {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn players_are_found_by_their_program() {
+        assert!(plays_as(r"C:\Users\a\AppData\Roaming\Spotify\Spotify.exe", "Spotify.exe"));
+        assert!(plays_as(
+            r"C:\Program Files\WindowsApps\Spotify\Spotify.exe",
+            "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"
+        ));
+        assert!(plays_as(r"C:\Program Files\Google\Chrome\Application\chrome.exe", "chrome"));
+        assert!(plays_as(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "MSEdge"));
+        assert!(plays_as(r"C:\Program Files\VideoLAN\VLC\vlc.exe", "vlc.exe"));
+        // Not another program, and never on an opaque id.
+        assert!(!plays_as(r"C:\Program Files\Google\Chrome\Application\chrome.exe", "Spotify.exe"));
+        assert!(!plays_as(r"C:\Program Files\Mozilla Firefox\firefox.exe", "308046B0AF4A39CB"));
+        assert!(!plays_as(r"C:\Windows\a.exe", "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"));
+    }
 
     #[test]
     fn player_names_are_readable_or_empty() {

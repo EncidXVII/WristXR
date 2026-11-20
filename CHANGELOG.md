@@ -93,7 +93,7 @@ First public early-access release (Windows).
   to find and close any panel; Inbox page with unread dots and a count on the rail.
 - Watch: date and battery rings at a glance, one line for the song (with a pause button that works without
   opening the watch), a new message or a low battery. Pointed at: seek bar, shuffle, share the song to VRChat,
-  Windows volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
+  the player's volume and mute, Keyboard / Screens switches, Inbox. It grows only downward.
 - Toolbar: the panel's name first, opacity slider, Room / Hand / Head as one choice, keyboard languages and
   Put away on the keyboard's toolbar.
 - Hide all and show again (double-tap left menu, or Show overlay) brings screens, windows and keyboard back as
@@ -142,6 +142,9 @@ First public early-access release (Windows).
 [0.1.0]: https://github.com/EncidXVII/WristXR/releases/tag/v0.1.0
 
 ### Fixed
+- The watch's volume slider and mute act on the playing app's own volume (its Volume mixer entry) wherever it
+  plays. They set Windows' default device, which did nothing for a player sent to another device (Spotify to an
+  audio interface while the headset is the default) or a device that takes volume itself (Virtual Desktop's).
 - Clicking a window of a program that runs as administrator now explains, once, why nothing happens (Windows drops
   clicks from other apps there) instead of failing silently.
 - Opening a window or a screen while everything is hidden shows everything again: a double-tap of the menu button

@@ -670,7 +670,7 @@ pub enum WristInput {
     Mute,
     /// Seek to this fraction of the song.
     Seek(f32),
-    /// Windows volume, 0..1.
+    /// The player's volume, 0..1.
     Volume(f32),
     /// Add > Window: list the windows on the watch.
     OpenAdd,
@@ -812,7 +812,7 @@ pub struct WristInfo {
     /// New message: app, title, body.
     pub toast: Option<(String, String, String)>,
     pub media: Option<WristMedia>,
-    /// Windows volume (0..1) and mute.
+    /// The player's volume (0..1) and mute.
     pub volume: Option<(f32, bool)>,
     /// Unread messages in the Inbox.
     pub unread: usize,
