@@ -103,7 +103,9 @@ impl Gpu {
     }
 
     /// Waits (at most 50 ms) until the GPU has done everything queued so far: for the rare frame whose picture
-    /// SteamVR must not see half drawn.
+    /// SteamVR must not see half drawn. The work goes to the GPU once, then is only looked at, with a sleep between
+    /// looks: a check that flushed each time sent the driver thousands of empty batches a millisecond, which starved
+    /// the game and SteamVR's compositor until the headset froze.
     pub fn finish(&self) {
         let mut q = None;
         // SAFETY: valid descriptor and out-param; the event query's data is one BOOL, written once it is done.
@@ -120,12 +122,13 @@ impl Gpu {
             self.context.Flush();
             let start = std::time::Instant::now();
             let mut done = 0i32;
+            let flags = D3D11_ASYNC_GETDATA_DONOTFLUSH.0 as u32;
             while start.elapsed() < std::time::Duration::from_millis(50) {
-                let _ = self.context.GetData(&q, Some((&raw mut done).cast()), size_of::<i32>() as u32, 0);
+                let _ = self.context.GetData(&q, Some((&raw mut done).cast()), size_of::<i32>() as u32, flags);
                 if done != 0 {
                     return;
                 }
-                std::thread::yield_now();
+                std::thread::sleep(std::time::Duration::from_micros(500));
             }
         }
     }

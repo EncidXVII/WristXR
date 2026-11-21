@@ -968,8 +968,6 @@ pub fn run() -> Result<(), String> {
         if let Some(px) = banner.render() {
             upload(px, Source::Banner, BANNER_SIZE.0, &mut surfaces);
         }
-        // A screen drew a new detail level this frame: SteamVR must not see it half drawn.
-        let mut wait_gpu = false;
         for p in &engine.panels {
             let world = p.world_pose(&poses);
             // Leaning into a screen fades it out rather than letting the near clip slice it.
@@ -1033,7 +1031,6 @@ pub fn run() -> Result<(), String> {
                     d.set_width(&gpu, want).map_err(err)?;
                     if s.captured {
                         draw = true;
-                        wait_gpu = true;
                         s.needs_submit = true;
                     }
                 }
@@ -1044,17 +1041,15 @@ pub fn run() -> Result<(), String> {
         }
         timer.end(&gpu);
         gpu.flush();
-        if wait_gpu {
-            plat::finish(&gpu);
-        }
         for (id, w, h) in resized.drain(..) {
             if let Some(p) = engine.panels.iter_mut().find(|p| p.id == id) {
                 p.aspect = h as f32 / w as f32;
                 dirty = Some(Instant::now());
             }
         }
-        // A screen's new detail level sits in the slot SteamVR is not showing: the texture first, then, with the GPU
-        // done with it, the bounds that point there. Either order SteamVR takes them in shows a whole picture.
+        // A screen's new detail level sits in the slot SteamVR is not showing: the texture first (SteamVR's copy of it
+        // is queued behind our drawing, so it never runs ahead of it), then, once the GPU has done that copy, the
+        // bounds that point there. Either order SteamVR takes them in shows a whole picture.
         let mut moved = Vec::new();
         for p in &engine.panels {
             let Some(s) = surfaces.get_mut(&p.id) else { continue };
