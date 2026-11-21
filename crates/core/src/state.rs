@@ -22,18 +22,19 @@ pub fn is_discord_app(app: &str) -> bool {
 /// Which other apps' Windows notifications show on the watch.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NotifyFrom {
+    /// Every app's (messengers too); the default, so nothing is held back until asked.
     #[default]
-    Discord,
     AllApps,
+    Discord,
     Off,
 }
 
 impl NotifyFrom {
     pub fn next(self) -> Self {
         match self {
-            Self::Discord => Self::AllApps,
-            Self::AllApps => Self::Off,
-            Self::Off => Self::Discord,
+            Self::AllApps => Self::Discord,
+            Self::Discord => Self::Off,
+            Self::Off => Self::AllApps,
         }
     }
 
@@ -239,7 +240,7 @@ impl Default for State {
             wrist_media: true,
             wrist_layout: WatchLayout::Standard,
             accent: Accent::Lime,
-            notify_from: NotifyFrom::Discord,
+            notify_from: NotifyFrom::AllApps,
             smoothing: true,
             hold_right_click: true,
             drag_scroll: false,

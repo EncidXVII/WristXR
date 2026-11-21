@@ -1153,10 +1153,13 @@ impl Session {
             }
             Page::Tab(TAB_INBOX) => {
                 let mut l = Layout::rail(t("menu-inbox-title"));
+                // A setting, not a filter of the list below: which apps' Windows notifications come in at all.
+                // VRCX and other apps that send to WristXR directly (the XSOverlay way) are not Windows ones.
+                l.label(Col::Full, t("menu-notify-from"));
                 let from = self.state.notify_from;
                 let segs = [
-                    (NotifyFrom::Discord, "notify-discord"),
                     (NotifyFrom::AllApps, "notify-all"),
+                    (NotifyFrom::Discord, "notify-discord"),
                     (NotifyFrom::Off, "notify-off"),
                 ]
                 .map(|(f, id)| add(&mut acts, Act::NotifyFrom(f), seg(t(id), from == f)))

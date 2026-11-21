@@ -336,9 +336,9 @@ pub fn first_run_and_menu() -> GateResult {
     if c.session.page != Page::Tab(TAB_INBOX) || !first.is_some_and(|m| m.label == "Steam" && m.on) {
         return Err(format!("the Inbox must list newest first, unread: {first:?}"));
     }
-    c.press("notify-all")?;
-    if !c.effects.contains(&Effect::NotifyFrom(NotifyFrom::AllApps)) {
-        return Err("All apps must switch where notifications come from".into());
+    c.press("notify-discord")?;
+    if !c.effects.contains(&Effect::NotifyFrom(NotifyFrom::Discord)) {
+        return Err("Discord only must switch where notifications come from".into());
     }
     c.click(tab_center(TAB_PANELS))?;
     if c.session.unread() != 0 {

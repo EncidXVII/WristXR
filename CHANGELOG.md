@@ -119,7 +119,8 @@ First public early-access release (Windows).
   headset in the compositor, so they never lag.
 - Laser smoothing: tremor and tracking noise are filtered, fast aiming passes straight through.
 - Notification history (Menu > Notifications).
-- Discord notifications on the watch, read from Windows notifications (no login); source Discord / all apps / off.
+- Notifications on the watch from any app (Telegram, Discord, ...), read from Windows notifications (no login);
+  Inbox > Windows notifications from: All apps (the default) / Discord only / Off. VRCX always comes through.
 - Menu Close button; adding a screen or window closes the menu so the new panel is in view.
 - Windows that close remove their panel; the keyboard's toolbar sits above it; a buzz confirms hide / show.
 - Double-tap the left menu button (as in XSOverlay) to hide or show screens, windows and keyboard; hidden panels
