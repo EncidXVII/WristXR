@@ -23,6 +23,8 @@ pub struct MediaInfo {
     pub position: f32,
     pub duration: f32,
     pub shuffle: bool,
+    /// The player has a shuffle setting (MPRIS leaves the property out otherwise).
+    pub can_shuffle: bool,
     pub at: Instant,
     /// The song's cover, `COVER_PX` square, RGBA. Not read on Linux yet (MPRIS gives a URL, often remote).
     pub cover: Option<std::sync::Arc<[u8]>>,
@@ -154,6 +156,7 @@ fn read(conn: &Connection) -> Option<(Player, MediaInfo, Volume)> {
         position: p.get_property::<i64>("Position").map(|u| u as f32 / 1e6).unwrap_or(0.0),
         duration: meta.get("mpris:length").and_then(micros).unwrap_or(0.0),
         shuffle: p.get_property::<bool>("Shuffle").unwrap_or(false),
+        can_shuffle: p.get_property::<bool>("Shuffle").is_ok(),
         at: Instant::now(),
         cover: None,
     };

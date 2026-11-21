@@ -51,6 +51,8 @@ const BEAT_STEP: Duration = Duration::from_millis(22);
 /// A screen goes to a smaller picture only after wanting it this long (a larger one comes at once), so walking
 /// about or a panel in hand never flips it back and forth.
 const COARSER_AFTER: Duration = Duration::from_millis(600);
+/// How long the watch's Share button stays lit after sending the song.
+const SHARED_LIT: Duration = Duration::from_secs(2);
 // The media session reads covers at the size the watch expects.
 const _: () = assert!(wxr_sys::COVER_PX == wxr_ui::COVER_PX);
 /// SteamVR's texture bounds for a whole texture: u and v, min then max.
@@ -220,6 +222,7 @@ fn wrist_info(
             position: if expanded { m.position_now() } else { 0.0 },
             duration: m.duration,
             shuffle: m.shuffle,
+            can_shuffle: m.can_shuffle,
             cover: m.cover.clone(),
         }),
         ..WristInfo::default()
@@ -340,6 +343,8 @@ pub fn run() -> Result<(), String> {
     let mut wrist = Wrist::new()?;
     let media = Media::start();
     let mut now_playing: Option<MediaInfo> = None;
+    // When the watch last sent the song to the chatbox (its button is lit for `SHARED_LIT`).
+    let mut shared_at: Option<Instant> = None;
     let mut wrist_hovered = false;
     let mut menu = Menu::new()?;
     let mut toolbar = Toolbar::new()?;
@@ -573,8 +578,9 @@ pub fn run() -> Result<(), String> {
                 WristInput::Share => {
                     if let Some(m) = media.info() {
                         let name = now_playing_line(&m);
-                        if let Err(e) = chatbox.send_quiet(&strings.get("chat-now-playing", &[("track", name)])) {
-                            tracing::warn!(%e, "now-playing send failed");
+                        match chatbox.send_quiet(&strings.get("chat-now-playing", &[("track", name)])) {
+                            Ok(()) => shared_at = Some(Instant::now()),
+                            Err(e) => tracing::warn!(%e, "now-playing send failed"),
                         }
                     }
                 }
@@ -857,6 +863,10 @@ pub fn run() -> Result<(), String> {
             toast = None;
             refresh_wrist = true;
         }
+        if shared_at.is_some_and(|at| at.elapsed() >= SHARED_LIT) {
+            shared_at = None;
+            refresh_wrist = true;
+        }
         if refresh_wrist {
             let info = wrist_info(
                 &vr,
@@ -874,7 +884,8 @@ pub fn run() -> Result<(), String> {
                 screen: Session::next_screen(&engine.panels, &screens),
                 windows: if wrist_adding { wrist_windows(&session.windows, &engine.panels) } else { Vec::new() },
             };
-            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, add, ..info });
+            let shared = shared_at.is_some();
+            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, add, shared, ..info });
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {

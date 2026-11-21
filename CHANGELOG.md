@@ -17,6 +17,8 @@ First public early-access release (Windows).
   slot SteamVR is not showing, then shown, so moving or resizing a screen never blinks or flashes a wrong
   picture. Under 0.35 ms of GPU per captured frame.
 - The open watch stays open 2.5 seconds after the laser leaves it (was 1.5).
+- The watch's shuffle button is dim and does nothing when the player can't shuffle (a browser tab), instead of
+  looking pressable; its Share button lights for 2 seconds once the song is sent to the VRChat chatbox.
 - Pointing at a panel takes from the game only the controls that do something there. The stick is taken only over
   a screen or window (it scrolls) or while holding a panel; A/X only over a screen or window; the menu button
   never. So over the keyboard, the toolbar or the watch, you still turn and walk in the game. A control changes

@@ -589,6 +589,7 @@ mod tests {
             position: 72.0,
             duration: 220.0,
             shuffle: false,
+            can_shuffle: true,
             cover: None,
         };
         let mut info = WristInfo {
@@ -747,6 +748,7 @@ mod tests {
             position: 4000.0,
             duration: 36_000.0,
             shuffle: true,
+            can_shuffle: true,
             // A stand-in cover: a diagonal blend, so the tiles show a picture and its rounded corners.
             cover: Some(
                 (0..wxr_ui::COVER_PX * wxr_ui::COVER_PX)

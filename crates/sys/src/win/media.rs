@@ -43,6 +43,8 @@ pub struct MediaInfo {
     pub position: f32,
     pub duration: f32,
     pub shuffle: bool,
+    /// The player takes a shuffle change (a browser tab usually does not).
+    pub can_shuffle: bool,
     pub at: Instant,
     /// The song's cover, `COVER_PX` square, RGBA (None when the player gives none).
     pub cover: Option<Arc<[u8]>>,
@@ -162,6 +164,8 @@ fn read(manager: &Manager, covers: &mut Covers) -> Option<MediaInfo> {
     }
     let info = session.GetPlaybackInfo().ok();
     let playing = info.as_ref().and_then(|p| p.PlaybackStatus().ok()) == Some(Status::Playing);
+    let can_shuffle =
+        info.as_ref().and_then(|p| p.Controls().ok()).and_then(|c| c.IsShuffleEnabled().ok()).unwrap_or(false);
     let shuffle = info.and_then(|p| p.IsShuffleActive().ok()).and_then(|s| s.Value().ok()).unwrap_or(false);
     let (mut position, mut duration) = (0.0, 0.0);
     if let Ok(t) = session.GetTimelineProperties() {
@@ -187,6 +191,7 @@ fn read(manager: &Manager, covers: &mut Covers) -> Option<MediaInfo> {
         position,
         duration,
         shuffle,
+        can_shuffle,
         at: Instant::now(),
         cover: covers.cover.clone(),
     })
@@ -435,5 +440,29 @@ mod tests {
         assert_eq!(app_name("chrome"), "Chrome");
         assert_eq!(app_name("308046B0AF4A39CB"), "");
         assert_eq!(app_name(""), "");
+    }
+
+    /// Against the real player (changes it, then puts it back): `cargo test -p wxr-sys -- --ignored live_shuffle`.
+    #[test]
+    #[ignore]
+    fn live_shuffle() {
+        let m = Media::start();
+        let wait = |f: &dyn Fn(&MediaInfo) -> bool| {
+            for _ in 0..50 {
+                if m.info().is_some_and(|i| f(&i)) { return true; }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            false
+        };
+        assert!(wait(&|_| true), "no media");
+        let before = m.info().unwrap().shuffle;
+        eprintln!("player {} shuffle {before}", m.info().unwrap().app);
+        m.send(MediaCommand::ToggleShuffle);
+        let changed = wait(&|i| i.shuffle != before);
+        eprintln!("after toggle: changed={changed}");
+        m.send(MediaCommand::ToggleShuffle);
+        let back = wait(&|i| i.shuffle == before);
+        eprintln!("after second toggle: back={back}");
+        assert!(changed && back);
     }
 }

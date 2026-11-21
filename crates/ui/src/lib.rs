@@ -50,16 +50,18 @@ slint::slint! {
         // Pressed colour; filled buttons (#2A2A2E) need a lighter step than bare icons to show the press.
         in property <brush> press-color: #36363B;
         in property <bool> lit;
+        // Off: dim and not pressable (the player can't do it).
+        in property <bool> enabled: true;
         callback clicked;
         border-radius: self.width / 2;
         background: touch.pressed && !root.lit ? root.press-color : touch.has-hover && !root.lit ? #2A2A2E : root.fill-color;
-        opacity: touch.pressed && root.lit ? 0.8 : 1.0;
+        opacity: !root.enabled ? 0.4 : touch.pressed && root.lit ? 0.8 : 1.0;
         Path {
             width: 26px; height: 26px; viewbox-width: 24; viewbox-height: 24;
             commands: root.icon; stroke: root.tint; stroke-width: 2.2px;
             fill: root.filled ? root.tint : transparent;
         }
-        touch := TouchArea { clicked => { root.clicked(); } }
+        touch := TouchArea { enabled: root.enabled; clicked => { root.clicked(); } }
     }
 
     component Row inherits Rectangle {
@@ -229,6 +231,9 @@ slint::slint! {
         in property <float> progress;
         in property <bool> can-seek;
         in property <bool> shuffle;
+        in property <bool> can-shuffle;
+        // The song was just sent to the VRChat chatbox.
+        in property <bool> shared;
         in property <bool> has-volume;
         in property <float> volume;
         in property <bool> muted;
@@ -539,7 +544,8 @@ slint::slint! {
                 }
                 Round {
                     x: 56px; y: 158px; width: 52px; height: 52px; icon: "M3 7h4l10 10h4 M3 17h4l3-3 M14 10l3-3h4 M18 4l3 3-3 3 M18 14l3 3-3 3";
-                    tint: root.shuffle ? Theme.accent : #A8A8AF; clicked => { root.action(7); }
+                    tint: root.shuffle && root.can-shuffle ? Theme.accent : #A8A8AF; enabled: root.can-shuffle;
+                    clicked => { root.action(7); }
                 }
                 Round {
                     x: 136px; y: 152px; width: 64px; height: 64px; icon: "M6 5h2v14H6z M19 5v14l-10-7z"; filled: true; press-color: #444449;
@@ -556,7 +562,7 @@ slint::slint! {
                 }
                 Round {
                     x: 428px; y: 158px; width: 52px; height: 52px; icon: "M4 12l16-8-6 16-3-7z M11 13l9-9";
-                    tint: #A8A8AF; clicked => { root.action(8); }
+                    tint: root.shared ? Theme.accent : #A8A8AF; clicked => { root.action(8); }
                 }
                 Rectangle {
                     x: 18px; y: 238px; width: 52px; height: 52px; border-radius: 14px;
@@ -834,6 +840,8 @@ pub struct WristInfo {
     /// Unread messages in the Inbox.
     pub unread: usize,
     pub add: WristAdd,
+    /// The song was just sent to the VRChat chatbox (its button lights for a moment).
+    pub shared: bool,
 }
 
 /// The open watch's Add row and list.
@@ -869,6 +877,8 @@ pub struct WristMedia {
     pub position: f32,
     pub duration: f32,
     pub shuffle: bool,
+    /// The player takes a shuffle change; otherwise the button is dim.
+    pub can_shuffle: bool,
     /// The cover, `COVER_PX` square, RGBA; `None` shows a note.
     pub cover: Option<std::sync::Arc<[u8]>>,
 }
@@ -1126,6 +1136,8 @@ impl Wrist {
         v.set_duration(if can_seek { clock(media.duration, hours).into() } else { Default::default() });
         v.set_progress(if can_seek { media.position / media.duration } else { 0.0 });
         v.set_shuffle(media.shuffle);
+        v.set_can_shuffle(media.can_shuffle);
+        v.set_shared(w.shared);
         let (volume, muted) = w.volume.unwrap_or((0.0, false));
         v.set_has_volume(w.volume.is_some());
         v.set_volume(volume);
@@ -1318,6 +1330,7 @@ mod tests {
             position: 72.0,
             duration: 220.0,
             shuffle: false,
+            can_shuffle: true,
             cover: None,
         }
     }
@@ -1337,6 +1350,31 @@ mod tests {
         assert!(!wrist.view.get_has_cover());
         wrist.set(&with(None));
         assert!(!wrist.view.get_has_cover());
+    }
+
+    #[test]
+    fn shuffle_is_off_when_the_player_cannot_and_share_lights_after_sending() {
+        let mut wrist = Wrist::new().expect("wrist");
+        let uv = |(x, y): (f32, f32)| [x / WRIST_SIZE.0 as f32, y / WRIST_SIZE.1 as f32];
+        let open = |media| WristInfo { media: Some(media), expanded: true, ..WristInfo::default() };
+        let press = |wrist: &mut Wrist, input| {
+            let at = uv(wrist.center(input).expect("drawn"));
+            wrist.pointer_move(at);
+            wrist.pointer_button(at, true);
+            wrist.pointer_button(at, false);
+            wrist.take_inputs()
+        };
+        // A browser tab: shuffle is dim and a press does nothing.
+        wrist.set(&open(WristMedia { can_shuffle: false, shuffle: true, ..song() }));
+        assert!(wrist.render().is_some());
+        assert!(!wrist.view.get_can_shuffle());
+        assert_eq!(press(&mut wrist, WristInput::Shuffle), vec![]);
+        wrist.set(&open(song()));
+        assert!(wrist.render().is_some());
+        assert_eq!(press(&mut wrist, WristInput::Shuffle), vec![WristInput::Shuffle]);
+        // Share lights while the song was just sent.
+        wrist.set(&WristInfo { shared: true, ..open(song()) });
+        assert!(wrist.view.get_shared());
     }
 
     #[test]
