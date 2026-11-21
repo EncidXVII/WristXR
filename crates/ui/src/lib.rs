@@ -219,6 +219,9 @@ slint::slint! {
         in property <float> beat;
         in property <bool> beating;
         in property <bool> has-media;
+        // The song's cover; without one the music tiles show a note.
+        in property <image> cover;
+        in property <bool> has-cover;
         in property <string> media-title;
         in property <string> media-sub;
         in property <string> position;
@@ -433,8 +436,15 @@ slint::slint! {
                 x: 12px; y: 132px; width: 536px; height: 96px; border-radius: 20px; opacity: max(0, 1 - root.open * 3);
                 background: root.strip == 3 ? #2B1712 : #1D1D20; clip: true;
                 if root.strip == 1 : Rectangle {
-                    x: 14px; y: 16px; width: 64px; height: 64px; border-radius: 14px; background: #36363B;
-                    Path {
+                    x: 14px; y: 16px; width: 64px; height: 64px; border-radius: 14px; background: #36363B; clip: true;
+                    if root.has-cover : Image { width: parent.width; height: parent.height; source: root.cover; image-fit: ImageFit.cover; }
+                    // The renderer clips square: the card's colour rounds the cover's corners like every tile.
+                    if root.has-cover : Path {
+                        width: parent.width; height: parent.height; viewbox-width: 64; viewbox-height: 64;
+                        commands: "M0 14V0H14A14 14 0 0 0 0 14Z M50 0H64V14A14 14 0 0 0 50 0Z M64 50V64H50A14 14 0 0 0 64 50Z M14 64H0V50A14 14 0 0 0 14 64Z";
+                        fill: #1D1D20; stroke-width: 0px;
+                    }
+                    if !root.has-cover : Path {
                         width: 28px; height: 28px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
                         stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
@@ -488,8 +498,15 @@ slint::slint! {
             if root.open > 0 && root.has-media && !root.adding : Rectangle {
                 x: 12px; y: root.body-y * 1px; width: 536px; height: 306px; border-radius: 20px; background: #1D1D20; opacity: root.open;
                 Rectangle {
-                    x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #36363B;
-                    Path {
+                    x: 18px; y: 16px; width: 72px; height: 72px; border-radius: 14px; background: #36363B; clip: true;
+                    if root.has-cover : Image { width: parent.width; height: parent.height; source: root.cover; image-fit: ImageFit.cover; }
+                    // The renderer clips square: the card's colour rounds the cover's corners like every tile.
+                    if root.has-cover : Path {
+                        width: parent.width; height: parent.height; viewbox-width: 72; viewbox-height: 72;
+                        commands: "M0 14V0H14A14 14 0 0 0 0 14Z M58 0H72V14A14 14 0 0 0 58 0Z M72 58V72H58A14 14 0 0 0 72 58Z M14 72H0V58A14 14 0 0 0 14 72Z";
+                        fill: #1D1D20; stroke-width: 0px;
+                    }
+                    if !root.has-cover : Path {
                         width: 30px; height: 30px; viewbox-width: 24; viewbox-height: 24;
                         commands: "M9 18V5l11-2v13 M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0z M20 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0z";
                         stroke: #F5F5F7; stroke-width: 2.2px; fill: transparent;
@@ -838,6 +855,9 @@ pub struct WristWindow {
     pub shown: bool,
 }
 
+/// Side of a song's cover in pixels (`WristMedia::cover`).
+pub const COVER_PX: u32 = 128;
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WristMedia {
     pub title: String,
@@ -849,6 +869,8 @@ pub struct WristMedia {
     pub position: f32,
     pub duration: f32,
     pub shuffle: bool,
+    /// The cover, `COVER_PX` square, RGBA; `None` shows a note.
+    pub cover: Option<std::sync::Arc<[u8]>>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -885,6 +907,8 @@ pub struct Wrist {
     /// Bottom of the card (pixels), where the laser stops counting as "on the watch".
     card: f32,
     shown: Shown,
+    /// The cover last handed to the view (a new picture only when the song's cover changes).
+    cover: Option<std::sync::Arc<[u8]>>,
 }
 
 fn percent(v: Option<f32>) -> String {
@@ -954,7 +978,7 @@ impl Wrist {
         view.set_gpu_label(t("wrist-gpu"));
         view.set_ring_track(RING_TRACK.into());
         view.set_motion(motion());
-        Ok(Self { view, canvas, strings, inputs, targets, card: HEADER_H, shown: Shown::default() })
+        Ok(Self { view, canvas, strings, inputs, targets, card: HEADER_H, shown: Shown::default(), cover: None })
     }
 
     /// Accent colour (0xRRGGBB), from Setup > Theme.
@@ -1074,6 +1098,18 @@ impl Wrist {
         v.set_expanded(w.expanded);
         let media = w.media.clone().unwrap_or_default();
         v.set_has_media(w.media.is_some());
+        let same = |a: &Option<std::sync::Arc<[u8]>>, b: &Option<std::sync::Arc<[u8]>>| match (a, b) {
+            (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+            (a, b) => a.is_none() && b.is_none(),
+        };
+        let cover = media.cover.clone().filter(|px| px.len() == (COVER_PX * COVER_PX * 4) as usize);
+        if !same(&self.cover, &cover) {
+            v.set_has_cover(cover.is_some());
+            v.set_cover(cover.as_deref().map_or_else(slint::Image::default, |px| {
+                slint::Image::from_rgba8(slint::SharedPixelBuffer::clone_from_slice(px, COVER_PX, COVER_PX))
+            }));
+            self.cover = cover;
+        }
         v.set_playing(media.playing);
         v.set_media_title(media.title.as_str().into());
         let sub = match (media.artist.is_empty(), media.app.is_empty()) {
@@ -1282,7 +1318,25 @@ mod tests {
             position: 72.0,
             duration: 220.0,
             shuffle: false,
+            cover: None,
         }
+    }
+
+    #[test]
+    fn the_song_cover_replaces_the_note_and_goes_with_the_song() {
+        let mut wrist = Wrist::new().expect("wrist");
+        let px: std::sync::Arc<[u8]> = vec![200u8; (COVER_PX * COVER_PX * 4) as usize].into();
+        let with = |cover| WristInfo { media: Some(WristMedia { cover, ..song() }), ..WristInfo::default() };
+        wrist.set(&with(Some(px.clone())));
+        assert!(wrist.view.get_has_cover() && wrist.view.get_cover().size().width == COVER_PX);
+        // The same cover again (the media thread hands the same one each second): kept, not uploaded anew.
+        wrist.set(&with(Some(px.clone())));
+        assert!(wrist.cover.as_ref().is_some_and(|c| std::sync::Arc::ptr_eq(c, &px)));
+        // A cover of the wrong size is ignored; no cover shows the note.
+        wrist.set(&with(Some(vec![1u8; 12].into())));
+        assert!(!wrist.view.get_has_cover());
+        wrist.set(&with(None));
+        assert!(!wrist.view.get_has_cover());
     }
 
     #[test]

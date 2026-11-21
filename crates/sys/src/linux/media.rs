@@ -24,7 +24,12 @@ pub struct MediaInfo {
     pub duration: f32,
     pub shuffle: bool,
     pub at: Instant,
+    /// The song's cover, `COVER_PX` square, RGBA. Not read on Linux yet (MPRIS gives a URL, often remote).
+    pub cover: Option<std::sync::Arc<[u8]>>,
 }
+
+/// Side of a song's cover in pixels (see the Windows side).
+pub const COVER_PX: u32 = 128;
 
 impl MediaInfo {
     /// Position now, counting on from `at` while playing.
@@ -150,6 +155,7 @@ fn read(conn: &Connection) -> Option<(Player, MediaInfo, Volume)> {
         duration: meta.get("mpris:length").and_then(micros).unwrap_or(0.0),
         shuffle: p.get_property::<bool>("Shuffle").unwrap_or(false),
         at: Instant::now(),
+        cover: None,
     };
     let volume = p.get_property::<f64>("Volume").ok().map(|v| (v.clamp(0.0, 1.0) as f32, v <= 0.0));
     Some((Player { name, proxy: p, unmuted: None }, info, volume))

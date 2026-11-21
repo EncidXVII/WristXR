@@ -10,8 +10,13 @@
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use windows::Graphics::Imaging::{
+    BitmapAlphaMode, BitmapBounds, BitmapDecoder, BitmapInterpolationMode, BitmapPixelFormat, BitmapTransform,
+    ColorManagementMode, ExifOrientationMode,
+};
 use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session, GlobalSystemMediaTransportControlsSessionManager as Manager,
+    GlobalSystemMediaTransportControlsSessionMediaProperties as Properties,
     GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
 };
 use windows::Win32::Foundation::CloseHandle;
@@ -39,7 +44,12 @@ pub struct MediaInfo {
     pub duration: f32,
     pub shuffle: bool,
     pub at: Instant,
+    /// The song's cover, `COVER_PX` square, RGBA (None when the player gives none).
+    pub cover: Option<Arc<[u8]>>,
 }
+
+/// Side of a song's cover in pixels: sharp on the watch's largest tile (72 px).
+pub const COVER_PX: u32 = 128;
 
 impl MediaInfo {
     /// Position now, counting on from `at` while playing.
@@ -96,12 +106,59 @@ fn now_ticks() -> i64 {
     (i64::from(ft.dwHighDateTime) << 32) | i64::from(ft.dwLowDateTime)
 }
 
-fn read(manager: &Manager) -> Option<MediaInfo> {
+/// The last song and its cover: read once per song, and again while missing (a player may set it a moment after
+/// the title).
+#[derive(Default)]
+struct Covers {
+    song: (String, String),
+    cover: Option<Arc<[u8]>>,
+}
+
+/// A cover from the media session: the middle square of its thumbnail, scaled to `COVER_PX`.
+fn cover(props: &Properties) -> Option<Arc<[u8]>> {
+    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
+    let decoder = BitmapDecoder::CreateAsync(&stream).ok()?.get().ok()?;
+    let (w, h) = (decoder.OrientedPixelWidth().ok()?, decoder.OrientedPixelHeight().ok()?);
+    let side = w.min(h);
+    if side == 0 {
+        return None;
+    }
+    let scaled = |n: u32| ((u64::from(n) * u64::from(COVER_PX)).div_ceil(u64::from(side)) as u32).max(COVER_PX);
+    let (sw, sh) = (scaled(w), scaled(h));
+    let t = BitmapTransform::new().ok()?;
+    t.SetScaledWidth(sw).ok()?;
+    t.SetScaledHeight(sh).ok()?;
+    t.SetInterpolationMode(BitmapInterpolationMode::Fant).ok()?;
+    t.SetBounds(BitmapBounds { X: (sw - COVER_PX) / 2, Y: (sh - COVER_PX) / 2, Width: COVER_PX, Height: COVER_PX })
+        .ok()?;
+    let pixels = decoder
+        .GetPixelDataTransformedAsync(
+            BitmapPixelFormat::Rgba8,
+            BitmapAlphaMode::Straight,
+            &t,
+            ExifOrientationMode::RespectExifOrientation,
+            ColorManagementMode::DoNotColorManage,
+        )
+        .ok()?
+        .get()
+        .ok()?
+        .DetachPixelData()
+        .ok()?;
+    (pixels.len() == (COVER_PX * COVER_PX * 4) as usize).then(|| Arc::from(&pixels[..]))
+}
+
+fn read(manager: &Manager, covers: &mut Covers) -> Option<MediaInfo> {
     let session = manager.GetCurrentSession().ok()?;
     let props = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
     let title = props.Title().ok()?.to_string_lossy();
     if title.is_empty() {
         return None;
+    }
+    let artist = props.Artist().map(|a| a.to_string_lossy()).unwrap_or_default();
+    let song = (title.clone(), artist.clone());
+    if covers.song != song || covers.cover.is_none() {
+        covers.cover = cover(&props);
+        covers.song = song;
     }
     let info = session.GetPlaybackInfo().ok();
     let playing = info.as_ref().and_then(|p| p.PlaybackStatus().ok()) == Some(Status::Playing);
@@ -124,13 +181,14 @@ fn read(manager: &Manager) -> Option<MediaInfo> {
     let app = session.SourceAppUserModelId().map(|s| app_name(&s.to_string_lossy())).unwrap_or_default();
     Some(MediaInfo {
         title,
-        artist: props.Artist().map(|a| a.to_string_lossy()).unwrap_or_default(),
+        artist,
         app,
         playing,
         position,
         duration,
         shuffle,
         at: Instant::now(),
+        cover: covers.cover.clone(),
     })
 }
 
@@ -295,8 +353,9 @@ impl Media {
             // SAFETY: initialises COM for this thread only (needed for the volume).
             let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
             let manager = Manager::RequestAsync().and_then(|op| op.get()).ok();
+            let mut covers = Covers::default();
             loop {
-                let media = manager.as_ref().and_then(read);
+                let media = manager.as_ref().and_then(|m| read(m, &mut covers));
                 let session = manager.as_ref().and_then(|m| m.GetCurrentSession().ok());
                 let player = session.as_ref().and_then(|s| s.SourceAppUserModelId().ok()).unwrap_or_default();
                 let volume = Volume::of(&player.to_string_lossy());

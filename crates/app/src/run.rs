@@ -53,6 +53,8 @@ const BEAT_STEP: Duration = Duration::from_millis(22);
 /// A screen goes to a smaller picture only after wanting it this long (a larger one comes at once), so walking
 /// about or a panel in hand never flips it back and forth.
 const COARSER_AFTER: Duration = Duration::from_millis(600);
+// The media session reads covers at the size the watch expects.
+const _: () = assert!(wxr_sys::COVER_PX == wxr_ui::COVER_PX);
 /// SteamVR's texture bounds for a whole texture: u and v, min then max.
 const FULL_TEXTURE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 
@@ -218,6 +220,7 @@ fn wrist_info(
             position: if expanded { m.position_now() } else { 0.0 },
             duration: m.duration,
             shuffle: m.shuffle,
+            cover: m.cover.clone(),
         }),
         ..WristInfo::default()
     }

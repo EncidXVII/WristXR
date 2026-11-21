@@ -53,6 +53,8 @@ First public early-access release (Windows).
   after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- The song's cover on the watch (Music and Player layouts, and the open watch), read from Windows' media session,
+  in place of the note. Linux keeps the note for now.
 - Linux: WristXR runs on Linux with SteamVR for Linux, on X11 and on Wayland. On Wayland, screens, windows,
   keyboard and pointer go through the desktop portal (asked once, remembered after); frames come from PipeWire.
   Panels reach SteamVR through Vulkan. The tray, Discord and other app notifications on the watch, media controls
