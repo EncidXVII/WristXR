@@ -53,6 +53,9 @@ First public early-access release (Windows).
   after a restart. Menu > Reset layout (or changing the watch hand) puts it back.
 
 ### Added
+- Keyboard: Print Screen, and an Fn key (as on a laptop): Fn + arrows are Home / End / Page Up / Page Down,
+  Fn + Del is Insert, and the keys show it while Fn is lit. Combos of modifiers alone: tap a lit modifier again
+  to send the lit ones (Alt, Shift, Shift = Alt+Shift), as Win, Win already opened Start.
 - The song's cover on the watch (Music and Player layouts, and the open watch), read from Windows' media session,
   in place of the note. Linux keeps the note for now.
 - Linux: WristXR runs on Linux with SteamVR for Linux, on X11 and on Wayland. On Wayland, screens, windows,

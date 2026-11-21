@@ -13,6 +13,7 @@ pub fn evdev(scancode: u16) -> Option<u16> {
     Some(match code {
         0x1C => 96,  // keypad Enter
         0x1D => 97,  // right Ctrl
+        0x37 => 99,  // Print Screen (SysRq)
         0x35 => 98,  // keypad /
         0x38 => 100, // right Alt
         0x47 => 102, // Home

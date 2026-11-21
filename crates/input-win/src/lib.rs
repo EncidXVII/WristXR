@@ -13,7 +13,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
     MOUSEINPUT, MapVirtualKeyExW, SendInput, ToUnicodeEx, VIRTUAL_KEY,
 };
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL, VK_CAPITAL, VK_SHIFT};
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayoutList, HKL, VK_CAPITAL, VK_SHIFT, VK_SNAPSHOT};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetForegroundWindow, GetWindowThreadProcessId, PostMessageW, SetCursorPos, WM_INPUTLANGCHANGEREQUEST,
 };
@@ -114,6 +114,23 @@ impl Injector {
     }
 
     pub fn key(&self, scancode: u16, down: bool) {
+        // Print Screen by scancode often does nothing; by its virtual key Windows treats it as the real key.
+        if scancode == wxr_core::keyboard::PRTSC {
+            let flags = if down { KEYEVENTF_EXTENDEDKEY } else { KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP };
+            send(&[INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VK_SNAPSHOT,
+                        wScan: 0x37,
+                        dwFlags: KEYBD_EVENT_FLAGS(flags.0),
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            }]);
+            return;
+        }
         let mut flags = KEYEVENTF_SCANCODE;
         if scancode & EXT != 0 {
             flags |= KEYEVENTF_EXTENDEDKEY;

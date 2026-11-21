@@ -683,7 +683,7 @@ impl Engine {
                 Press::Idle
             }
             Press::Key { sc, mods, next_repeat } if keyboard::repeats(sc) && now >= next_repeat => {
-                out.push(Event::Key { scancode: sc, down: true });
+                out.push(Event::Key { scancode: keyboard::sent(sc, mods), down: true });
                 Press::Key { sc, mods, next_repeat: next_repeat + KEY_REPEAT_INTERVAL_MS }
             }
             held @ Press::Key { .. } => held,

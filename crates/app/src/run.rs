@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use wxr_core::backend::VrBackend;
 use wxr_core::chat::{ChatAction, ChatLine};
 use wxr_core::engine::{Claims, Engine, Event, FrameInput, MouseButton};
-use wxr_core::keyboard::{CAPS, CHAT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE};
+use wxr_core::keyboard::{CAPS, CHAT, FN, FN_BIT, LALT, LANG, LCTRL, LSHIFT, LWIN, ROWS, RSHIFT, SPACE, fn_label};
 use wxr_core::math::{Pose, Quat, Vec3};
 use wxr_core::panel::{BANNER_ID, DEFAULT_WIDTH_M, Glance, Hand, MIN_WIDTH_M, Panel, PixelRect, Source};
 use wxr_core::raster;
@@ -37,7 +37,7 @@ const EXIT_GRACE: Duration = Duration::from_secs(3);
 /// A popped-out window appears this far in front of the hand that pulled it.
 const POP_OUT_DISTANCE_M: f32 = 0.3;
 /// Characters of the chat line that fit on the space bar.
-const SPACE_BAR_CHARS: usize = 24;
+const SPACE_BAR_CHARS: usize = 19;
 /// The watch stays expanded this long after the laser leaves it.
 const WRIST_LINGER_MS: u64 = 2500;
 /// How long a notification from another app (Discord, ...) stays on the watch.
@@ -103,11 +103,13 @@ fn layout_labels(shift: bool, caps: bool) -> Vec<String> {
         .collect()
 }
 
-/// What each key shows: label (space bar = chat line in chat mode), lit, laser hover.
+/// What each key shows: label (space bar = chat line in chat mode; with Fn lit, what the arrows and Del send),
+/// lit, laser hover.
 fn key_faces(
     faces: &mut Vec<KeyFace>,
     labels: &[String],
     chat: Option<&str>,
+    fn_lit: bool,
     lit: impl Fn(u16) -> bool,
     hover: &[Option<u16>; 2],
 ) {
@@ -118,7 +120,7 @@ fn key_faces(
                 let skip = text.chars().count().saturating_sub(SPACE_BAR_CHARS);
                 text.chars().skip(skip).collect()
             }
-            _ => label.clone(),
+            (sc, _) => fn_label(sc).filter(|_| fn_lit).map_or_else(|| label.clone(), str::to_owned),
         };
         faces.push(KeyFace { label, lit: lit(key.sc), hover: hover.contains(&Some(key.sc)) });
     }
@@ -959,9 +961,10 @@ pub fn run() -> Result<(), String> {
                     || (sc == LCTRL && latched & 2 != 0)
                     || (sc == LALT && latched & 4 != 0)
                     || (sc == LWIN && latched & 8 != 0)
+                    || (sc == FN && latched & FN_BIT != 0)
             };
             let chat_line = session.state.chatbox.then_some(chat.text());
-            key_faces(&mut faces, &labels, chat_line, lit, &key_hover);
+            key_faces(&mut faces, &labels, chat_line, latched & FN_BIT != 0, lit, &key_hover);
             keyboard.set(&faces);
             key_state = Some(state);
         }
