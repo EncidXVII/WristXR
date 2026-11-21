@@ -68,8 +68,8 @@ First public early-access release (Windows).
 - Two watch layouts: Game (time, date, FPS, CPU and GPU) and Player (time, date and the small player), for
   Performance and Music without the batteries.
 - Notification banner: a message also shows low in your view (riding with your head), with the app, the sender and
-  up to three lines of text. It rises and fades in, goes back down the same way after about 6 seconds, and stays
-  while you point at it. Without Windows' animations it simply appears and goes.
+  up to three lines of text. It rises and fades in and goes back down the same way after about 6 seconds; lasers
+  pass through it to whatever is behind. Without Windows' animations it simply appears and goes.
 - The watch's playing mark moves while a song plays and you look at the watch: four bars rising and falling on slow
   waves of their own. Paused, they rest.
 - After a SteamVR restart, the layout comes to where you are when you put the headset on, as you arranged it

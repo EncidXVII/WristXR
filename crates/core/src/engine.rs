@@ -348,12 +348,13 @@ impl Engine {
         }
     }
 
-    /// Nearest visible panel under this hand's (smoothed) laser. A hand never points at panels attached to itself.
+    /// Nearest visible panel under this hand's (smoothed) laser. A hand never points at panels attached to itself,
+    /// and the notification banner is only to read: the laser passes through it to what is behind.
     fn hit(&self, hand: Hand, poses: &Anchors) -> Option<(usize, [f32; 2])> {
         let ray = self.hands[hand.index()].ray.unwrap_or(poses[hand.index()]);
         let mut best: Option<(usize, f32, [f32; 2])> = None;
         for (i, p) in self.panels.iter().enumerate() {
-            if !p.shown() || p.anchor == Anchor::Hand(hand) {
+            if !p.shown() || p.anchor == Anchor::Hand(hand) || p.source == Source::Banner {
                 continue;
             }
             if let Some((t, uv)) = p.hit(p.world_pose(poses), ray)
@@ -733,7 +734,7 @@ fn dist(a: [f32; 2], b: [f32; 2]) -> f32 {
 mod tests {
     use super::*;
     use crate::math::{Quat, Vec3};
-    use crate::panel::Anchor;
+    use crate::panel::{Anchor, BANNER_ID};
 
     #[test]
     fn smoothing_calms_tremor_but_never_lags_real_moves() {
@@ -799,6 +800,29 @@ mod tests {
         let ray = r.pose;
         let (_, uv) = p.hit(p.pose, ray).expect("laser on the screen");
         assert!((uv[0] - 0.7).abs() < 0.02 && (uv[1] - 0.5).abs() < 0.02, "spot moved to {uv:?}");
+    }
+
+    #[test]
+    fn the_laser_passes_through_the_notification_banner() {
+        let mut e = screen();
+        // A banner right in front of the screen, across the laser's path.
+        let banner = Pose::new(Vec3::new(0.0, 1.4, -0.6), Quat::IDENTITY);
+        e.panels.push(Panel::new(BANNER_ID, Source::Banner, banner, 1.0, 0.3));
+        let mut out = Vec::new();
+        let rest = hand_at(Vec3::new(-0.3, 1.2, -0.2), Vec3::new(-0.3, 1.2, -1.0));
+        let mut r = hand_at(Vec3::new(0.0, 1.4, -0.2), Vec3::new(0.0, 1.4, -1.0));
+        r.trigger = true;
+        run(&mut e, 0, 3, [rest, r], &mut out);
+        r.trigger = false;
+        run(&mut e, 33, 3, [rest, r], &mut out);
+        assert!(
+            !out.iter()
+                .any(|ev| matches!(ev, Event::Hover { panel: BANNER_ID, .. } | Event::Mouse { panel: BANNER_ID, .. }))
+        );
+        assert!(
+            out.iter().any(|ev| matches!(ev, Event::Mouse { panel: 1, down: true, .. })),
+            "the click reaches the screen"
+        );
     }
 
     #[test]

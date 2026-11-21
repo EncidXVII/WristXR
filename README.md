@@ -68,9 +68,9 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
   back / play / next), Performance (fps, CPU and GPU) and Compact (one slim bar). Messages and low batteries come
   through in every one, and opening the watch looks the same in all of them.
 - **Themes**: eight accent colours (Lime, Mint, Aqua, Sky, Violet, Pink, Amber, White) in Setup > Theme.
-- **Discord notifications on your wrist**: Discord messages (or, if you choose, any app's Windows notifications)
-  pop up with a buzz as a banner low in your view (who, the app, and up to three lines of the message; point at
-  it to keep it) and on the watch, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
+- **Notifications on your wrist**: messages from Discord, Telegram and any other app's Windows notifications
+  pop up with a buzz as a banner low in your view (who, the app, and up to three lines of the message; lasers pass
+  through it) and on the watch, no Discord login or bot needed; the last few wait in the menu's Inbox. Apps that send XSOverlay notifications
   (UDP 42069) work too.
 - **Game input stays yours**: a hand on a panel takes from the game only the controls that do something there
   (the stick only over a screen or window), and only once you let them go; the other hand keeps playing.

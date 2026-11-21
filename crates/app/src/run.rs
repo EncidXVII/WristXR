@@ -45,8 +45,6 @@ const APP_TOAST_S: f32 = 6.0;
 /// The banner comes in over about this long and goes in a little less (critically damped: no bounce).
 const BANNER_IN_S: f32 = 0.35;
 const BANNER_OUT_S: f32 = 0.25;
-/// Pointing at the banner keeps it; once the laser leaves, it stays at least this long.
-const BANNER_LINGER_S: f32 = 2.0;
 /// How often the watch's playing mark steps while it moves.
 const BEAT_STEP: Duration = Duration::from_millis(22);
 
@@ -854,13 +852,6 @@ pub fn run() -> Result<(), String> {
         if blocked != session.notify_blocked {
             session.notify_blocked = blocked;
             menu_dirty = true;
-        }
-        // Pointing at the banner keeps it up; after the laser leaves it stays a little longer.
-        if events.iter().any(|e| matches!(e, Event::Hover { panel: BANNER_ID, .. }))
-            && let Some((t, at)) = toast.as_mut()
-        {
-            let keep = Duration::from_secs_f32((t.timeout_s - BANNER_LINGER_S).max(0.0));
-            *at = (*at).max(Instant::now().checked_sub(keep).unwrap_or_else(Instant::now));
         }
         if toast.as_ref().is_some_and(|(t, at)| at.elapsed().as_secs_f32() >= t.timeout_s) {
             toast = None;
