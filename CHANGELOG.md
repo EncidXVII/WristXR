@@ -8,14 +8,14 @@ versions: [Semantic Versioning](https://semver.org/).
 First public early-access release (Windows).
 
 ### Changed
-- Screens and windows look sharper in the headset, far ones most: each is handed to SteamVR at about twice the
+- Screens and windows look sharper in the headset, far ones most: each is handed to SteamVR at about 2.5x the
   size it is shown, so text no longer shimmers or smears when the compositor shrinks it and stays readable at mid
-  and far distances. Screens shrunk 2x or more are resampled with a Kaiser-windowed filter (as SimulaVR filters
+  and far distances. Screens shrunk 2.5x or more are resampled with a Kaiser-windowed filter (as SimulaVR filters
   its windows) from the nearest of a set of smaller copies, which keeps letter edges smooth with no sharpening
   halos; close ones get a light sharpen. Detail changes in steps of about a tenth as a screen moves,
   and each screen keeps one texture for good, with two picture slots: a new detail level is drawn into the
   slot SteamVR is not showing, then shown, so moving or resizing a screen never blinks or flashes a wrong
-  picture. Under 0.3 ms of GPU per captured frame.
+  picture. Under 0.35 ms of GPU per captured frame.
 - The open watch stays open 2.5 seconds after the laser leaves it (was 1.5).
 - Pointing at a panel takes from the game only the controls that do something there. The stick is taken only over
   a screen or window (it scrolls) or while holding a panel; A/X only over a screen or window; the menu button
