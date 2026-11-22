@@ -18,6 +18,7 @@ It costs under **0.1 ms of GPU time per frame** and shows its own cost live. Eve
 way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
 
 [**Download for Windows and Linux**](https://github.com/EncidXVII/WristXR/releases/latest) ·
+[Guides and help on everyvr.net](https://everyvr.net/wristxr) ·
 [Report a bug](https://github.com/EncidXVII/WristXR/issues/new/choose)
 
 ![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
@@ -246,7 +247,7 @@ restores your SteamVR settings). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## More PC VR tools from the same author
 
-Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working:
+Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working. Guides, downloads and news for all four: [everyvr.net](https://everyvr.net).
 
 | | |
 |---|---|

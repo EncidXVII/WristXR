@@ -1,0 +1,19 @@
+# Rebuilds everyvr.net when a release is published, edited or deleted,
+# so the site's download page, changelog and the launcher's tool list show it the same day.
+# The repository secret SITE_DEPLOY_HOOK holds the Cloudflare Pages deploy hook; without it this does nothing.
+name: Update everyvr.net
+on:
+  release:
+    types: [published, edited, deleted]
+permissions: {}
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask Cloudflare Pages to rebuild the site
+        env:
+          HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then echo "No SITE_DEPLOY_HOOK secret: nothing to do."; exit 0; fi
+          curl -fsS -X POST "$HOOK" > /dev/null
