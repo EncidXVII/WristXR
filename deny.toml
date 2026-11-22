@@ -9,6 +9,9 @@ multiple-versions = "warn"
 
 [advisories]
 yanked = "deny"
+# Unmaintained crates that only come in through Slint, zbus or the tray (none of them ours to swap) are
+# reported, not blocking. Vulnerabilities always block.
+unmaintained = "workspace"
 
 [sources]
 unknown-registry = "deny"
