@@ -23,7 +23,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 
 ![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
 
-> **Status: early access (0.1).** The Windows build works end to end with SteamVR. The Linux build (X11 and
+> **Status: early access (0.8).** The Windows build works end to end with SteamVR. The Linux build (X11 and
 > Wayland) is experimental, and some headsets require more testing.
 > Reports from Linux and from more headsets help most: see [Status and help wanted](#status-and-help-wanted).
 
@@ -37,7 +37,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 | **Headsets** | Anything on SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link, Virtual Desktop, Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame (experimental) |
 | **Cost in a game** | Under 0.1 ms of GPU time per frame, shown live |
 | **Price** | Free. No account, no telemetry, no paid tier |
-| **Status** | Early access (0.1): Windows works end to end; Linux is experimental; English only |
+| **Status** | Early access (0.8): Windows works end to end; Linux is experimental; English only |
 | **Comes from** | XSOverlay, OVR Toolkit and Desktop+ users can switch in a minute: settings import and the same notification API |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
@@ -194,7 +194,7 @@ machine.
 
 ## Status and help wanted
 
-WristXR is in early access (0.1). Where each part stands, and what moves it forward:
+WristXR is in early access (0.8). Where each part stands, and what moves it forward:
 
 | Area | Where it stands | What helps |
 |---|---|---|

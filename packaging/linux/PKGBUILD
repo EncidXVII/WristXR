@@ -1,6 +1,6 @@
 # AUR recipe (wristxr-bin). Update pkgver and sha256sums from the release's .sha256 file.
 pkgname=wristxr-bin
-pkgver=0.1.0
+pkgver=0.8.0
 pkgrel=1
 pkgdesc="Use your desktop in VR without taking the headset off (SteamVR overlay)"
 arch=('x86_64' 'aarch64')
