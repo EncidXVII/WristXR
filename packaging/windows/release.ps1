@@ -19,5 +19,6 @@ $zip = "$stage.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$stage\*" -DestinationPath $zip
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-"$hash  $(Split-Path $zip -Leaf)" | Set-Content -Encoding ascii "$zip.sha256"
+# LF, not CRLF: `sha256sum -c` on Linux reads a CR as part of the file name.
+[IO.File]::WriteAllText("$zip.sha256", "$hash  $(Split-Path $zip -Leaf)`n")
 Write-Output "$zip`n$hash"
