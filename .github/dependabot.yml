@@ -1,3 +1,5 @@
+# One pull request a month per ecosystem with every update in it: CI runs once and nothing piles up.
+# Security fixes do not wait for this: Dependabot opens those as soon as an advisory is published.
 version: 2
 updates:
   - package-ecosystem: cargo
@@ -6,8 +8,11 @@ updates:
       interval: monthly
     groups:
       cargo:
-        patterns: ["*"]
+        patterns: ['*']
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      github-actions:
+        patterns: ['*']
