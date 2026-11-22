@@ -285,8 +285,10 @@ mod tests {
     const HEADER: &str = include_str!("../../../third_party/openvr/openvr_capi.h");
 
     fn table(name: &str) -> Vec<String> {
-        let start = HEADER.find(&format!("struct VR_{name}_FnTable\n")).expect("table in header");
-        let body = &HEADER[start..];
+        // Git may check the header out with CRLF line ends (Windows CI); compare it as LF.
+        let header = HEADER.replace("\r\n", "\n");
+        let start = header.find(&format!("struct VR_{name}_FnTable\n")).expect("table in header");
+        let body = &header[start..];
         let body = &body[..body.find("};").expect("table end")];
         body.split("(OPENVR_FNTABLE_CALLTYPE *")
             .skip(1)
