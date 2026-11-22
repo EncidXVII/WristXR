@@ -18,7 +18,7 @@ It costs under **0.1 ms of GPU time per frame** and shows its own cost live. Eve
 way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
 
 [**Download for Windows and Linux**](https://github.com/EncidXVII/WristXR/releases/latest) ·
-[Guides and help on everyvr.net](https://everyvr.net/wristxr) ·
+[Guides and help on everyvr.net](https://everyvr.net/wristxr) · [Discord](https://discord.gg/WkzGQwu2kz) ·
 [Report a bug](https://github.com/EncidXVII/WristXR/issues/new/choose)
 
 ![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
