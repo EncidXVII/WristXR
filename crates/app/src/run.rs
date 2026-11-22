@@ -728,6 +728,7 @@ pub fn run() -> Result<(), String> {
                         tracing::warn!(%e, "binding screen not opened");
                     }
                 }
+                Effect::OpenUrl(url) => crate::update::browse(url),
                 Effect::Accent => {
                     let accent = session.state.accent.rgb();
                     wrist.set_accent(accent);
@@ -885,7 +886,15 @@ pub fn run() -> Result<(), String> {
                 windows: if wrist_adding { wrist_windows(&session.windows, &engine.panels) } else { Vec::new() },
             };
             let shared = shared_at.is_some();
-            wrist.set(&WristInfo { hidden: session.hidden, keyboard: keyboard_out, unread, volume, add, shared, ..info });
+            wrist.set(&WristInfo {
+                hidden: session.hidden,
+                keyboard: keyboard_out,
+                unread,
+                volume,
+                add,
+                shared,
+                ..info
+            });
         }
         // Rebuilt only on change (the cost line updates with the stats tick), never per frame.
         if session.menu_open(&engine.panels) && (menu_dirty || refresh_wrist) {

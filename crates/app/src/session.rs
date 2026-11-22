@@ -53,6 +53,13 @@ const TOOLBAR_LANGUAGES: usize = 3;
 pub const WINDOW_NEARER: f32 = 0.85;
 /// Gap between screens when the layout is reset (radians of the arc around you).
 const LAYOUT_GAP_RAD: f32 = 0.04;
+/// Setup > About: where each row goes (the desktop browser opens them).
+const ISSUES_URL: &str = "https://github.com/EncidXVII/WristXR/issues/new/choose";
+const GUIDE_URL: &str = "https://everyvr.net/wristxr";
+const GITHUB_URL: &str = "https://github.com/EncidXVII";
+const THREADS_URL: &str = "https://www.threads.com/@encidxvii";
+const X_URL: &str = "https://x.com/MykolaOP";
+const LICENSE_URL: &str = "https://github.com/EncidXVII/WristXR/blob/main/LICENSE";
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
 
@@ -79,6 +86,8 @@ pub enum Page {
     Theme,
     /// Setup > Controls: what every button does.
     Controls,
+    /// Setup > About: version, bug reports, guide, who made it, licence.
+    About,
 }
 
 impl Page {
@@ -87,14 +96,14 @@ impl Page {
         match self {
             Self::Tab(i) => i.min(TABS - 1),
             Self::WatchLayouts => TAB_WATCH,
-            Self::Theme | Self::Controls => TAB_SETUP,
+            Self::Theme | Self::Controls | Self::About => TAB_SETUP,
             _ => TAB_PANELS,
         }
     }
 
     /// A sub-page that opens from a rail page (closing the menu goes back to that page).
     fn sub(self) -> bool {
-        matches!(self, Self::Windows(_) | Self::WatchLayouts | Self::Theme | Self::Controls)
+        matches!(self, Self::Windows(_) | Self::WatchLayouts | Self::Theme | Self::Controls | Self::About)
     }
 }
 
@@ -119,6 +128,8 @@ pub enum Effect {
     Accent,
     /// Open SteamVR's binding screen for WristXR.
     Rebind,
+    /// Open this web page in the desktop's browser.
+    OpenUrl(&'static str),
 }
 
 /// What a menu slot does (kept for the slots last drawn, so a click acts on what the user saw).
@@ -167,6 +178,9 @@ pub enum Act {
     Smoothing,
     Updates,
     Curved,
+    OpenAbout,
+    /// A link on the About page.
+    Link(&'static str),
     Quit,
 }
 
@@ -1114,6 +1128,29 @@ impl Session {
                 l.footer(t("menu-theme-footer"), None);
                 l.finish()
             }
+            Page::About => {
+                let mut l = Layout::rail(t("menu-about"));
+                l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
+                l.hint(s.get("about-version", &[("version", env!("CARGO_PKG_VERSION").to_owned())]));
+                l.paragraph(Col::Full, t("about-what"), Tone::Secondary, 36.0);
+                let link =
+                    |acts: &mut Vec<Act>, id: &str, url: &'static str| add(acts, Act::Link(url), row(t(id)).value("›"));
+                l.label(Col::Left, t("about-help"));
+                let rows = vec![link(&mut acts, "about-report", ISSUES_URL), link(&mut acts, "about-guide", GUIDE_URL)];
+                l.rows(Col::Left, rows, ROW_H);
+                l.label(Col::Right, t("about-made-by"));
+                let rows = vec![
+                    link(&mut acts, "about-github", GITHUB_URL),
+                    link(&mut acts, "about-threads", THREADS_URL),
+                    link(&mut acts, "about-x", X_URL),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
+                l.label(Col::Left, t("about-licence"));
+                l.rows(Col::Left, vec![link(&mut acts, "about-gpl", LICENSE_URL)], ROW_H);
+                l.paragraph(Col::Full, t("about-report-hint"), Tone::Tertiary, 60.0);
+                l.footer(t("about-footer"), None);
+                l.finish()
+            }
             Page::Controls => {
                 let mut l = Layout::rail(t("menu-controls"));
                 l.back(add(&mut acts, Act::Back, Slot::new(SlotKind::Back, t("menu-back")).icon(icons::BACK)));
@@ -1208,19 +1245,21 @@ impl Session {
                     add(&mut acts, Act::OpenControls, row(t("menu-controls")).value("›")),
                 ];
                 l.rows(Col::Left, rows, ROW_H);
-                l.label(Col::Right, t("menu-start"));
+                // Two groups of three: a third group's heading would not fit above the Quit button.
+                l.label(Col::Right, t("menu-app"));
                 let rows = vec![
                     add(&mut acts, Act::AutoStart, toggle(t("menu-autostart"), self.auto_launch)),
                     add(&mut acts, Act::Updates, toggle(t("menu-update-check"), self.state.update_check)),
+                    add(&mut acts, Act::OpenAbout, row(t("menu-about")).value("›")),
                 ];
-                l.rows(Col::Right, rows, ROW_H);
-                l.label(Col::Right, t("menu-new-screens"));
-                let rows =
-                    vec![add(&mut acts, Act::Curved, toggle(t("menu-curved-default"), self.state.default_curved))];
                 l.rows(Col::Right, rows, ROW_H);
                 l.label(Col::Right, t("menu-look"));
                 let theme = row(t("menu-theme")).value(format!("{} ›", t(self.state.accent.name_id())));
-                l.rows(Col::Right, vec![add(&mut acts, Act::OpenTheme, theme)], ROW_H);
+                let rows = vec![
+                    add(&mut acts, Act::OpenTheme, theme),
+                    add(&mut acts, Act::Curved, toggle(t("menu-curved-default"), self.state.default_curved)),
+                ];
+                l.rows(Col::Right, rows, ROW_H);
                 let quit = Slot::new(SlotKind::Danger, t(if self.armed { "menu-confirm" } else { "menu-quit" }))
                     .on(self.armed);
                 l.footer("", Some(add(&mut acts, Act::Quit, quit)));
@@ -1478,6 +1517,8 @@ impl Session {
             Act::Smoothing => self.state.smoothing = !self.state.smoothing,
             Act::Updates => self.state.update_check = !self.state.update_check,
             Act::Curved => self.state.default_curved = !self.state.default_curved,
+            Act::OpenAbout => self.page = Page::About,
+            Act::Link(url) => fx.push(Effect::OpenUrl(url)),
             Act::Quit => fx.push(Effect::Quit),
         }
         fx

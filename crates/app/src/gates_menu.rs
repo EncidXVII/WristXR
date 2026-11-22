@@ -465,6 +465,40 @@ mod tests {
         assert_eq!(m.tab, TAB_WATCH, "a sub-page keeps its tab lit");
     }
 
+    #[test]
+    fn about_links_open_in_the_browser_and_nothing_overlaps() {
+        let strings = Strings::english().expect("strings");
+        let (mut session, mut panels, screens) = setup();
+        let click = |session: &mut Session, panels: &mut Vec<_>, label: &str| {
+            let m = session.model(panels, &screens, &strings, (0.0, 0.0));
+            let i = m.find(label).unwrap_or_else(|| panic!("{label} not on {}", m.title));
+            session.input(wxr_ui::MenuInput::Slot(i), panels, HEAD, &screens)
+        };
+        for page in [Page::Tab(TAB_SETUP), Page::About] {
+            session.page = page;
+            let m = session.model(&panels, &screens, &strings, (0.0, 0.0));
+            for (i, a) in m.slots.iter().enumerate() {
+                for b in &m.slots[i + 1..] {
+                    let (r, o) = (a.rect, b.rect);
+                    let apart = r.x + r.w <= o.x || o.x + o.w <= r.x || r.y + r.h <= o.y || o.y + o.h <= r.y;
+                    assert!(apart, "{page:?}: {} and {} overlap", a.label, b.label);
+                }
+            }
+        }
+        session.page = Page::Tab(TAB_SETUP);
+        click(&mut session, &mut panels, "About");
+        assert_eq!(session.page, Page::About);
+        let m = session.model(&panels, &screens, &strings, (0.0, 0.0));
+        assert!(m.hint.ends_with(env!("CARGO_PKG_VERSION")), "version from the build: {}", m.hint);
+        let fx = click(&mut session, &mut panels, "Report a problem");
+        assert_eq!(fx, vec![Effect::OpenUrl("https://github.com/EncidXVII/WristXR/issues/new/choose")]);
+        let fx = click(&mut session, &mut panels, "Guide");
+        assert_eq!(fx, vec![Effect::OpenUrl("https://everyvr.net/wristxr")]);
+        assert_eq!(session.page, Page::About, "a link keeps the page open");
+        click(&mut session, &mut panels, "Back");
+        assert_eq!(session.page, Page::Tab(TAB_SETUP));
+    }
+
     /// One line per control: what a user reads and its state, without pixel positions.
     fn outline(m: &MenuModel) -> String {
         let mut out = format!("{} | {}\n", m.title, m.hint);
@@ -492,7 +526,7 @@ mod tests {
     fn menu_views_match_snapshots() {
         let strings = Strings::english().expect("strings");
         let (mut session, panels, screens) = setup();
-        let pages: [(&str, Page); 13] = [
+        let pages: [(&str, Page); 14] = [
             ("first_hand", Page::FirstHand),
             ("first_monitor", Page::FirstMonitor),
             ("first_keyboard", Page::FirstKeyboard),
@@ -506,6 +540,7 @@ mod tests {
             ("watch_layouts", Page::WatchLayouts),
             ("theme", Page::Theme),
             ("controls", Page::Controls),
+            ("about", Page::About),
         ];
         for (name, page) in pages {
             session.page = page;
@@ -517,7 +552,8 @@ mod tests {
                     "{name}: slot {i} off page"
                 );
             }
-            insta::assert_snapshot!(name, outline(&m));
+            // The version would change the About snapshot on every release.
+            insta::assert_snapshot!(name, outline(&m).replace(env!("CARGO_PKG_VERSION"), "<version>"));
         }
     }
 

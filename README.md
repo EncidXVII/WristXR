@@ -23,8 +23,8 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 ![WristXR: VR keyboard and wrist watch overlay for SteamVR](docs/img/og.png)
 
 > **Status: early access (0.1).** The Windows build works end to end with SteamVR. The Linux build (X11 and
-> Wayland) is new and not yet tested on hardware, and not every headset has been tried. Linux testers and headset
-> self-test reports are what it needs most: see [Status and help wanted](#status-and-help-wanted).
+> Wayland) is experimental, and some headsets require more testing.
+> Reports from Linux and from more headsets help most: see [Status and help wanted](#status-and-help-wanted).
 
 ## At a glance
 
@@ -32,11 +32,11 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 |---|---|
 | **What it is** | A SteamVR overlay that puts your desktop screens and windows in VR, with a wrist watch for the time, controller batteries, music, messages and frame rate |
 | **Use it for** | Using the desktop without taking the headset off, typing into VRChat, reading Discord messages in VR, checking battery and fps at a glance |
-| **Platforms** | Windows 10 and 11; Linux on X11 and Wayland (new, not yet tested on hardware) |
-| **Headsets** | Anything on SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link, Virtual Desktop, Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame |
+| **Platforms** | Windows 10 and 11; Linux on X11 and Wayland (experimental) |
+| **Headsets** | Anything on SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link, Virtual Desktop, Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame (experimental) |
 | **Cost in a game** | Under 0.1 ms of GPU time per frame, shown live |
 | **Price** | Free. No account, no telemetry, no paid tier |
-| **Status** | Early access (0.1): Windows works end to end; Linux is new and needs testers; English only so far |
+| **Status** | Early access (0.1): Windows works end to end; Linux is experimental; English only |
 | **Comes from** | XSOverlay, OVR Toolkit and Desktop+ users can switch in a minute: settings import and the same notification API |
 | **License** | Open source, `GPL-3.0-or-later`, © 2026 EncidXVII |
 
@@ -76,7 +76,7 @@ way until you need it: hold one button to hide it all. No account, no telemetry,
 - **Game input stays yours**: a hand on a panel takes from the game only the controls that do something there
   (the stick only over a screen or window), and only once you let them go; the other hand keeps playing.
 - **Rebindable** in SteamVR's own binding UI. Default bindings for Valve Index, Meta Quest (Touch),
-  HTC Vive, Windows Mixed Reality and Steam Frame controllers.
+  HTC Vive, Windows Mixed Reality and Steam Frame (experimental) controllers.
 
 | Watch at a glance | Watch, pointed at |
 |---|---|
@@ -179,8 +179,8 @@ Run one overlay at a time: two overlays fight over the same controller input and
 
 ## Performance
 
-Measured on the build machine (RTX 5070 Ti, Windows 11, SteamVR) with a constantly changing desktop, which is
-the worst case (60 fps capture):
+Measured with an RTX 5070 Ti, Windows 11 and SteamVR, on a constantly changing desktop (the worst case, 60 fps
+capture):
 
 | Budget | Target | Measured |
 |---|---|---|
@@ -197,10 +197,10 @@ WristXR is in early access (0.1). Where each part stands, and what moves it forw
 
 | Area | Where it stands | What helps |
 |---|---|---|
-| **Windows** | Works end to end with SteamVR. This is the build it is developed and measured on | A [bug report](https://github.com/EncidXVII/WristXR/issues/new/choose) with `selftest-report.zip` when something is off |
-| **Linux (X11 and Wayland)** | New: written and compiled, not yet run on a Linux machine with a headset. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
-| **Headsets and controllers** | Default bindings for Valve Index, Meta Quest (Touch), HTC Vive, Windows Mixed Reality and Steam Frame controllers. Not every one has been tried on the real device | A self-test report from your headset, even when everything worked: say which headset, controllers and streaming method |
-| **Steam Frame** | Bindings and the Linux build are written for it; no reports yet | The "Steam Frame test report" issue template |
+| **Windows** | Works end to end with SteamVR | A [bug report](https://github.com/EncidXVII/WristXR/issues/new/choose) with `selftest-report.zip` when something is off |
+| **Linux (X11 and Wayland)** | Experimental, requires more testing. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
+| **Headsets and controllers** | Default bindings for Valve Index, Meta Quest (Touch), HTC Vive, Windows Mixed Reality and Steam Frame (experimental) controllers | A self-test report from your headset, even when everything worked: say which headset, controllers and streaming method |
+| **Steam Frame** | Controller bindings and the Linux build support it; experimental, requires more testing | The "Steam Frame test report" issue template |
 | **Languages** | English only. Every string is in one file, `crates/ui/locales/en-US.ftl`; loading other languages is the next step | Open an issue to claim a language |
 | **Code signing** | Builds are not signed yet, so Windows SmartScreen warns on first run | Nothing: see the [code signing policy](docs/code-signing-policy.md) |
 
@@ -211,18 +211,18 @@ How to send any of these: [CONTRIBUTING.md](CONTRIBUTING.md).
 **Is it free?** Yes. Free and open source under GPL-3.0, with no paid tier, account or ads.
 
 **Which headsets work?** Anything that runs SteamVR: Valve Index, Meta Quest 2 / 3 / Pro (Link, Air Link,
-Virtual Desktop or Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame.
+Virtual Desktop or Steam Link), HTC Vive, Pico, Bigscreen Beyond, Windows Mixed Reality, Steam Frame (experimental).
 
 **Does it work with VRChat?** Yes. It runs alongside VRChat, types into the chatbox via OSC (enable OSC in
 VRChat's Action Menu), and takes from the game only the controls you're using on a panel.
 
-**Does it work on Linux?** Yes, on X11 and Wayland with SteamVR for Linux (see [Linux](#linux)). It is new and not
-yet tested on hardware, so please report what you find.
+**Does it work on Linux?** Yes, on X11 and Wayland with SteamVR for Linux (see [Linux](#linux)). Linux support is
+experimental and requires more testing.
 
 **Does it slow down my game?** It's designed not to: under 0.1 ms GPU per frame and a few percent of one CPU
 core. Hidden panels stop capturing entirely. Setup shows the real cost on your machine.
 
-**Is Windows SmartScreen warning me?** Early builds aren't code-signed yet (see
+**Is Windows SmartScreen warning me?** The builds aren't code-signed yet (see
 [code signing policy](docs/code-signing-policy.md)). Every release ships a SHA-256 checksum.
 
 ## Self-test and bug reports

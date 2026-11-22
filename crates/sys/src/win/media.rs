@@ -449,7 +449,9 @@ mod tests {
         let m = Media::start();
         let wait = |f: &dyn Fn(&MediaInfo) -> bool| {
             for _ in 0..50 {
-                if m.info().is_some_and(|i| f(&i)) { return true; }
+                if m.info().is_some_and(|i| f(&i)) {
+                    return true;
+                }
                 std::thread::sleep(std::time::Duration::from_millis(100));
             }
             false

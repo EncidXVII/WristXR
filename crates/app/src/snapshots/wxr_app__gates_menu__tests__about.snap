@@ -1,0 +1,23 @@
+---
+source: crates/app/src/gates_menu.rs
+expression: "outline(&m).replace(env!(\"CARGO_PKG_VERSION\"), \"<version>\")"
+---
+About | WristXR <version>
+tab Panels (0)
+tab Keys (0)
+tab Watch (0)
+tab Inbox (2)
+tab Setup (0)
+  Your desktop screens, windows, keyboard and a watch in VR.
+  Help
+  Made by EncidXVII
+  Free and open source
+  For a bug report, attach selftest-report.zip. The Guide shows how to make it.
+  Links open in your desktop browser
+Back "Back" "" ""
+Action "Report a problem" "" "›"
+Action "Guide" "" "›"
+Action "GitHub" "" "›"
+Action "Threads" "" "›"
+Action "X" "" "›"
+Action "GPL-3.0" "" "›"

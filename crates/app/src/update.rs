@@ -65,6 +65,12 @@ pub fn check_in_background() -> std::sync::mpsc::Receiver<Release> {
 #[cfg(any(windows, target_os = "linux"))]
 pub fn open(url: &str) {
     if url.starts_with("https://github.com/") {
-        let _ = std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(url).spawn();
+        browse(url);
     }
+}
+
+/// Opens one of the app's own links (Setup > About) in the default browser.
+#[cfg(any(windows, target_os = "linux"))]
+pub fn browse(url: &str) {
+    let _ = std::process::Command::new(if cfg!(windows) { "explorer.exe" } else { "xdg-open" }).arg(url).spawn();
 }

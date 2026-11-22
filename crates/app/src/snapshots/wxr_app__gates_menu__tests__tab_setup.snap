@@ -1,7 +1,6 @@
 ---
 source: crates/app/src/gates_menu.rs
-assertion_line: 517
-expression: outline(&m)
+expression: "outline(&m).replace(env!(\"CARGO_PKG_VERSION\"), \"<version>\")"
 ---
 Setup | Overlay 0.05 ms · 1.2% CPU
 tab Panels (0)
@@ -13,8 +12,7 @@ tab Setup (0)
   Laser hand
   Watch on
   Feel
-  Start
-  New screens
+  App
   Look
   
 Segment "Left" "" ""
@@ -26,6 +24,7 @@ Toggle "Steady laser" "" "" [on]
 Action "Controls" "" "›"
 Toggle "With SteamVR" "" ""
 Toggle "Check updates" "" "" [on]
-Toggle "Curved" "" ""
+Action "About" "" "›"
 Action "Theme" "" "Lime ›"
+Toggle "Curved screens" "" ""
 Danger "Quit WristXR" "" ""

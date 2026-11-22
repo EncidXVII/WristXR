@@ -192,12 +192,27 @@ ctl-size = Size
 ctl-both-grips = Both grips
 ctl-to-hand = To other hand
 ctl-attach = Attach
-menu-start = Start
+menu-app = App
 menu-autostart = With SteamVR
 menu-update-check = Check updates
-menu-new-screens = New screens
-menu-curved-default = Curved
+menu-curved-default = Curved screens
+menu-about = About
 menu-quit = Quit WristXR
+
+## Setup > About
+about-version = WristXR { $version }
+about-what = Your desktop screens, windows, keyboard and a watch in VR.
+about-help = Help
+about-report = Report a problem
+about-guide = Guide
+about-made-by = Made by EncidXVII
+about-github = GitHub
+about-threads = Threads
+about-x = X
+about-licence = Free and open source
+about-gpl = GPL-3.0
+about-report-hint = For a bug report, attach selftest-report.zip. The Guide shows how to make it.
+about-footer = Links open in your desktop browser
 
 ## Toolbar
 tool-keyboard = Keyboard
