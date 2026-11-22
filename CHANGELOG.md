@@ -3,7 +3,7 @@
 All notable changes to WristXR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions: [Semantic Versioning](https://semver.org/).
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-23
 
 First public early-access release (Windows).
 

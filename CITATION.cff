@@ -6,6 +6,7 @@ abstract: "Free, open-source SteamVR overlay for Windows and Linux: desktop scre
 authors:
   - alias: EncidXVII
 version: 0.1.0
+date-released: 2026-11-23
 license: GPL-3.0-or-later
 repository-code: "https://github.com/EncidXVII/WristXR"
 url: "https://everyvr.net/wristxr"
