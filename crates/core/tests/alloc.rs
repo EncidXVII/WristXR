@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use wxr_core::engine::{Engine, FrameInput, HandInput};
 use wxr_core::math::{Pose, Vec3};
@@ -13,10 +14,17 @@ use wxr_core::panel::{Panel, Source};
 struct Counting;
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
 
+thread_local! {
+    // Only this test's thread is counted: the test runner's other threads allocate on their own schedule.
+    static COUNTING: Cell<bool> = const { Cell::new(false) };
+}
+
 // SAFETY: forwards to the system allocator unchanged; only counts calls.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ALLOCS.fetch_add(1, Ordering::Relaxed);
+        if COUNTING.try_with(Cell::get).unwrap_or(false) {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+        }
         // SAFETY: same contract as the caller's.
         unsafe { System.alloc(layout) }
     }
@@ -55,6 +63,8 @@ fn hot_loop_is_allocation_free() {
     };
     run(200, &mut engine);
     ALLOCS.store(0, Ordering::Relaxed);
+    COUNTING.set(true);
     run(10_000, &mut engine);
+    COUNTING.set(false);
     assert_eq!(ALLOCS.load(Ordering::Relaxed), 0);
 }
