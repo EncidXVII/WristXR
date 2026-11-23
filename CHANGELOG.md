@@ -149,8 +149,6 @@ First public early-access release: Windows, and Linux on X11 and Wayland (experi
 - Default bindings for Index, Quest Touch, Vive, WMR and Steam Frame controllers.
 - Release check against GitHub (no identifiers), `--selftest` report.
 
-[0.1.0]: https://github.com/EncidXVII/WristXR/releases/tag/v0.1.0
-
 ### Fixed
 - The watch's volume slider and mute act on the playing app's own volume (its Volume mixer entry) wherever it
   plays. They set Windows' default device, which did nothing for a player sent to another device (Spotify to an
