@@ -5,7 +5,7 @@ versions: [Semantic Versioning](https://semver.org/).
 
 ## [0.8.0] - 2026-11-23
 
-First public early-access release (Windows).
+First public early-access release: Windows, and Linux on X11 and Wayland (experimental).
 
 ### Changed
 - Screens and windows look sharper in the headset, far ones most: each is handed to SteamVR at about 2.5x the
