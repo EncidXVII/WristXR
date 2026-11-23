@@ -94,7 +94,7 @@ First public early-access release: Windows, and Linux on X11 and Wayland (experi
   trigger still right-clicks; Setup > Controls can turn that off.
 - Setup > Controls: every control in one page, pointing and holding.
 - Drag to scroll (Setup > Controls, off by default): trigger-drag on a screen or window scrolls it like a
-  touchscreen, as in OVR Toolkit.
+  touchscreen.
 - Grip + stick left / right resizes the held panel smoothly.
 - Bring a held panel to your other hand and let go: it sits above that hand and moves with it (the hand feels it
   arrive). Let it go in the room to take it off.
@@ -139,7 +139,7 @@ First public early-access release: Windows, and Linux on X11 and Wayland (experi
   Inbox > Windows notifications from: All apps (the default) / Discord only / Off. VRCX always comes through.
 - Menu Close button; adding a screen or window closes the menu so the new panel is in view.
 - Windows that close remove their panel; the keyboard's toolbar sits above it; a buzz confirms hide / show.
-- Double-tap the left menu button (as in XSOverlay) to hide or show screens, windows and keyboard; hidden panels
+- Double-tap the left menu button to hide or show screens, windows and keyboard; hidden panels
   stop capturing. Hide all / Show all buttons on the watch and in the menu show the current state.
 - Toolbar Reset and Menu > Reset layout (screens and windows in an arc in front of you).
 - Compact menu: 10 buttons per page; laser smoothing can be switched off in Settings.
@@ -152,7 +152,8 @@ First public early-access release: Windows, and Linux on X11 and Wayland (experi
 - Keyboard language key cycling the installed Windows input languages; function row (Esc, F1–F12, Del), Win key
   (Win + key, or Win twice for Start) and arrow keys.
 - Settings: pointing hand, start with SteamVR, vibration, curved screens by default, update check.
-- XSOverlay notification API compatibility (UDP 42069) and XSOverlay settings import on first run.
+- Notifications from apps that already send them to a VR overlay (UDP 42069), and that overlay's settings imported
+  on first run.
 - Four-step first run, menu (Panels, Keyboard, Wrist, Settings), tray icon, start with SteamVR.
 - Per-hand input exclusivity: only the hand using the overlay is taken from the game.
 - Default bindings for Index, Quest Touch, Vive, WMR and Steam Frame controllers.
