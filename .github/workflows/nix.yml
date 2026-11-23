@@ -22,12 +22,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
-      - run: nix flake check -L
-      - run: nix build -L .#app -o app
-      - run: nix build -L . -o pkg
+      - run: nix flake check -L --no-update-lock-file
+      - run: nix build -L .#app -o result-app
+      - run: nix build -L . -o result-pkg
       - name: Libraries resolve
         run: |
-          bin=app/share/wristxr/wristxr
+          bin=result-app/share/wristxr/wristxr
           ldd "$bin"
           if ldd "$bin" | grep -q "not found"; then exit 1; fi
           # Loaded at run time, so not in the ldd list: each must sit in a folder on the binary's RUNPATH.
@@ -43,15 +43,8 @@ jobs:
           export HOME=$RUNNER_TEMP/home XDG_DATA_HOME=
           mkdir -p "$HOME"
           # The app itself needs a desktop and SteamVR; it is only started so the launcher makes its copy.
-          timeout 10 pkg/bin/wristxr >/dev/null 2>&1 </dev/null || true
+          timeout 10 result-pkg/bin/wristxr >/dev/null 2>&1 </dev/null || true
           dest=$HOME/.local/share/wristxr
           ls -la "$dest"
           test -x "$dest/wristxr" -a -w "$dest/wristxr"
-          test "$(cat "$dest/.nix-package")" = "$(readlink -f app)"
-      - name: Lock file
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: flake-lock-${{ matrix.runner }}
-          path: flake.lock
-          if-no-files-found: ignore
+          test "$(cat "$dest/.nix-package")" = "$(readlink -f result-app)"
