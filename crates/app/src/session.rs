@@ -58,7 +58,7 @@ const ISSUES_URL: &str = "https://github.com/EncidXVII/WristXR/issues/new/choose
 const GUIDE_URL: &str = "https://everyvr.net/wristxr";
 const GITHUB_URL: &str = "https://github.com/EncidXVII";
 const THREADS_URL: &str = "https://www.threads.com/@encidxvii";
-const X_URL: &str = "https://x.com/MykolaOP";
+const X_URL: &str = "https://x.com/EncidXVII";
 const LICENSE_URL: &str = "https://github.com/EncidXVII/WristXR/blob/main/LICENSE";
 /// The keyboard test asks for this word.
 pub const TEST_WORD: &str = "hi";
