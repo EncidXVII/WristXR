@@ -8,6 +8,7 @@ use slint::{ComponentHandle, ModelRc, VecModel};
 use wxr_core::keyboard::{ROW_UNITS, ROWS};
 
 slint::slint! {
+    #[edition = "1.19"]
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";
