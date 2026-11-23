@@ -618,8 +618,8 @@ mod tests {
         save("banner", wxr_ui::BANNER_SIZE, &px, wxr_ui::BANNER_SIZE.1);
         let mut wrist = Wrist::new().expect("wrist");
         let song = WristMedia {
-            title: "Night Drive".into(),
-            artist: "Synthwave Radio".into(),
+            title: "Falling Man".into(),
+            artist: "Blonde Redhead".into(),
             app: "Spotify".into(),
             playing: true,
             position: 72.0,
