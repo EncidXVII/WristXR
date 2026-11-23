@@ -19,7 +19,7 @@ What search engines and assistants read first is the repository's own page, so i
 1. Everything committed, the changelog's top section dated, the version the same in every manifest.
 2. The checks in [CONTRIBUTING.md](CONTRIBUTING.md) pass, and the build has been used in a headset.
 3. Build the packages with the packaging scripts; each carries `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md`.
-4. Tag `vX.Y.Z` and push the tag: the `release` workflow builds the packages and their SHA-256 files. Publish them
+4. Tag `vX.Y.Z` (annotated: `git tag -a vX.Y.Z -m "WristXR X.Y.Z"`) and push the tag: the `release` workflow builds the packages and their SHA-256 files. Publish them
    from your own account, with the changelog section as the notes:
    `gh run download <run id> -D assets`, then
    `gh release create vX.Y.Z assets/*/* --title "WristXR X.Y.Z" --notes-file notes.md`.
