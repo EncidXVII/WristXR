@@ -110,6 +110,9 @@ then delete the folder.
 Unpack the Linux archive, run `./install.sh`, start SteamVR, then run `~/.local/share/wristxr/wristxr`. It
 registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes it all.
 
+**NixOS or Nix:** `nix run github:EncidXVII/WristXR`, or `nix profile install github:EncidXVII/WristXR` to keep it. The
+`wristxr` command keeps its files in `~/.local/share/wristxr`, the folder `./install.sh` uses, and runs them from there.
+
 - **Wayland** (GNOME, KDE Plasma, and others with a desktop portal): the first run asks once, on the desktop, which
   screens and windows to share and whether WristXR may use the keyboard and pointer. Take the headset off to
   answer; later runs remember it. Windows show as "Shared window 1, 2..." (Wayland gives no titles), and a window

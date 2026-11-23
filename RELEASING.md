@@ -21,3 +21,5 @@ What search engines and assistants read first is the repository's own page, so i
 3. Build the packages with the packaging scripts; each carries `LICENSE`, `NOTICE` and `THIRD_PARTY_NOTICES.md`.
 4. Tag `vX.Y.Z`, publish the release with the changelog section as its notes, the packages and their SHA-256 files.
 5. Check the README's download links and the app's update check against the new release.
+6. In `flake.nix`, set `version` and each Linux file's `hash` (its `.sha256` in SRI form: `nix hash convert --hash-algo
+   sha256 <hex>`), then push: the Nix workflow builds it.
