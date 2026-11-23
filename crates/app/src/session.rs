@@ -1141,8 +1141,8 @@ impl Session {
                 l.label(Col::Right, t("about-made-by"));
                 let rows = vec![
                     link(&mut acts, "about-github", GITHUB_URL),
-                    link(&mut acts, "about-threads", THREADS_URL),
                     link(&mut acts, "about-x", X_URL),
+                    link(&mut acts, "about-threads", THREADS_URL),
                 ];
                 l.rows(Col::Right, rows, ROW_H);
                 l.label(Col::Left, t("about-licence"));
