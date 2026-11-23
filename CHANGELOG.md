@@ -9,8 +9,8 @@ versions: [Semantic Versioning](https://semver.org/).
 - About lists the maker's profiles as GitHub, X, Threads, with X at its new address (x.com/EncidXVII).
 
 ### Added
-- Packages for Linux: a Nix flake (`nix run github:EncidXVII/WristXR`) and an AUR package (`wristxr-bin`), both
-  built from the release files.
+- Linux packaging: a Nix flake (`nix run github:EncidXVII/WristXR`), and an Arch Linux PKGBUILD in `packaging/aur`,
+  both built from the release files.
 
 ## [0.8.0] - 2026-11-23
 
