@@ -1,0 +1,57 @@
+# Builds the Nix flake on each system it supports: the release files download and match their hashes, every library
+# the app links and loads resolves in the Nix store, and the `wristxr` command sets up its per-user copy.
+name: Nix
+
+on:
+  push:
+    paths: [flake.nix, flake.lock, .github/workflows/nix.yml]
+  pull_request:
+    paths: [flake.nix, flake.lock, .github/workflows/nix.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - run: nix flake check -L
+      - run: nix build -L .#app -o app
+      - run: nix build -L . -o pkg
+      - name: Libraries resolve
+        run: |
+          bin=app/share/wristxr/wristxr
+          ldd "$bin"
+          if ldd "$bin" | grep -q "not found"; then exit 1; fi
+          # Loaded at run time, so not in the ldd list: each must sit in a folder on the binary's RUNPATH.
+          rpath=$(nix run nixpkgs#patchelf -- --print-rpath "$bin")
+          for lib in libpipewire-0.3.so.0; do
+            found=
+            for dir in ${rpath//:/ }; do if [ -e "$dir/$lib" ]; then found=$dir/$lib; fi; done
+            echo "$lib: ${found:-MISSING}"
+            [ -n "$found" ]
+          done
+      - name: Per-user copy
+        run: |
+          export HOME=$RUNNER_TEMP/home XDG_DATA_HOME=
+          mkdir -p "$HOME"
+          # The app itself needs a desktop and SteamVR; it is only started so the launcher makes its copy.
+          timeout 10 pkg/bin/wristxr >/dev/null 2>&1 </dev/null || true
+          dest=$HOME/.local/share/wristxr
+          ls -la "$dest"
+          test -x "$dest/wristxr" -a -w "$dest/wristxr"
+          test "$(cat "$dest/.nix-package")" = "$(readlink -f app)"
+      - name: Lock file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flake-lock-${{ matrix.runner }}
+          path: flake.lock
+          if-no-files-found: ignore
