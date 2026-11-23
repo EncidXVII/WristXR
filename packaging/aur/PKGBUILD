@@ -1,0 +1,30 @@
+# Maintainer: EncidXVII
+# The AUR package, built from the published release. The AUR workflow (.github/workflows/aur.yml) sets pkgver and
+# the checksums from each new release and pushes it to aur.archlinux.org; the values here are the last ones.
+pkgname=wristxr-bin
+pkgver=0.8.1
+pkgrel=1
+pkgdesc="Your PC desktop, a wrist watch and notifications in SteamVR"
+arch=('x86_64' 'aarch64')
+url="https://everyvr.net/wristxr"
+_repo="https://github.com/EncidXVII/WristXR"
+license=('GPL-3.0-or-later')
+depends=('fontconfig' 'pipewire' 'gcc-libs')
+optdepends=('steam: SteamVR'
+            'xdg-desktop-portal: picking screens to share on Wayland')
+provides=('wristxr')
+conflicts=('wristxr')
+source_x86_64=("$_repo/releases/download/v$pkgver/WristXR-$pkgver-linux-x64.tar.gz")
+source_aarch64=("$_repo/releases/download/v$pkgver/WristXR-$pkgver-linux-arm64.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  local arch=x64
+  [[ $CARCH == aarch64 ]] && arch=arm64
+  cd "WristXR-$pkgver-linux-$arch"
+  # In /usr/bin, a path that stays the same across updates: WristXR registers it with SteamVR on its first run.
+  install -Dm755 wristxr "$pkgdir/usr/bin/wristxr"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/wristxr/README.md"
+  install -Dm644 LICENSE NOTICE THIRD_PARTY_NOTICES.md -t "$pkgdir/usr/share/licenses/wristxr/"
+}

@@ -1,0 +1,63 @@
+# Updates the wristxr-bin package on the AUR (aur.archlinux.org) when a release is published: pkgver from the tag, the
+# checksums from the release's files. Needs the AUR_SSH_PRIVATE_KEY secret (the key of the AUR account that owns the
+# package); without it the job only says so. A change to packaging/aur/ is test-built on Arch Linux against the
+# latest release.
+name: AUR
+on:
+  release:
+    types: [published]
+  push:
+    paths: [packaging/aur/**, .github/workflows/aur.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the package from the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pacman -Syu --noconfirm --needed pacman-contrib github-cli namcap
+          tag=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          useradd -m build
+          cp -r packaging/aur /home/build/pkg && chown -R build /home/build/pkg
+          cd /home/build/pkg
+          sed -i "s/^pkgver=.*/pkgver=${tag#v}/" PKGBUILD
+          # makepkg runs as a plain user, so the dependencies go in first, as root.
+          pacman -S --noconfirm --needed $(bash -c 'source PKGBUILD; echo "${depends[@]}"')
+          su build -c "updpkgsums && makepkg --noconfirm --cleanbuild"
+          namcap PKGBUILD *.pkg.tar.zst || true
+          pacman -Qlp *.pkg.tar.zst
+  aur:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    env:
+      AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - if: env.AUR_KEY == ''
+        run: echo "::notice::No AUR_SSH_PRIVATE_KEY secret, so the AUR package was not updated."
+      - if: env.AUR_KEY != ''
+        uses: actions/checkout@v4
+      - name: Version from the release
+        if: env.AUR_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view -R "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          sed -i "s/^pkgver=.*/pkgver=${tag#v}/; s/^pkgrel=.*/pkgrel=1/" packaging/aur/PKGBUILD
+      - if: env.AUR_KEY != ''
+        uses: KSXGitHub/github-actions-deploy-aur@084b0d9b15415bf9cdb65d44dad1efe37a354050 # v4.2.0
+        with:
+          pkgname: wristxr-bin
+          pkgbuild: packaging/aur/PKGBUILD
+          assets: ''
+          updpkgsums: true
+          commit_username: EncidXVII
+          commit_email: 192697909+EncidXVII@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ github.event.release.tag_name || 'the latest release' }}
