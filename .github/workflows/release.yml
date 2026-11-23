@@ -1,11 +1,12 @@
 name: release
-# Tag vX.Y.Z -> draft GitHub release with the Windows zip, Linux tarballs and SHA-256 files.
+# Tag vX.Y.Z -> the Windows zip, Linux tarballs and SHA-256 files, kept as this run's artifacts. The release itself is
+# published by hand from the maintainer's account (RELEASING.md), so no bot appears as its author.
 # Signing (SignPath) and the Steam depot upload are separate, manual steps (see packaging/).
 on:
   push:
     tags: ['v*']
 permissions:
-  contents: write
+  contents: read
 jobs:
   windows:
     runs-on: windows-latest
@@ -36,14 +37,3 @@ jobs:
         with:
           name: linux-${{ matrix.arch }}
           path: dist/release/*.tar.gz*
-  publish:
-    needs: [windows, linux]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: assets
-          merge-multiple: true
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" assets/* --draft --repo "${{ github.repository }}" --title "${{ github.ref_name }}"
