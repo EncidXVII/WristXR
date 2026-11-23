@@ -3,6 +3,15 @@
 All notable changes to WristXR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions: [Semantic Versioning](https://semver.org/).
 
+## [0.8.1] - 2026-11-23
+
+### Changed
+- About lists the maker's profiles as GitHub, X, Threads, with X at its new address (x.com/EncidXVII).
+
+### Added
+- Packages for Linux: a Nix flake (`nix run github:EncidXVII/WristXR`) and an AUR package (`wristxr-bin`), both
+  built from the release files.
+
 ## [0.8.0] - 2026-11-23
 
 First public early-access release: Windows, and Linux on X11 and Wayland (experimental).
