@@ -118,8 +118,8 @@ struct Covers {
 
 /// A cover from the media session: the middle square of its thumbnail, scaled to `COVER_PX`.
 fn cover(props: &Properties) -> Option<Arc<[u8]>> {
-    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
-    let decoder = BitmapDecoder::CreateAsync(&stream).ok()?.get().ok()?;
+    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
+    let decoder = BitmapDecoder::CreateAsync(&stream).ok()?.join().ok()?;
     let (w, h) = (decoder.OrientedPixelWidth().ok()?, decoder.OrientedPixelHeight().ok()?);
     let side = w.min(h);
     if side == 0 {
@@ -142,7 +142,7 @@ fn cover(props: &Properties) -> Option<Arc<[u8]>> {
             ColorManagementMode::DoNotColorManage,
         )
         .ok()?
-        .get()
+        .join()
         .ok()?
         .DetachPixelData()
         .ok()?;
@@ -151,7 +151,7 @@ fn cover(props: &Properties) -> Option<Arc<[u8]>> {
 
 fn read(manager: &Manager, covers: &mut Covers) -> Option<MediaInfo> {
     let session = manager.GetCurrentSession().ok()?;
-    let props = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
+    let props = session.TryGetMediaPropertiesAsync().ok()?.join().ok()?;
     let title = props.Title().ok()?.to_string_lossy();
     if title.is_empty() {
         return None;
@@ -343,7 +343,7 @@ fn control(session: Option<&Session>, volume: Option<&Volume>, cmd: MediaCommand
                 }
                 MediaCommand::Volume(_) | MediaCommand::ToggleMute => return,
             };
-            let _ = op.and_then(|o| o.get());
+            let _ = op.and_then(|o| o.join());
         }
     }
 }
@@ -357,7 +357,7 @@ impl Media {
         std::thread::spawn(move || {
             // SAFETY: initialises COM for this thread only (needed for the volume).
             let _ = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
-            let manager = Manager::RequestAsync().and_then(|op| op.get()).ok();
+            let manager = Manager::RequestAsync().and_then(|op| op.join()).ok();
             let mut covers = Covers::default();
             loop {
                 let media = manager.as_ref().and_then(|m| read(m, &mut covers));

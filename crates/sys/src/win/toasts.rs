@@ -85,13 +85,13 @@ fn read(n: &UserNotification) -> windows::core::Result<AppToast> {
 
 /// Toasts in the notification center now, with their ids.
 fn current(listener: &UserNotificationListener) -> windows::core::Result<Vec<(u32, UserNotification)>> {
-    let list = listener.GetNotificationsAsync(NotificationKinds::Toast)?.get()?;
+    let list = listener.GetNotificationsAsync(NotificationKinds::Toast)?.join()?;
     Ok((0..list.Size()?).filter_map(|i| list.GetAt(i).ok()).filter_map(|n| Some((n.Id().ok()?, n))).collect())
 }
 
 fn listen(tx: &Sender<AppToast>, access: &Mutex<Access>) -> windows::core::Result<()> {
     let listener = UserNotificationListener::Current()?;
-    let status = listener.RequestAccessAsync()?.get()?;
+    let status = listener.RequestAccessAsync()?.join()?;
     let allowed = status == UserNotificationListenerAccessStatus::Allowed;
     if let Ok(mut a) = access.lock() {
         *a = if allowed { Access::Allowed } else { Access::Denied };
@@ -146,7 +146,7 @@ mod probe {
     #[ignore = "reads this PC's notification center"]
     fn dump_notification_center() {
         let l = super::UserNotificationListener::Current().expect("listener");
-        eprintln!("access: {:?}", l.RequestAccessAsync().and_then(|o| o.get()).map(|a| a.0));
+        eprintln!("access: {:?}", l.RequestAccessAsync().and_then(|o| o.join()).map(|a| a.0));
         for (id, n) in super::current(&l).expect("list") {
             let app = n.AppInfo().and_then(|a| a.DisplayInfo()).and_then(|d| d.DisplayName());
             let aumid = n.AppInfo().and_then(|a| a.AppUserModelId());

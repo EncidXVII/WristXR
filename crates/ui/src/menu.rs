@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 slint::slint! {
+    #[edition = "1.19"]
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
     import "../fonts/Anton-Regular.ttf";

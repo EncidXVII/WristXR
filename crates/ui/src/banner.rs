@@ -8,6 +8,7 @@ use crate::{Canvas, ensure_platform, menu::Slot, rgb};
 use slint::ComponentHandle;
 
 slint::slint! {
+    #[edition = "1.19"]
     import "../fonts/Barlow-Regular.ttf";
     import "../fonts/Barlow-SemiBold.ttf";
 
