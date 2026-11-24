@@ -40,8 +40,9 @@
             platforms = builtins.attrNames assets;
             mainProgram = "wristxr";
           };
-          # The release as published, with its libraries pointed at the Nix store. PipeWire (screen capture on
-          # Wayland) is loaded at run time, so it goes on the library path too.
+          # The release as published, with its libraries pointed at the Nix store. Vulkan, PipeWire (screen capture
+          # on Wayland), libxkbcommon (keyboard labels on X11) and the OpenXR loader (Monado, WiVRn) are loaded at
+          # run time, so they go on the library path too.
           app = pkgs.stdenv.mkDerivation {
             pname = "wristxr-app";
             inherit version meta;
@@ -54,7 +55,12 @@
               pkgs.stdenv.cc.cc.lib
               pkgs.fontconfig
             ];
-            runtimeDependencies = [ pkgs.pipewire ];
+            runtimeDependencies = [
+              pkgs.vulkan-loader
+              pkgs.pipewire
+              pkgs.libxkbcommon
+              pkgs.openxr-loader
+            ];
             dontConfigure = true;
             dontBuild = true;
             installPhase = ''
