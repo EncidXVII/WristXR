@@ -366,6 +366,8 @@ pub fn run() -> Result<(), String> {
     let mut toast: Option<(Toast, Instant)> = None;
     // Administrator windows already explained (see `admin_window_at`).
     let mut admin_told: Vec<String> = Vec::new();
+    // View-only screens (a Wayland desktop whose portal has no remote input) already explained, at the first click.
+    let mut view_only_told = false;
     // Windows notifications from other apps; started only when wanted (Windows may ask for access once).
     let mut app_toasts = (session.state.notify_from != NotifyFrom::Off).then(AppToasts::start);
     let mut keyboard = Keyboard::new()?;
@@ -616,6 +618,17 @@ pub fn run() -> Result<(), String> {
                 let app = if title.is_empty() { strings.get("admin-this-window", &[]) } else { title };
                 let (head, body) =
                     (strings.get("admin-title", &[("app", app.clone())]), strings.get("admin-body", &[("app", app)]));
+                banner.set("WristXR", &head, &body, &strings.get("wrist-now", &[]));
+                let t = Toast { title: head, content: body, source_app: "WristXR".into(), timeout_s: APP_TOAST_S };
+                toast = Some((t, Instant::now()));
+                refresh_wrist = true;
+            }
+            if let Event::Mouse { down: true, .. } = *e
+                && !view_only_told
+                && plat::view_only()
+            {
+                view_only_told = true;
+                let (head, body) = (strings.get("view-only-title", &[]), strings.get("view-only-body", &[]));
                 banner.set("WristXR", &head, &body, &strings.get("wrist-now", &[]));
                 let t = Toast { title: head, content: body, source_app: "WristXR".into(), timeout_s: APP_TOAST_S };
                 toast = Some((t, Instant::now()));

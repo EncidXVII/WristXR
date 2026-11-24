@@ -7,7 +7,7 @@ use wxr_vr::OpenVr;
 
 pub use wxr_desktop_linux::{
     Injector, Monitor, admin_window_at, caps_lock, focus, key_char, layout_id, layout_name, layouts, monitors,
-    next_layout, select_layout, window_at, window_rect, windows,
+    next_layout, select_layout, view_only, window_at, window_rect, windows,
 };
 pub use wxr_gfx_vk::{Gpu, GpuTimer, Tex};
 

@@ -16,6 +16,11 @@ pub use wxr_input_win::{
 /// A panel texture.
 pub type Tex = ID3D11Texture2D;
 
+/// Windows always lets WristXR click and type (see `admin_window_at` for the one exception).
+pub fn view_only() -> bool {
+    false
+}
+
 /// The process name of SteamVR's server, watched so WristXR leaves with it.
 pub const STEAMVR_SERVER: &str = "vrserver.exe";
 

@@ -113,10 +113,11 @@ registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes 
 **NixOS or Nix:** `nix run github:EncidXVII/WristXR`, or `nix profile install github:EncidXVII/WristXR` to keep it. The
 `wristxr` command keeps its files in `~/.local/share/wristxr`, the folder `./install.sh` uses, and runs them from there.
 
-- **Wayland** (GNOME, KDE Plasma, and others with a desktop portal): the first run asks once, on the desktop, which
-  screens and windows to share and whether WristXR may use the keyboard and pointer. Take the headset off to
-  answer; later runs remember it. Windows show as "Shared window 1, 2..." (Wayland gives no titles), and a window
-  cannot be pulled out of a screen.
+- **Wayland** (GNOME, KDE Plasma, COSMIC): the first run asks once, on the desktop, which screens and windows to
+  share and whether WristXR may use the keyboard and pointer. Take the headset off to answer; later runs remember it.
+  Windows show as "Shared window 1, 2..." (Wayland gives no titles), and a window cannot be pulled out of a screen.
+- **Sway, Hyprland and other wlroots desktops**: their desktop portal shares screens but has no remote keyboard and
+  pointer, so the screens show view-only, and WristXR says so at the first click.
 - **X11**: everything works as on Windows, with no prompt.
 - Needs Vulkan, fontconfig and, on Wayland, PipeWire and xdg-desktop-portal (all standard on current desktops).
   The tray icon needs a StatusNotifierItem tray (KDE, XFCE, GNOME with the AppIndicator extension).

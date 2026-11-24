@@ -351,3 +351,9 @@ pub fn caps_lock() -> bool {
 pub fn admin_window_at(_p: (i32, i32)) -> Option<String> {
     None
 }
+
+/// The screens are shared without keyboard and pointer: the desktop's portal has no RemoteDesktop (the wlroots
+/// and Hyprland portals), so clicks and keys go nowhere.
+pub fn view_only() -> bool {
+    matches!(backend(), Backend::Portal(p) if p.view_only)
+}
