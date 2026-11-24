@@ -3,6 +3,29 @@
 All notable changes to WristXR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions: [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-11-24
+
+Linux, all of it experimental.
+
+### Added
+- Monado and WiVRn: without SteamVR, WristXR runs as an OpenXR overlay. Screens, windows and the pointer show as
+  flat panels. The game still sees the controllers while you point at a panel, and WristXR does not start with the
+  runtime on its own. SteamVR stays first when it runs; `WRISTXR_OPENXR=1` skips it.
+- X11: the keyboard's labels and the VRChat chatbox follow your active keyboard layout, and the layout can be
+  switched from VR. On Wayland they stay on a US layout.
+- Wayland: `WRISTXR_DMABUF=1` lets the GPU take screen frames with no copy on the CPU. When the GPU can't take
+  them, WristXR goes back to shared memory by itself.
+
+### Changed
+- Sway, Hyprland and other desktops whose screen sharing has no remote input now share their screens view-only
+  instead of not at all, and WristXR says so at the first click.
+- Wayland: frames the desktop marks broken are skipped, shared windows follow their crop, and each frame is copied
+  once on the CPU instead of twice. A resized window shows its new picture at once.
+- X11: screens and windows are read only after they change, straight from the X server's shared memory.
+- Libraries: Slint 1.19, windows 0.62, x11rb 0.14, rosc 0.11.
+- Nix: Vulkan, libxkbcommon and the OpenXR loader are on the library path, and the installed copy is kept safe
+  from garbage collection. The Arch Linux PKGBUILD lists `openxr` as optional.
+
 ## [0.8.1] - 2026-11-23
 
 ### Changed

@@ -5566,7 +5566,7 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "wxr-app"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "insta",
  "ksni",
@@ -5592,7 +5592,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-capture-win"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "windows",
  "wxr-core",
@@ -5600,7 +5600,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-core"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "directories",
  "serde",
@@ -5610,7 +5610,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-desktop-linux"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ashpd",
  "futures-lite",
@@ -5622,7 +5622,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-gfx-d3d11"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "tracing",
  "windows",
@@ -5631,7 +5631,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-gfx-vk"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "ash",
  "libc",
@@ -5642,7 +5642,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-input-win"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "windows",
  "wxr-core",
@@ -5650,7 +5650,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-notify-api"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -5659,14 +5659,14 @@ dependencies = [
 
 [[package]]
 name = "wxr-osc"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "rosc",
 ]
 
 [[package]]
 name = "wxr-sys"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "libc",
  "windows",
@@ -5675,7 +5675,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-ui"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "fluent",
  "slint",
@@ -5684,7 +5684,7 @@ dependencies = [
 
 [[package]]
 name = "wxr-vr"
-version = "0.8.1"
+version = "0.9.0"
 dependencies = [
  "openxr",
  "serde_json",
