@@ -5604,6 +5604,7 @@ name = "wxr-gfx-vk"
 version = "0.8.1"
 dependencies = [
  "ash",
+ "libc",
  "tracing",
  "wxr-core",
  "wxr-vr",

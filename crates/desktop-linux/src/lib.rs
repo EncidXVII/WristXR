@@ -24,6 +24,7 @@ use wxr_core::keyboard::CAPS;
 use wxr_core::panel::PixelRect;
 
 pub use keys::evdev;
+pub use pipewire::{Crop, DmaFrame, set_dmabuf_modifiers};
 
 /// Shared Wayland windows are numbered from here, so their ids never meet X11 window ids (29 bits).
 const PORTAL_WINDOW: u64 = 1 << 40;
@@ -142,7 +143,15 @@ pub fn focus(id: u64) {
 
 enum CaptureInner {
     X { cap: x11::XCapture, at: Option<Instant> },
-    Pw { stream: pipewire::Stream, seen: u64, buf: Vec<u8> },
+    Pw { stream: pipewire::Stream, seen: u64 },
+}
+
+/// A new frame, lent for the length of `Capture::grab`'s closure.
+pub enum Pixels<'a> {
+    /// BGRA rows of `w * 4` bytes.
+    Bgra(&'a [u8]),
+    /// A frame still in the GPU (Wayland, with DMA-BUF modifiers set): the GPU copies it.
+    DmaBuf(&'a DmaFrame),
 }
 
 /// A live capture of one screen or window.
@@ -168,31 +177,41 @@ impl Capture {
 
     fn stream(node: u32) -> Result<Self, String> {
         let pw = pipewire::PipeWire::get().ok_or("PipeWire not connected")?;
-        Ok(Self(CaptureInner::Pw { stream: pipewire::Stream::new(pw, node)?, seen: 0, buf: Vec::new() }))
+        Ok(Self(CaptureInner::Pw { stream: pipewire::Stream::new(pw, node)?, seen: 0 }))
     }
 
-    /// The newest frame, BGRA with rows of `w * 4`, when there is a new one since the last call.
-    pub fn grab(&mut self) -> Option<(u32, u32, &[u8])> {
+    /// The newest frame, when there is a new one since the last call: `f` gets its size and pixels. The pixels
+    /// are lent, not copied, so `f` should copy them out.
+    pub fn grab<R>(&mut self, f: impl FnOnce(u32, u32, Pixels<'_>) -> R) -> Option<R> {
         match &mut self.0 {
             CaptureInner::X { cap, at } => {
                 if at.is_some_and(|t| t.elapsed() < X11_FRAME) {
                     return None;
                 }
                 *at = Some(Instant::now());
-                cap.grab()
+                let (w, h, px) = cap.grab()?;
+                Some(f(w, h, Pixels::Bgra(px)))
             }
-            CaptureInner::Pw { stream, seen, buf } => {
+            CaptureInner::Pw { stream, seen } => {
                 let latest = stream.latest.lock().ok()?;
-                if latest.seq == *seen || latest.bgra.is_empty() {
+                if latest.seq == *seen {
                     return None;
                 }
                 *seen = latest.seq;
-                let (w, h) = (latest.w, latest.h);
-                buf.clear();
-                buf.extend_from_slice(&latest.bgra);
-                drop(latest);
-                Some((w, h, buf.as_slice()))
+                let pixels = match &latest.pixels {
+                    pipewire::Pixels::None => return None,
+                    pipewire::Pixels::Bgra(px) => Pixels::Bgra(px),
+                    pipewire::Pixels::Dma(frame) => Pixels::DmaBuf(frame),
+                };
+                Some(f(latest.w, latest.h, pixels))
             }
+        }
+    }
+
+    /// The GPU could not import this capture's DMA-BUFs: it asks for shared memory from now on.
+    pub fn dmabuf_failed(&self) {
+        if let CaptureInner::Pw { stream, .. } = &self.0 {
+            stream.shared_memory_only();
         }
     }
 }

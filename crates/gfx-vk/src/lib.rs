@@ -8,12 +8,16 @@
 //! command buffer, submits it once and waits, so a frame costs one submit however many panels changed. GPU
 //! timestamps around that submit give the cost meter its number. Textures free themselves when the last handle
 //! goes, a few frames later, so SteamVR is never still reading an image that has been destroyed.
+//!
+//! Where the GPU can import DMA-BUFs, a Wayland capture can skip the CPU: `copy_dmabuf` imports the compositor's
+//! buffer (once per buffer, then from a small cache) and the same flush copies it into the texture on the GPU.
 #![cfg(target_os = "linux")]
 #![allow(unsafe_code)]
 
 use ash::vk::{self, Handle};
 use std::cell::{Cell, RefCell};
-use std::ffi::{CString, c_void};
+use std::ffi::{CStr, CString, c_void};
+use std::os::fd::{AsRawFd, BorrowedFd, IntoRawFd};
 use std::rc::Rc;
 use wxr_core::raster::Image;
 use wxr_vr::{OpenVr, VulkanTexture};
@@ -22,6 +26,15 @@ use wxr_vr::{OpenVr, VulkanTexture};
 const FORMAT: vk::Format = vk::Format::B8G8R8A8_UNORM;
 /// A dropped texture is destroyed this many flushes later, once SteamVR has long moved on from it.
 const GRACE_FRAMES: u64 = 4;
+/// Imported DMA-BUFs kept for reuse: a compositor cycles a few buffers per stream.
+const IMPORT_CACHE: usize = 12;
+/// Device extensions DMA-BUF import needs; enabled only when the GPU has them all.
+const DMABUF_EXTENSIONS: [&CStr; 4] = [
+    c"VK_KHR_external_memory_fd",
+    c"VK_EXT_external_memory_dma_buf",
+    c"VK_EXT_image_drm_format_modifier",
+    c"VK_KHR_image_format_list",
+];
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -49,6 +62,48 @@ struct Device {
     graveyard: RefCell<Vec<(u64, Parts)>>,
     frame: Cell<u64>,
     last_ms: Cell<f32>,
+    /// DMA-BUF import, when the GPU has the extensions for it.
+    dmabuf: Option<DmaBufSupport>,
+    /// Imported DMA-BUFs, most recently used last.
+    imports: RefCell<Vec<Import>>,
+    /// GPU copies from imported DMA-BUFs into textures, recorded at the next flush.
+    pending_dma: RefCell<Vec<(Rc<TexInner>, vk::Image, vk::Offset2D)>>,
+}
+
+struct DmaBufSupport {
+    fd: ash::khr::external_memory_fd::Device,
+    /// The queue family that stands for the compositor in ownership transfers.
+    foreign: u32,
+}
+
+/// The identity of an imported buffer: its file (device and inode) and how it is laid out.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct ImportKey {
+    dev: u64,
+    ino: u64,
+    modifier: u64,
+    w: u32,
+    h: u32,
+    offset: u32,
+    stride: u32,
+}
+
+struct Import {
+    key: ImportKey,
+    image: vk::Image,
+    mem: vk::DeviceMemory,
+}
+
+/// One plane of a DMA-BUF frame, and the part of it to copy (`x, y` and the texture's size).
+pub struct DmaBuf<'a> {
+    pub fd: BorrowedFd<'a>,
+    pub offset: u32,
+    pub stride: u32,
+    pub modifier: u64,
+    pub w: u32,
+    pub h: u32,
+    pub x: u32,
+    pub y: u32,
 }
 
 /// The Vulkan objects of one texture.
@@ -127,11 +182,28 @@ impl Gpu {
             };
             let timestamps = families[family].timestamp_valid_bits > 0;
             let family = family as u32;
-            let names: Vec<CString> = vr
+            let mut names: Vec<CString> = vr
                 .vulkan_extensions(Some(physical.as_raw()))
                 .into_iter()
                 .filter_map(|e| CString::new(e).ok())
                 .collect();
+            let available: Vec<CString> = instance
+                .enumerate_device_extension_properties(physical)
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|e| e.extension_name_as_c_str().ok().map(CStr::to_owned))
+                .collect();
+            let has = |e: &CStr| available.iter().any(|a| a.as_c_str() == e);
+            let dmabuf = DMABUF_EXTENSIONS.iter().all(|e| has(e));
+            let foreign = has(c"VK_EXT_queue_family_foreign");
+            if dmabuf {
+                let extra = DMABUF_EXTENSIONS.iter().copied().chain(foreign.then_some(c"VK_EXT_queue_family_foreign"));
+                for e in extra {
+                    if !names.iter().any(|n| n.as_c_str() == e) {
+                        names.push(e.to_owned());
+                    }
+                }
+            }
             let dev_ext: Vec<_> = names.iter().map(|e| e.as_ptr()).collect();
             let queue_info = [vk::DeviceQueueCreateInfo::default().queue_family_index(family).queue_priorities(&[1.0])];
             let device = match instance.create_device(
@@ -147,6 +219,10 @@ impl Gpu {
             };
             let props = instance.get_physical_device_properties(physical);
             let memory = instance.get_physical_device_memory_properties(physical);
+            let dmabuf = dmabuf.then(|| DmaBufSupport {
+                fd: ash::khr::external_memory_fd::Device::new(&instance, &device),
+                foreign: if foreign { vk::QUEUE_FAMILY_FOREIGN_EXT } else { vk::QUEUE_FAMILY_EXTERNAL },
+            });
             let mut dev = Device {
                 _entry: entry,
                 queue: device.get_device_queue(family, 0),
@@ -164,6 +240,9 @@ impl Gpu {
                 graveyard: RefCell::new(Vec::new()),
                 frame: Cell::new(0),
                 last_ms: Cell::new(0.0),
+                dmabuf,
+                imports: RefCell::new(Vec::new()),
+                pending_dma: RefCell::new(Vec::new()),
             };
             // From here `Device::drop` frees whatever exists.
             let d = &dev.device;
@@ -315,8 +394,9 @@ impl Gpu {
         let frame = dev.frame.get() + 1;
         dev.frame.set(frame);
         let pending: Vec<_> = dev.pending.borrow_mut().drain(..).collect();
-        if !pending.is_empty()
-            && let Err(e) = self.copy(&pending)
+        let dma: Vec<_> = dev.pending_dma.borrow_mut().drain(..).collect();
+        if (!pending.is_empty() || !dma.is_empty())
+            && let Err(e) = self.copy(&pending, &dma)
         {
             tracing::warn!(%e, "texture upload failed");
         }
@@ -340,7 +420,7 @@ impl Gpu {
         }
     }
 
-    fn copy(&self, textures: &[Rc<TexInner>]) -> Result<()> {
+    fn copy(&self, textures: &[Rc<TexInner>], dma: &[(Rc<TexInner>, vk::Image, vk::Offset2D)]) -> Result<()> {
         let dev = &self.dev;
         let d = &dev.device;
         let range =
@@ -370,8 +450,10 @@ impl Gpu {
                     .image(image)
                     .subresource_range(range)
             };
-            let to_dst: Vec<_> = textures
+            let foreign = dev.dmabuf.as_ref().map_or(vk::QUEUE_FAMILY_EXTERNAL, |d| d.foreign);
+            let mut to_dst: Vec<_> = textures
                 .iter()
+                .chain(dma.iter().map(|(t, _, _)| t))
                 .map(|t| {
                     let from = if t.initialised.get() {
                         vk::ImageLayout::TRANSFER_SRC_OPTIMAL
@@ -387,6 +469,18 @@ impl Gpu {
                     )
                 })
                 .collect();
+            // Imported buffers come from the compositor: take them over (it left them in GENERAL) for reading.
+            to_dst.extend(dma.iter().map(|(_, image, _)| {
+                barrier(
+                    *image,
+                    vk::ImageLayout::GENERAL,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::TRANSFER_READ,
+                )
+                .src_queue_family_index(foreign)
+                .dst_queue_family_index(dev.family)
+            }));
             d.cmd_pipeline_barrier(
                 dev.cmd,
                 vk::PipelineStageFlags::ALL_COMMANDS,
@@ -410,9 +504,27 @@ impl Gpu {
                     &[region],
                 );
             }
+            for (t, image, at) in dma {
+                let layers =
+                    vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1);
+                let region = vk::ImageCopy::default()
+                    .src_subresource(layers)
+                    .src_offset(vk::Offset3D { x: at.x, y: at.y, z: 0 })
+                    .dst_subresource(layers)
+                    .extent(vk::Extent3D { width: t.w, height: t.h, depth: 1 });
+                d.cmd_copy_image(
+                    dev.cmd,
+                    *image,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    t.parts.image,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    &[region],
+                );
+            }
             // SteamVR reads overlay textures in TRANSFER_SRC_OPTIMAL.
-            let to_src: Vec<_> = textures
+            let mut to_src: Vec<_> = textures
                 .iter()
+                .chain(dma.iter().map(|(t, _, _)| t))
                 .map(|t| {
                     barrier(
                         t.parts.image,
@@ -423,6 +535,18 @@ impl Gpu {
                     )
                 })
                 .collect();
+            // And hand the imported buffers back to the compositor.
+            to_src.extend(dma.iter().map(|(_, image, _)| {
+                barrier(
+                    *image,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                    vk::ImageLayout::GENERAL,
+                    vk::AccessFlags::TRANSFER_READ,
+                    vk::AccessFlags::empty(),
+                )
+                .src_queue_family_index(dev.family)
+                .dst_queue_family_index(foreign)
+            }));
             d.cmd_pipeline_barrier(
                 dev.cmd,
                 vk::PipelineStageFlags::TRANSFER,
@@ -448,10 +572,210 @@ impl Gpu {
                 }
             }
         }
-        for t in textures {
+        for t in textures.iter().chain(dma.iter().map(|(t, _, _)| t)) {
             t.initialised.set(true);
         }
         Ok(())
+    }
+
+    /// DMA-BUF modifiers the GPU can import a BGRA frame with and copy from; empty when it cannot import at all.
+    pub fn dmabuf_modifiers(&self) -> Vec<u64> {
+        let dev = &self.dev;
+        if dev.dmabuf.is_none() {
+            return Vec::new();
+        }
+        // SAFETY: queries on our own physical device with well-formed structure chains.
+        unsafe {
+            let mut list = vk::DrmFormatModifierPropertiesListEXT::default();
+            dev.instance.get_physical_device_format_properties2(
+                dev.physical,
+                FORMAT,
+                &mut vk::FormatProperties2::default().push_next(&mut list),
+            );
+            let mut props =
+                vec![vk::DrmFormatModifierPropertiesEXT::default(); list.drm_format_modifier_count as usize];
+            let mut list = vk::DrmFormatModifierPropertiesListEXT::default().drm_format_modifier_properties(&mut props);
+            dev.instance.get_physical_device_format_properties2(
+                dev.physical,
+                FORMAT,
+                &mut vk::FormatProperties2::default().push_next(&mut list),
+            );
+            props
+                .iter()
+                .filter(|m| {
+                    m.drm_format_modifier_plane_count == 1
+                        && m.drm_format_modifier_tiling_features.contains(vk::FormatFeatureFlags::TRANSFER_SRC)
+                })
+                .map(|m| m.drm_format_modifier)
+                .filter(|&m| self.importable(m))
+                .collect()
+        }
+    }
+
+    /// Whether a BGRA DMA-BUF with this modifier can be imported as a copy source.
+    fn importable(&self, modifier: u64) -> bool {
+        let dev = &self.dev;
+        let mut external = vk::PhysicalDeviceExternalImageFormatInfo::default()
+            .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
+        let mut drm = vk::PhysicalDeviceImageDrmFormatModifierInfoEXT::default()
+            .drm_format_modifier(modifier)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+        let info = vk::PhysicalDeviceImageFormatInfo2::default()
+            .format(FORMAT)
+            .ty(vk::ImageType::TYPE_2D)
+            .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
+            .usage(vk::ImageUsageFlags::TRANSFER_SRC)
+            .push_next(&mut external)
+            .push_next(&mut drm);
+        let mut external_props = vk::ExternalImageFormatProperties::default();
+        let mut props = vk::ImageFormatProperties2::default().push_next(&mut external_props);
+        // SAFETY: a query on our own physical device with well-formed structure chains.
+        let ok = unsafe { dev.instance.get_physical_device_image_format_properties2(dev.physical, &info, &mut props) };
+        ok.is_ok()
+            && external_props
+                .external_memory_properties
+                .external_memory_features
+                .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+    }
+
+    /// Queues a GPU copy of a DMA-BUF frame (the part at `x, y` the size of `tex`) into `tex`, done at the next
+    /// flush. Errors when the buffer cannot be imported: the caller then asks for shared memory instead.
+    pub fn copy_dmabuf(&self, tex: &Tex, frame: &DmaBuf<'_>) -> Result<()> {
+        let dev = &self.dev;
+        let support = dev.dmabuf.as_ref().ok_or("this GPU cannot import DMA-BUFs")?;
+        let t = &tex.0;
+        if frame.x + t.w > frame.w || frame.y + t.h > frame.h {
+            return Err("DMA-BUF frame smaller than the texture".into());
+        }
+        // SAFETY: fstat on a file descriptor we borrow for this call.
+        let st = unsafe {
+            let mut st: libc::stat = std::mem::zeroed();
+            if libc::fstat(frame.fd.as_raw_fd(), &mut st) != 0 {
+                return Err("fstat on the DMA-BUF failed".into());
+            }
+            st
+        };
+        let key = ImportKey {
+            dev: st.st_dev as u64,
+            ino: st.st_ino as u64,
+            modifier: frame.modifier,
+            w: frame.w,
+            h: frame.h,
+            offset: frame.offset,
+            stride: frame.stride,
+        };
+        let image = {
+            let mut imports = dev.imports.borrow_mut();
+            if let Some(i) = imports.iter().position(|i| i.key == key) {
+                let hit = imports.remove(i);
+                let image = hit.image;
+                imports.push(hit);
+                image
+            } else {
+                let fresh = self.import(support, &key, frame)?;
+                let image = fresh.image;
+                imports.push(fresh);
+                // Drop the least recently used, unless a copy still waits on it (every flush waits for the GPU).
+                let pending = dev.pending_dma.borrow();
+                while imports.len() > IMPORT_CACHE {
+                    let Some(i) = imports.iter().position(|i| !pending.iter().any(|(_, img, _)| *img == i.image))
+                    else {
+                        break;
+                    };
+                    let old = imports.remove(i);
+                    // SAFETY: no submitted work uses it (the last flush waited) and no pending copy does.
+                    unsafe {
+                        dev.device.destroy_image(old.image, None);
+                        dev.device.free_memory(old.mem, None);
+                    }
+                }
+                image
+            }
+        };
+        // The GPU copy replaces any CPU upload queued for this texture this frame.
+        dev.pending.borrow_mut().retain(|p| !Rc::ptr_eq(p, t));
+        let mut dma = dev.pending_dma.borrow_mut();
+        dma.retain(|(p, _, _)| !Rc::ptr_eq(p, t));
+        let at = vk::Offset2D { x: frame.x as i32, y: frame.y as i32 };
+        dma.push((t.clone(), image, at));
+        Ok(())
+    }
+
+    fn import(&self, support: &DmaBufSupport, key: &ImportKey, frame: &DmaBuf<'_>) -> Result<Import> {
+        let d = &self.dev.device;
+        let plane = [vk::SubresourceLayout {
+            offset: u64::from(key.offset),
+            size: 0,
+            row_pitch: u64::from(key.stride),
+            array_pitch: 0,
+            depth_pitch: 0,
+        }];
+        let mut drm = vk::ImageDrmFormatModifierExplicitCreateInfoEXT::default()
+            .drm_format_modifier(key.modifier)
+            .plane_layouts(&plane);
+        let mut external =
+            vk::ExternalMemoryImageCreateInfo::default().handle_types(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
+        // SAFETY: an image and its memory on our own device; the fd is duplicated and its copy handed to Vulkan
+        // (which owns it once vkAllocateMemory succeeds; we close it ourselves when that fails).
+        unsafe {
+            let image = d
+                .create_image(
+                    &vk::ImageCreateInfo::default()
+                        .image_type(vk::ImageType::TYPE_2D)
+                        .format(FORMAT)
+                        .extent(vk::Extent3D { width: key.w, height: key.h, depth: 1 })
+                        .mip_levels(1)
+                        .array_layers(1)
+                        .samples(vk::SampleCountFlags::TYPE_1)
+                        .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
+                        .usage(vk::ImageUsageFlags::TRANSFER_SRC)
+                        .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                        .initial_layout(vk::ImageLayout::UNDEFINED)
+                        .push_next(&mut external)
+                        .push_next(&mut drm),
+                    None,
+                )
+                .map_err(vk_err("vkCreateImage (DMA-BUF)"))?;
+            let fail = |e: String| {
+                d.destroy_image(image, None);
+                e
+            };
+            let fd = frame.fd.try_clone_to_owned().map_err(|e| fail(format!("dup DMA-BUF fd: {e}")))?.into_raw_fd();
+            let mut fd_props = vk::MemoryFdPropertiesKHR::default();
+            let bits = support
+                .fd
+                .get_memory_fd_properties(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT, fd, &mut fd_props)
+                .map(|()| fd_props.memory_type_bits)
+                .unwrap_or(u32::MAX);
+            let req = d.get_image_memory_requirements(image);
+            let bits = req.memory_type_bits & bits;
+            if bits == 0 {
+                libc::close(fd);
+                return Err(fail("no memory type fits the DMA-BUF".into()));
+            }
+            let mut import =
+                vk::ImportMemoryFdInfoKHR::default().handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT).fd(fd);
+            let mut dedicated = vk::MemoryDedicatedAllocateInfo::default().image(image);
+            let mem = match d.allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(req.size)
+                    .memory_type_index(bits.trailing_zeros())
+                    .push_next(&mut import)
+                    .push_next(&mut dedicated),
+                None,
+            ) {
+                Ok(m) => m,
+                Err(e) => {
+                    libc::close(fd);
+                    return Err(fail(vk_err("vkAllocateMemory (DMA-BUF)")(e)));
+                }
+            };
+            if let Err(e) = d.bind_image_memory(image, mem, 0) {
+                d.free_memory(mem, None);
+                return Err(fail(vk_err("vkBindImageMemory (DMA-BUF)")(e)));
+            }
+            Ok(Import { key: *key, image, mem })
+        }
     }
 
     /// Hands `tex` to the overlay `key`. Call after `flush`.
@@ -487,6 +811,10 @@ impl Drop for Device {
         unsafe {
             let d = &self.device;
             let _ = d.device_wait_idle();
+            for i in self.imports.get_mut().drain(..) {
+                d.destroy_image(i.image, None);
+                d.free_memory(i.mem, None);
+            }
             for (_, p) in self.graveyard.get_mut().drain(..) {
                 d.destroy_buffer(p.staging, None);
                 d.free_memory(p.staging_mem, None);
