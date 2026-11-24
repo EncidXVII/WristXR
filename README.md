@@ -7,6 +7,7 @@
 
 [![CI](https://github.com/EncidXVII/WristXR/actions/workflows/ci.yml/badge.svg)](https://github.com/EncidXVII/WristXR/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/EncidXVII/WristXR?include_prereleases&label=download)](https://github.com/EncidXVII/WristXR/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/EncidXVII/WristXR/total?label=downloads)](https://github.com/EncidXVII/WristXR/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 
 **Use your desktop in VR without taking the headset off.** WristXR is a free, open-source SteamVR desktop overlay
