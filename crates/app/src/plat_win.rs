@@ -7,6 +7,11 @@ use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use wxr_core::panel::PixelRect;
 pub use wxr_vr::OpenVr as Vr;
 
+/// WristXR runs in SteamVR (always, on Windows).
+pub fn on_steamvr(_vr: &Vr) -> bool {
+    true
+}
+
 pub use wxr_capture_win::{Frame, Monitor};
 pub use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, keeps, width_for};
 pub use wxr_input_win::{

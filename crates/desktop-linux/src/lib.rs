@@ -208,6 +208,18 @@ impl Capture {
         }
     }
 
+    /// The last frame `grab` gave was not used (its size was new): the next `grab` gives the newest frame again,
+    /// even when nothing changed since, so a still window does not wait for its next change to show.
+    pub fn again(&mut self) {
+        match &mut self.0 {
+            CaptureInner::X { cap, at } => {
+                cap.again();
+                *at = None;
+            }
+            CaptureInner::Pw { seen, .. } => *seen = seen.wrapping_sub(1),
+        }
+    }
+
     /// The GPU could not import this capture's DMA-BUFs: it asks for shared memory from now on.
     pub fn dmabuf_failed(&self) {
         if let CaptureInner::Pw { stream, .. } = &self.0 {

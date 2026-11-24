@@ -328,7 +328,7 @@ static EVENTS: StreamEvents = StreamEvents {
     io_changed: None,
     param_changed: Some(on_param_changed),
     add_buffer: None,
-    remove_buffer: None,
+    remove_buffer: Some(on_remove_buffer),
     process: Some(on_process),
     drained: None,
     command: None,
@@ -481,6 +481,17 @@ fn crop_of(region: Option<&SpaRegion>, w: u32, h: u32) -> Crop {
 }
 
 #[allow(unsafe_code)]
+/// A buffer leaves the stream (the format or the buffers were renegotiated): if it is the one held for the GPU, it
+/// is no longer ours to give back.
+unsafe extern "C" fn on_remove_buffer(data: *mut c_void, buffer: *mut c_void) {
+    // SAFETY: `data` is our `Shared`, as for every callback of this stream.
+    let shared = unsafe { &*data.cast::<Shared>() };
+    let mut held = shared.held.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if held.cast::<c_void>() == buffer {
+        *held = std::ptr::null_mut();
+    }
+}
+
 unsafe extern "C" fn on_process(data: *mut c_void) {
     // SAFETY: `data` is our `Shared`; buffers come from this stream and go back to it; the mapped data covers the
     // chunk PipeWire describes; metas are read within the sizes PipeWire gives.

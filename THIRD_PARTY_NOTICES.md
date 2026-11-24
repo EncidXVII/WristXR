@@ -89,6 +89,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | crunchy | 0.2.4 | MIT |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib |
 | data-url | 0.3.2 | MIT OR Apache-2.0 |
+| deranged | 0.5.9 | MIT OR Apache-2.0 |
 | derive_more | 2.1.1 | MIT |
 | derive_more-impl | 2.1.1 | MIT |
 | directories | 6.0.0 | MIT OR Apache-2.0 |
@@ -127,11 +128,11 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | foldhash | 0.2.0 | Zlib |
 | font-types | 0.12.7 | MIT OR Apache-2.0 |
 | fontdb | 0.24.0 | MIT |
-| fontique | 0.11.1 | Apache-2.0 OR MIT |
+| fontique | 0.12.0 | Apache-2.0 OR MIT |
 | foreign-types | 0.5.0 | MIT/Apache-2.0 |
 | foreign-types-macros | 0.2.4 | MIT/Apache-2.0 |
 | foreign-types-shared | 0.3.1 | MIT/Apache-2.0 |
-| form_urlencoded | 1.2.2 | MIT OR Apache-2.0 |
+| form_urlencoded | 1.2.3 | MIT OR Apache-2.0 |
 | futures | 0.3.34 | MIT OR Apache-2.0 |
 | futures-channel | 0.3.34 | MIT OR Apache-2.0 |
 | futures-core | 0.3.34 | MIT OR Apache-2.0 |
@@ -148,7 +149,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | gdk-sys | 0.18.2 | MIT |
 | gethostname | 1.1.0 | Apache-2.0 |
 | getrandom | 0.3.4 | MIT OR Apache-2.0 |
-| getrandom | 0.4.3 | MIT OR Apache-2.0 |
 | gif | 0.14.2 | MIT OR Apache-2.0 |
 | gio | 0.18.4 | MIT |
 | gio-sys | 0.18.1 | MIT |
@@ -161,7 +161,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | glutin_wgl_sys | 0.6.1 | Apache-2.0 |
 | gobject-sys | 0.18.0 | MIT |
 | gpu-allocator | 0.28.0 | MIT OR Apache-2.0 |
-| grid | 1.0.1 | MIT |
 | gtk | 0.18.2 | MIT |
 | gtk-sys | 0.18.2 | MIT |
 | gtk3-macros | 0.18.2 | MIT |
@@ -176,16 +175,16 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | hermit-abi | 0.5.3 | MIT OR Apache-2.0 |
 | hex | 0.4.3 | MIT OR Apache-2.0 |
 | htmlparser | 0.2.1 | MIT OR Apache-2.0 |
-| i-slint-backend-linuxkms | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-backend-selector | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-backend-testing | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-backend-winit | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-common | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-compiler | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-core | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-core-macros | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-renderer-skia | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| i-slint-renderer-software | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-backend-linuxkms | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-backend-selector | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-backend-testing | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-backend-winit | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-common | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-compiler | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-core | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-core-macros | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-renderer-skia | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| i-slint-renderer-software | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
 | iana-time-zone | 0.1.65 | MIT OR Apache-2.0 |
 | iana-time-zone-haiku | 0.1.2 | MIT OR Apache-2.0 |
 | icu_collections | 2.4.0 | Unicode-3.0 |
@@ -223,7 +222,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | jni-sys | 0.4.1 | MIT OR Apache-2.0 |
 | jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 |
 | js-sys | 0.3.107 | MIT OR Apache-2.0 |
-| keyboard-types | 0.7.0 | MIT OR Apache-2.0 |
 | keyboard-types | 0.8.3 | MIT OR Apache-2.0 |
 | ksni | 0.3.7 | Unlicense |
 | kurbo | 0.13.1 | Apache-2.0 OR MIT |
@@ -232,15 +230,16 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | libc | 0.2.191 | MIT OR Apache-2.0 |
 | libloading | 0.7.4 | ISC |
 | libloading | 0.8.9 | ISC |
+| libloading | 0.9.1 | ISC |
 | libm | 0.2.16 | MIT |
 | libredox | 0.1.25 | MIT |
 | libseat | 0.2.4 | MIT |
 | libseat-sys | 0.2.0 | MIT |
 | libudev-sys | 0.1.4 | MIT |
 | linebender_resource_handle | 0.1.1 | Apache-2.0 OR MIT |
-| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | linux-raw-sys | 0.9.4 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
+| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | litemap | 0.8.3 | Unicode-3.0 |
 | litrs | 1.0.1 | MIT OR Apache-2.0 |
 | lock_api | 0.4.14 | MIT OR Apache-2.0 |
@@ -256,7 +255,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 |
-| muda | 0.19.3 | Apache-2.0 OR MIT |
 | muda | 0.21.2 | Apache-2.0 OR MIT |
 | naga | 30.0.1 | MIT OR Apache-2.0 |
 | naga-types | 30.0.1 | MIT OR Apache-2.0 |
@@ -265,6 +263,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | ndk-sys | 0.6.0+11769913 | MIT OR Apache-2.0 |
 | nix | 0.31.3 | MIT |
 | nom | 7.1.3 | MIT |
+| num-conv | 0.2.2 | MIT OR Apache-2.0 |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 |
 | num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
 | num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 |
@@ -296,6 +295,8 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | objc2-uniform-type-identifiers | 0.2.2 | MIT |
 | objc2-user-notifications | 0.2.2 | MIT |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 |
+| openxr | 0.22.0 | MIT OR Apache-2.0 |
+| openxr-sys | 0.14.0 | MIT OR Apache-2.0 |
 | option-ext | 0.2.0 | MPL-2.0 |
 | orbclient | 0.3.55 | MIT |
 | ordered-float | 5.5.1 | MIT |
@@ -306,8 +307,10 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | parking_lot | 0.12.5 | MIT OR Apache-2.0 |
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 |
 | parlance | 0.1.1 | Apache-2.0 OR MIT |
-| parley | 0.11.1 | Apache-2.0 OR MIT |
-| parley_data | 0.11.1 | Apache-2.0 OR MIT |
+| parley | 0.12.0 | Apache-2.0 OR MIT |
+| parley_data | 0.12.0 | Apache-2.0 OR MIT |
+| parley_emoji | 0.12.0 | MIT |
+| parley_engine | 0.12.0 | Apache-2.0 OR MIT |
 | pastey | 0.2.3 | MIT OR Apache-2.0 |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 |
 | pico-args | 0.5.0 | MIT |
@@ -324,6 +327,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | portable-atomic | 1.15.0 | Apache-2.0 OR MIT |
 | portable-atomic-util | 0.2.8 | Apache-2.0 OR MIT |
 | potential_utf | 0.1.6 | Unicode-3.0 |
+| powerfmt | 0.2.1 | MIT OR Apache-2.0 |
 | ppv-lite86 | 0.2.21 | MIT OR Apache-2.0 |
 | presser | 0.3.1 | MIT OR Apache-2.0 |
 | proc-macro-crate | 1.3.1 | MIT OR Apache-2.0 |
@@ -338,7 +342,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | quick-error | 2.0.1 | MIT/Apache-2.0 |
 | quote | 1.0.47 | MIT OR Apache-2.0 |
 | r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
-| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later |
 | rand | 0.9.5 | MIT OR Apache-2.0 |
 | rand_chacha | 0.9.0 | MIT OR Apache-2.0 |
 | rand_core | 0.9.5 | MIT OR Apache-2.0 |
@@ -351,9 +354,9 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | redox_syscall | 0.9.5 | MIT |
 | redox_users | 0.5.3 | MIT |
 | renderdoc-sys | 1.1.0 | MIT OR Apache-2.0 |
-| resvg | 0.48.1 | Apache-2.0 OR MIT |
+| resvg | 0.49.0 | Apache-2.0 OR MIT |
 | rgb | 0.8.53 | MIT |
-| rosc | 0.10.1 | MIT/Apache-2.0 |
+| rosc | 0.11.4 | MIT/Apache-2.0 |
 | rowan | 0.17.0 | MIT OR Apache-2.0 |
 | roxmltree | 0.21.2 | MIT OR Apache-2.0 |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT |
@@ -376,12 +379,12 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | simdutf8 | 0.1.5 | MIT OR Apache-2.0 |
 | simplecss | 0.2.2 | Apache-2.0 OR MIT |
 | siphasher | 1.0.4 | MIT OR Apache-2.0 |
-| skia-bindings | 0.153.3 | MIT |
-| skia-safe | 0.153.3 | MIT |
+| skia-bindings | 0.157.0 | MIT |
+| skia-safe | 0.157.0 | MIT |
 | skrifa | 0.44.0 | MIT OR Apache-2.0 |
 | slab | 0.4.12 | MIT |
-| slint | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
-| slint-macros | 1.18.1 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| slint | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
+| slint-macros | 1.19.0 | GPL-3.0-only OR LicenseRef-Slint-Royalty-free-2.0 OR LicenseRef-Slint-Software-3.0 |
 | slotmap | 1.1.1 | Zlib |
 | smallvec | 1.16.4 | MIT OR Apache-2.0 |
 | smol_str | 0.2.2 | MIT OR Apache-2.0 |
@@ -401,7 +404,7 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | syn | 3.0.9 | MIT OR Apache-2.0 |
 | synstructure | 0.14.0 | MIT |
 | sys-locale | 0.3.2 | MIT OR Apache-2.0 |
-| taffy | 0.10.1 | MIT |
+| taffy | 0.15.1 | MIT |
 | task-local | 0.1.1 | MIT OR Apache-2.0 |
 | tempfile | 3.27.0 | MIT OR Apache-2.0 |
 | text-size | 1.1.1 | MIT OR Apache-2.0 |
@@ -409,6 +412,9 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | thiserror | 2.0.21 | MIT OR Apache-2.0 |
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 |
+| time | 0.3.55 | MIT OR Apache-2.0 |
+| time-core | 0.1.9 | MIT OR Apache-2.0 |
+| time-macros | 0.2.32 | MIT OR Apache-2.0 |
 | tiny-skia | 0.12.0 | BSD-3-Clause |
 | tiny-skia-path | 0.12.0 | BSD-3-Clause |
 | tinystr | 0.8.5 | Unicode-3.0 |
@@ -440,13 +446,13 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | unicode-width | 0.2.3 | MIT OR Apache-2.0 |
 | unicode-xid | 0.2.6 | MIT OR Apache-2.0 |
 | unty | 0.0.4 | MIT OR Apache-2.0 |
-| url | 2.5.8 | MIT OR Apache-2.0 |
-| usvg | 0.48.1 | Apache-2.0 OR MIT |
+| url | 2.5.9 | MIT OR Apache-2.0 |
+| usvg | 0.49.0 | Apache-2.0 OR MIT |
 | utf8_iter | 1.1.0 | Apache-2.0 OR MIT |
 | utf_types | 1.0.0 | Apache-2.0 OR MIT |
 | uuid | 1.29.0 | Apache-2.0 OR MIT |
-| vtable | 0.5.0 | MIT OR Apache-2.0 |
-| vtable-macro | 0.5.0 | MIT OR Apache-2.0 |
+| vtable | 0.5.1 | MIT OR Apache-2.0 |
+| vtable-macro | 0.5.1 | MIT OR Apache-2.0 |
 | wasip2 | 1.0.4+wasi-0.2.12 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT |
 | wasm-bindgen | 0.2.130 | MIT OR Apache-2.0 |
 | wasm-bindgen-futures | 0.4.80 | MIT OR Apache-2.0 |
@@ -467,23 +473,15 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | winapi | 0.3.9 | MIT/Apache-2.0 |
 | winapi-i686-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |
 | winapi-x86_64-pc-windows-gnu | 0.4.0 | MIT/Apache-2.0 |
-| windows | 0.61.3 | MIT OR Apache-2.0 |
 | windows | 0.62.2 | MIT OR Apache-2.0 |
-| windows-collections | 0.2.0 | MIT OR Apache-2.0 |
 | windows-collections | 0.3.2 | MIT OR Apache-2.0 |
-| windows-core | 0.61.2 | MIT OR Apache-2.0 |
 | windows-core | 0.62.2 | MIT OR Apache-2.0 |
-| windows-future | 0.2.1 | MIT OR Apache-2.0 |
 | windows-future | 0.3.2 | MIT OR Apache-2.0 |
 | windows-implement | 0.60.2 | MIT OR Apache-2.0 |
 | windows-interface | 0.59.3 | MIT OR Apache-2.0 |
-| windows-link | 0.1.3 | MIT OR Apache-2.0 |
 | windows-link | 0.2.1 | MIT OR Apache-2.0 |
-| windows-numerics | 0.2.0 | MIT OR Apache-2.0 |
 | windows-numerics | 0.3.1 | MIT OR Apache-2.0 |
-| windows-result | 0.3.4 | MIT OR Apache-2.0 |
 | windows-result | 0.4.1 | MIT OR Apache-2.0 |
-| windows-strings | 0.4.2 | MIT OR Apache-2.0 |
 | windows-strings | 0.5.1 | MIT OR Apache-2.0 |
 | windows-sys | 0.48.0 | MIT OR Apache-2.0 |
 | windows-sys | 0.52.0 | MIT OR Apache-2.0 |
@@ -491,7 +489,6 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | windows-sys | 0.61.2 | MIT OR Apache-2.0 |
 | windows-targets | 0.48.5 | MIT OR Apache-2.0 |
 | windows-targets | 0.52.6 | MIT OR Apache-2.0 |
-| windows-threading | 0.1.0 | MIT OR Apache-2.0 |
 | windows-threading | 0.2.1 | MIT OR Apache-2.0 |
 | windows_aarch64_gnullvm | 0.48.5 | MIT OR Apache-2.0 |
 | windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 |
@@ -515,7 +512,9 @@ Generated from `cargo metadata` (normal dependencies, all platforms). License te
 | write-fonts | 0.50.0 | MIT OR Apache-2.0 |
 | writeable | 0.6.4 | Unicode-3.0 |
 | x11rb | 0.13.2 | MIT OR Apache-2.0 |
+| x11rb | 0.14.0 | MIT OR Apache-2.0 |
 | x11rb-protocol | 0.13.2 | MIT OR Apache-2.0 |
+| x11rb-protocol | 0.14.0 | MIT OR Apache-2.0 |
 | xkbcommon | 0.9.0 | MIT |
 | xkbcommon-dl | 0.4.2 | MIT |
 | xkeysym | 0.2.1 | MIT OR Apache-2.0 OR Zlib |

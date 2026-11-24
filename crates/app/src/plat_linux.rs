@@ -5,6 +5,11 @@
 //! input. The same names as `plat_win.rs`, so `run.rs` is the same file for both.
 pub use wxr_vr::Vr;
 
+/// WristXR runs in SteamVR, not as an OpenXR overlay (Monado, WiVRn).
+pub fn on_steamvr(vr: &Vr) -> bool {
+    matches!(vr, Vr::OpenVr(_))
+}
+
 use std::os::fd::AsFd;
 use wxr_desktop_linux::Pixels;
 pub use wxr_desktop_linux::{
@@ -101,6 +106,10 @@ impl Capture {
             // Off for every capture from now on, and this one renegotiates.
             wxr_desktop_linux::set_dmabuf_modifiers(Vec::new());
             self.0.dmabuf_failed();
+        }
+        if let Some(Frame::Resized(..)) = frame {
+            // That frame's pixels were not copied: the next poll takes them, into the new texture.
+            self.0.again();
         }
         Ok(frame.unwrap_or(Frame::Unchanged))
     }

@@ -528,6 +528,11 @@ impl XCapture {
         hit
     }
 
+    /// The next `grab` reads, changed or not (the last read's pixels were not used, as after a resize).
+    pub fn again(&mut self) {
+        self.read_at = None;
+    }
+
     /// Reads the latest pixels (BGRA, rows of `w * 4`); `None` when the source is gone or unreadable.
     #[allow(unsafe_code)]
     pub fn grab(&mut self) -> Option<(u32, u32, &[u8])> {

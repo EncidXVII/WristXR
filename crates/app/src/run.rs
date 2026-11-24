@@ -397,9 +397,11 @@ pub fn run() -> Result<(), String> {
         if session.state.update_check { crate::update::check_in_background() } else { std::sync::mpsc::channel().1 };
     let mut release = None;
     // SteamVR normally says goodbye with a quit event; if its server dies instead, we notice here and leave too.
-    let steamvr = wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER);
+    // Only when WristXR runs in SteamVR: on Monado or WiVRn a SteamVR open beside it is not ours to follow.
+    let on_steamvr = plat::on_steamvr(&vr);
+    let steamvr = on_steamvr.then(|| wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER)).flatten();
     // Backstop: even if a SteamVR call never returns once SteamVR is gone, the process still ends.
-    if let Some(w) = wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER) {
+    if let Some(w) = on_steamvr.then(|| wxr_sys::ProcessWatch::by_name(plat::STEAMVR_SERVER)).flatten() {
         w.exit_when_gone(Duration::from_secs(5));
     }
     'frames: while vr.poll(start.elapsed().as_millis() as u64, &mut input) {
