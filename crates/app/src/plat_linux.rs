@@ -3,7 +3,7 @@
 
 //! What the VR session needs from the platform, on Linux: Vulkan textures, X11 or Wayland-portal capture and
 //! input. The same names as `plat_win.rs`, so `run.rs` is the same file for both.
-use wxr_vr::OpenVr;
+pub use wxr_vr::Vr;
 
 use std::os::fd::AsFd;
 use wxr_desktop_linux::Pixels;
@@ -17,9 +17,10 @@ pub use wxr_gfx_vk::{Gpu, GpuTimer, Tex};
 /// The process name of SteamVR's server, watched so WristXR leaves with it.
 pub const STEAMVR_SERVER: &str = "vrserver";
 
-/// On the GPU the headset is on. With `WRISTXR_DMABUF=1`, Wayland captures offer the compositor GPU buffers
-/// (DMA-BUF) the GPU can import, so frames skip the CPU; experimental until tested on more GPUs and desktops.
-pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
+/// On the GPU the headset is on (under OpenXR, the session starts here too). With `WRISTXR_DMABUF=1`, Wayland
+/// captures offer the compositor GPU buffers (DMA-BUF) the GPU can import, so frames skip the CPU; experimental
+/// until tested on more GPUs and desktops.
+pub fn gpu(vr: &mut Vr) -> Result<Gpu, String> {
     let gpu = Gpu::new(vr)?;
     if std::env::var_os("WRISTXR_DMABUF").is_some_and(|v| v == "1") {
         let modifiers = gpu.dmabuf_modifiers();
@@ -33,7 +34,7 @@ pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
 /// Nothing to wait for: Linux screens never change detail level (see `Detail`).
 pub fn finish(_gpu: &Gpu) {}
 
-pub fn submit(gpu: &Gpu, vr: &mut OpenVr, key: u64, tex: &Tex) -> Result<(), String> {
+pub fn submit(gpu: &Gpu, vr: &mut Vr, key: u64, tex: &Tex) -> Result<(), String> {
     gpu.submit(vr, key, tex)
 }
 

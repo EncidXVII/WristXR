@@ -6,8 +6,16 @@
 #![allow(unsafe_code)]
 
 mod ffi;
+#[cfg(target_os = "linux")]
+mod runtime;
+#[cfg(target_os = "linux")]
+mod xr;
 
 pub use ffi::VulkanTexture;
+#[cfg(target_os = "linux")]
+pub use runtime::Vr;
+#[cfg(target_os = "linux")]
+pub use xr::{BLANK_KEY, OpenXr, VulkanHandles};
 
 use ffi::{
     ActiveActionSet, AnalogData, ClientCore, DigitalData, FrameTiming, Mat34, PoseData, Table, TrackedPose, VrEvent,

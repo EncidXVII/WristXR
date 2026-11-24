@@ -5,7 +5,7 @@
 //! SendInput. Linux has the same names in `plat_linux.rs`, so `run.rs` is the same file for both.
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use wxr_core::panel::PixelRect;
-use wxr_vr::OpenVr;
+pub use wxr_vr::OpenVr as Vr;
 
 pub use wxr_capture_win::{Frame, Monitor};
 pub use wxr_gfx_d3d11::{Detail, Gpu, GpuTimer, Sharpen, keeps, width_for};
@@ -24,8 +24,8 @@ pub fn view_only() -> bool {
 /// The process name of SteamVR's server, watched so WristXR leaves with it.
 pub const STEAMVR_SERVER: &str = "vrserver.exe";
 
-/// On the adapter SteamVR renders on.
-pub fn gpu(vr: &OpenVr) -> Result<Gpu, String> {
+/// On the adapter SteamVR renders on. (Mutable for Linux, where an OpenXR session starts here.)
+pub fn gpu(vr: &mut Vr) -> Result<Gpu, String> {
     Gpu::new(vr.adapter_index()).map_err(|e| e.to_string())
 }
 
@@ -35,7 +35,7 @@ pub fn finish(gpu: &Gpu) {
 }
 
 /// Hands a texture to an overlay. Call after `Gpu::flush`.
-pub fn submit(_gpu: &Gpu, vr: &mut OpenVr, key: u64, tex: &Tex) -> Result<(), String> {
+pub fn submit(_gpu: &Gpu, vr: &mut Vr, key: u64, tex: &Tex) -> Result<(), String> {
     vr.set_texture_d3d11(key, wxr_gfx_d3d11::raw(tex))
 }
 

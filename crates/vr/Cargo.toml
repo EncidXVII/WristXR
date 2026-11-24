@@ -9,5 +9,9 @@ wxr-core.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
+# Linux without SteamVR: Monado and WiVRn through OpenXR's overlay extension; the loader is opened at run time.
+[target.'cfg(target_os = "linux")'.dependencies]
+openxr = { version = "0.22", default-features = false, features = ["loaded"] }
+
 [lints]
 workspace = true

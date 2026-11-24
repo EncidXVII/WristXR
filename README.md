@@ -110,6 +110,11 @@ then delete the folder.
 Unpack the Linux archive, run `./install.sh`, start SteamVR, then run `~/.local/share/wristxr/wristxr`. It
 registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes it all.
 
+**Monado or WiVRn (no SteamVR):** start the runtime, then `~/.local/share/wristxr/wristxr`. WristXR uses SteamVR
+when it is there and otherwise shows itself as an OpenXR overlay, on top of the game. With SteamVR installed but
+not in use, start it with `WRISTXR_OPENXR=1`. Experimental: panels are flat, WristXR cannot keep controller input
+from the game, and it does not start with the runtime on its own.
+
 **NixOS or Nix:** `nix run github:EncidXVII/WristXR`, or `nix profile install github:EncidXVII/WristXR` to keep it. The
 `wristxr` command keeps its files in `~/.local/share/wristxr`, the folder `./install.sh` uses, and runs them from there.
 
@@ -207,7 +212,7 @@ WristXR is in early access (0.8). Where each part stands, and what moves it forw
 | Area | Where it stands | What helps |
 |---|---|---|
 | **Windows** | Works end to end with SteamVR | A [bug report](https://github.com/EncidXVII/WristXR/issues/new/choose) with `selftest-report.zip` when something is off |
-| **Linux (X11 and Wayland)** | Experimental, requires more testing. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR on Wayland, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
+| **Linux (X11 and Wayland)** | Experimental, requires more testing. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR on Wayland, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards, and from Monado and WiVRn; fixes for what breaks |
 | **Headsets and controllers** | Default bindings for Valve Index, Meta Quest (Touch), HTC Vive, Windows Mixed Reality and Steam Frame (experimental) controllers | A self-test report from your headset, even when everything worked: say which headset, controllers and streaming method |
 | **Steam Frame** | Controller bindings and the Linux build support it; experimental, requires more testing | The "Steam Frame test report" issue template |
 | **Languages** | English only. Every string is in one file, `crates/ui/locales/en-US.ftl`; loading other languages is the next step | Open an issue to claim a language |

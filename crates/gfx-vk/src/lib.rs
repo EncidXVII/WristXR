@@ -1,7 +1,8 @@
 // Copyright (C) 2026 EncidXVII
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Linux: panel textures for SteamVR through Vulkan, the counterpart of `wxr-gfx-d3d11`.
+//! Linux: panel textures for SteamVR (or an OpenXR overlay runtime) through Vulkan, the counterpart of
+//! `wxr-gfx-d3d11`.
 //!
 //! Every texture is a device-local image with its own persistently mapped staging buffer. `update` only copies
 //! pixels into the staging memory; `flush` records the copies for every texture changed this frame into one
@@ -11,6 +12,9 @@
 //!
 //! Where the GPU can import DMA-BUFs, a Wayland capture can skip the CPU: `copy_dmabuf` imports the compositor's
 //! buffer (once per buffer, then from a small cache) and the same flush copies it into the texture on the GPU.
+//!
+//! Under OpenXR the runtime does not take our images: `submit` copies a texture into the overlay's swapchain image
+//! on the GPU instead, and waits for that copy.
 #![cfg(target_os = "linux")]
 #![allow(unsafe_code)]
 
@@ -20,7 +24,7 @@ use std::ffi::{CStr, CString, c_void};
 use std::os::fd::{AsRawFd, BorrowedFd, IntoRawFd};
 use std::rc::Rc;
 use wxr_core::raster::Image;
-use wxr_vr::{OpenVr, VulkanTexture};
+use wxr_vr::{OpenXr, Vr, VulkanHandles, VulkanTexture};
 
 /// Captures and UI pixels are BGRA bytes, shown as they are (`ColorSpace_Auto`), as on Windows.
 const FORMAT: vk::Format = vk::Format::B8G8R8A8_UNORM;
@@ -146,11 +150,12 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    /// On the GPU the headset is on, with the extensions SteamVR asks for.
-    pub fn new(vr: &OpenVr) -> Result<Self> {
+    /// On the GPU the headset is on, with the extensions the runtime asks for. Under OpenXR this also starts the
+    /// session, which runs on this device.
+    pub fn new(vr: &mut Vr) -> Result<Self> {
         // SAFETY: loads the system Vulkan loader; the calls below follow the Vulkan valid-usage rules for these
         // simple objects, and every handle made here is destroyed in `Device::drop` (or right here on failure).
-        unsafe {
+        let gpu = unsafe {
             let entry = ash::Entry::load().map_err(|e| format!("Vulkan not available: {e}"))?;
             let names: Vec<CString> =
                 vr.vulkan_extensions(None).into_iter().filter_map(|e| CString::new(e).ok()).collect();
@@ -271,8 +276,26 @@ impl Gpu {
                     )
                     .map_err(vk_err("vkCreateQueryPool"))?;
             }
-            Ok(Self { dev: Rc::new(dev) })
+            Self { dev: Rc::new(dev) }
+        };
+        if let Vr::OpenXr(xr) = vr {
+            gpu.start_xr(xr)?;
         }
+        Ok(gpu)
+    }
+
+    fn start_xr(&self, xr: &mut OpenXr) -> Result<()> {
+        let dev = &self.dev;
+        let vk = VulkanHandles {
+            instance: dev.instance.handle().as_raw(),
+            physical_device: dev.physical.as_raw(),
+            device: dev.device.handle().as_raw(),
+            queue_family: dev.family,
+        };
+        xr.start(vk, Box::new(dev.clone()))?;
+        // The stand-in layer for frames with nothing else to show: clear.
+        let blank = self.texture(1, 1, None)?;
+        self.submit_xr(xr, wxr_vr::BLANK_KEY, &blank)
     }
 
     fn memory_type(&self, bits: u32, flags: vk::MemoryPropertyFlags) -> Result<u32> {
@@ -779,7 +802,11 @@ impl Gpu {
     }
 
     /// Hands `tex` to the overlay `key`. Call after `flush`.
-    pub fn submit(&self, vr: &mut OpenVr, key: u64, tex: &Tex) -> std::result::Result<(), String> {
+    pub fn submit(&self, vr: &mut Vr, key: u64, tex: &Tex) -> std::result::Result<(), String> {
+        let vr = match vr {
+            Vr::OpenVr(vr) => vr,
+            Vr::OpenXr(xr) => return self.submit_xr(xr, key, tex),
+        };
         let dev = &self.dev;
         let mut data = VulkanTexture {
             image: tex.0.parts.image.as_raw(),
@@ -794,6 +821,102 @@ impl Gpu {
             sample_count: 1,
         };
         vr.set_texture_vulkan(key, &mut data)
+    }
+
+    /// OpenXR: copies `tex` into the overlay's swapchain image and releases it to the runtime.
+    fn submit_xr(&self, xr: &mut OpenXr, key: u64, tex: &Tex) -> Result<()> {
+        // A texture made this frame (the cursor at start, after an accent change) has not been uploaded yet.
+        if !tex.0.initialised.get() {
+            self.flush();
+        }
+        if !tex.0.initialised.get() {
+            return Err("texture not uploaded".into());
+        }
+        let image = xr.acquire(key, tex.0.w, tex.0.h)?;
+        let copied = self.copy_to(tex, vk::Image::from_raw(image));
+        // Released even when the copy failed, so the swapchain is never left holding an image.
+        xr.release(key)?;
+        copied
+    }
+
+    /// Copies `tex` (uploaded, so in TRANSFER_SRC_OPTIMAL) into a swapchain image of the same size, which OpenXR
+    /// hands out and takes back in COLOR_ATTACHMENT_OPTIMAL, and waits for the copy.
+    fn copy_to(&self, tex: &Tex, dst: vk::Image) -> Result<()> {
+        let dev = &self.dev;
+        let d = &dev.device;
+        let t = &tex.0;
+        let range =
+            vk::ImageSubresourceRange::default().aspect_mask(vk::ImageAspectFlags::COLOR).level_count(1).layer_count(1);
+        let barrier = |from, to, src, dst_access| {
+            vk::ImageMemoryBarrier::default()
+                .old_layout(from)
+                .new_layout(to)
+                .src_access_mask(src)
+                .dst_access_mask(dst_access)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(dst)
+                .subresource_range(range)
+        };
+        // SAFETY: the one command buffer, re-recorded after the previous submit was waited for; `tex` is alive for
+        // the call and `dst` is an acquired, waited swapchain image of its size, not released until we return.
+        unsafe {
+            d.reset_command_buffer(dev.cmd, vk::CommandBufferResetFlags::empty())
+                .map_err(vk_err("vkResetCommandBuffer"))?;
+            d.begin_command_buffer(
+                dev.cmd,
+                &vk::CommandBufferBeginInfo::default().flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )
+            .map_err(vk_err("vkBeginCommandBuffer"))?;
+            d.cmd_pipeline_barrier(
+                dev.cmd,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier(
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::TRANSFER_WRITE,
+                )],
+            );
+            let layers = vk::ImageSubresourceLayers::default().aspect_mask(vk::ImageAspectFlags::COLOR).layer_count(1);
+            let region = vk::ImageCopy::default()
+                .src_subresource(layers)
+                .dst_subresource(layers)
+                .extent(vk::Extent3D { width: t.w, height: t.h, depth: 1 });
+            d.cmd_copy_image(
+                dev.cmd,
+                t.parts.image,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                dst,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[region],
+            );
+            d.cmd_pipeline_barrier(
+                dev.cmd,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::ALL_COMMANDS,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[barrier(
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                    vk::AccessFlags::TRANSFER_WRITE,
+                    vk::AccessFlags::MEMORY_READ,
+                )],
+            );
+            d.end_command_buffer(dev.cmd).map_err(vk_err("vkEndCommandBuffer"))?;
+            let cmds = [dev.cmd];
+            d.queue_submit(dev.queue, &[vk::SubmitInfo::default().command_buffers(&cmds)], dev.fence)
+                .map_err(vk_err("vkQueueSubmit"))?;
+            d.wait_for_fences(&[dev.fence], true, u64::MAX).map_err(vk_err("vkWaitForFences"))?;
+            d.reset_fences(&[dev.fence]).map_err(vk_err("vkResetFences"))?;
+        }
+        Ok(())
     }
 
     /// The GPU's name, for the self-test report.

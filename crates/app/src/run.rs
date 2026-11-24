@@ -5,7 +5,7 @@
 //! platform parts (textures, capture, input) come from `plat`: Direct3D 11 / WGC / SendInput on Windows, Vulkan /
 //! X11 or the Wayland portal on Linux.
 use crate::bindings::APP_KEY;
-use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, keeps, width_for};
+use crate::plat::{self, Capture, Detail, Frame, Gpu, GpuTimer, Injector, Monitor, Sharpen, Tex, Vr, keeps, width_for};
 use crate::session::{Effect, MonitorInfo, Page, PointerInput, Session, TAB_INBOX, WINDOW_NEARER};
 use crate::tray::{Tray, TrayCommand};
 use std::collections::HashMap;
@@ -25,7 +25,7 @@ use wxr_ui::{
     BANNER_SIZE, Banner, KEYBOARD_SIZE, KeyFace, Keyboard, LOW_BATTERY, MENU_SIZE, Menu, Strings, TOOLBAR_SIZE,
     Toolbar, WRIST_SIZE, Wrist, WristAdd, WristInfo, WristInput, WristLoad, WristMedia, WristWindow,
 };
-use wxr_vr::{OpenVr, cursor_key};
+use wxr_vr::cursor_key;
 
 const SAVE_DELAY: Duration = Duration::from_secs(1);
 const CURSOR_LIFT_M: f32 = 0.003;
@@ -179,7 +179,7 @@ impl Surface {
 
 /// What the watch shows, filtered by the Wrist settings.
 fn wrist_info(
-    vr: &OpenVr,
+    vr: &Vr,
     state: &State,
     expanded: bool,
     load: &wxr_sys::Load,
@@ -266,7 +266,7 @@ pub fn run() -> Result<(), String> {
     let dir = state_path.parent().ok_or("no config directory")?.to_path_buf();
     let manifest = crate::bindings::install(&dir.join("input")).map_err(err)?;
 
-    let mut vr = OpenVr::connect()?;
+    let mut vr = Vr::connect()?;
     // SteamVR knows us as an app (dashboard overlay) so it can start us with itself; first run opts in. This comes
     // before the actions, so even the very first launch gets its buttons.
     let app = std::env::current_exe()
@@ -274,13 +274,13 @@ pub fn run() -> Result<(), String> {
         .and_then(|exe| crate::bindings::install_vrmanifest(&dir, &exe).map_err(err))
         .and_then(|m| vr.register_app(&m, APP_KEY));
     vr.load_actions(&manifest)?;
-    let gpu = plat::gpu(&vr)?;
+    let gpu = plat::gpu(&mut vr)?;
     // Screens at the detail the headset shows; without a shader compiler they are shown as captured.
     let sharpen = Sharpen::new(&gpu).inspect_err(|e| tracing::warn!(%e, "screen detail pass unavailable")).ok();
     let sharp = sharpen.is_some();
     let monitors = plat::monitors();
     let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
-    let head = |vr: &OpenVr| vr.head_pose().unwrap_or(STANDING_HEAD);
+    let head = |vr: &Vr| vr.head_pose().unwrap_or(STANDING_HEAD);
 
     let mut state = State::load(&state_path);
     let imported = if state.onboarded { None } else { crate::import::detect() };
