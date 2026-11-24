@@ -23,7 +23,7 @@ wxr-input-win = { path = "crates/input-win" }
 wxr-gfx-vk = { path = "crates/gfx-vk" }
 wxr-desktop-linux = { path = "crates/desktop-linux" }
 ash = "0.38"
-x11rb = { version = "0.14", features = ["randr", "shm", "composite", "xtest", "xfixes"] }
+x11rb = { version = "0.14", features = ["randr", "shm", "composite", "xtest", "xfixes", "damage", "xkb"] }
 zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 libc = "0.2"
 serde = { version = "1", features = ["derive"] }

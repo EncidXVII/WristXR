@@ -3,13 +3,18 @@
 
 //! X11: monitors from RandR, windows from the window manager's stacking list, capture through MIT-SHM (plain
 //! GetImage where SHM is missing), windows from their Composite pixmap (their own pixels, even when covered), and
-//! input through XTest.
-use std::sync::OnceLock;
+//! input through XTest. With the DAMAGE extension a capture reads only after its screen or window changed.
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use wxr_core::panel::PixelRect;
 use x11rb::connection::Connection;
+use x11rb::protocol::Event;
 use x11rb::protocol::composite::{ConnectionExt as _, Redirect};
+use x11rb::protocol::damage::{ConnectionExt as _, ReportLevel};
 use x11rb::protocol::randr::ConnectionExt as _;
 use x11rb::protocol::shm::ConnectionExt as _;
+use x11rb::protocol::xkb::{self, ConnectionExt as _};
 use x11rb::protocol::xproto::{
     AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask, ImageFormat, MapState, Window,
 };
@@ -21,8 +26,119 @@ pub struct X11 {
     pub root: Window,
     shm: bool,
     composite: bool,
+    /// The DAMAGE extension is there: captures learn when their pixels change.
+    damage: bool,
+    /// Damage objects that reported a change not yet read.
+    damaged: Mutex<HashSet<u32>>,
+    /// The XKB extension is there: the active layout can be read and set.
+    xkb: bool,
     atoms: Atoms,
 }
+
+/// The keyboard as the X server maps it: keysyms per key code, the active layout and the layouts' names.
+pub struct Keymap {
+    min_keycode: u8,
+    per_keycode: usize,
+    keysyms: Vec<u32>,
+    pub group: u8,
+    /// Short language names of the layouts, in their order ("EN", "UK", "DE").
+    pub names: Vec<String>,
+}
+
+impl Keymap {
+    /// The character an evdev key types in the active layout; `None` for keys that type none, and for layouts
+    /// past the second (the core mapping only lists two).
+    pub fn char(&self, evdev: u16, shift: bool, caps: bool) -> Option<char> {
+        if self.group > 1 {
+            return None;
+        }
+        let keycode = usize::from(evdev) + 8;
+        let row = keycode.checked_sub(usize::from(self.min_keycode))? * self.per_keycode;
+        let col = usize::from(self.group) * 2;
+        let sym = |level: usize| {
+            self.keysyms.get(row + col + level).copied().filter(|&k| k != 0).or_else(|| {
+                // A layout listing only one level for a key types the same on both.
+                (level == 1).then(|| self.keysyms.get(row + col).copied()).flatten()
+            })
+        };
+        let lower = keysym_char(sym(0)?)?;
+        // Caps Lock shifts letters only.
+        let shifted = shift ^ (caps && lower.is_alphabetic());
+        if shifted { sym(1).and_then(keysym_char) } else { Some(lower) }
+    }
+}
+
+/// `xkb_keysym_to_utf32` from libxkbcommon, which every current desktop has; `None` without it.
+fn xkbcommon() -> Option<unsafe extern "C" fn(u32) -> u32> {
+    static F: OnceLock<Option<unsafe extern "C" fn(u32) -> u32>> = OnceLock::new();
+    *F.get_or_init(|| {
+        // SAFETY: dlopen/dlsym on a system library; the symbol is `uint32_t xkb_keysym_to_utf32(xkb_keysym_t)`.
+        #[allow(unsafe_code)]
+        unsafe {
+            let lib = libc::dlopen(c"libxkbcommon.so.0".as_ptr(), libc::RTLD_NOW);
+            if lib.is_null() {
+                return None;
+            }
+            let f = libc::dlsym(lib, c"xkb_keysym_to_utf32".as_ptr());
+            (!f.is_null()).then(|| std::mem::transmute::<*mut libc::c_void, unsafe extern "C" fn(u32) -> u32>(f))
+        }
+    })
+}
+
+/// The printable character of a keysym.
+fn keysym_char(keysym: u32) -> Option<char> {
+    let code = match xkbcommon() {
+        // SAFETY: a pure function of its argument.
+        #[allow(unsafe_code)]
+        Some(f) => unsafe { f(keysym) },
+        // Without libxkbcommon: Latin-1 keysyms are their code points, and 0x01000000 + U marks Unicode U.
+        None => match keysym {
+            0x20..=0x7E | 0xA0..=0xFF => keysym,
+            0x0100_00A0..=0x0110_FFFF => keysym - 0x0100_0000,
+            _ => 0,
+        },
+    };
+    char::from_u32(code).filter(|c| !c.is_control() && *c != '\0')
+}
+
+/// Short language names for XKB layout codes, as Windows names its input languages ("UK" is Ukrainian).
+fn language(layout: &str) -> String {
+    let code = layout.split(['(', ':']).next().unwrap_or(layout);
+    let name = match code {
+        "us" | "gb" | "au" | "ie" | "nz" | "za" => "en",
+        "ua" => "uk",
+        "by" => "be",
+        "cz" => "cs",
+        "dk" => "da",
+        "se" => "sv",
+        "no" => "nb",
+        "jp" => "ja",
+        "kr" => "ko",
+        "cn" | "tw" => "zh",
+        "il" => "he",
+        "gr" => "el",
+        "br" => "pt",
+        "latam" => "es",
+        "rs" => "sr",
+        "kz" => "kk",
+        "ee" => "et",
+        "si" => "sl",
+        "ge" => "ka",
+        "am" => "hy",
+        "ir" => "fa",
+        "vn" => "vi",
+        "in" => "hi",
+        "ch" => "de",
+        "at" => "de",
+        "be" => "nl",
+        "ca" => "fr",
+        other => other,
+    };
+    name.chars().take(2).collect::<String>().to_uppercase()
+}
+
+/// With DAMAGE, a capture still reads this often when nothing reported a change (a missed event costs at most this).
+const DAMAGE_REFRESH: Duration = Duration::from_secs(2);
 
 struct Atoms {
     client_list: u32,
@@ -33,6 +149,9 @@ struct Atoms {
     type_dialog: u32,
     wm_pid: u32,
     active: u32,
+    rules_names: u32,
+    /// `_NET_WM_CM_S<screen>`: owned while a compositing manager runs.
+    compositor: u32,
 }
 
 static X: OnceLock<Option<X11>> = OnceLock::new();
@@ -68,10 +187,91 @@ impl X11 {
             type_dialog: atom(b"_NET_WM_WINDOW_TYPE_DIALOG")?,
             wm_pid: atom(b"_NET_WM_PID")?,
             active: atom(b"_NET_ACTIVE_WINDOW")?,
+            rules_names: atom(b"_XKB_RULES_NAMES")?,
+            compositor: atom(format!("_NET_WM_CM_S{screen}").as_bytes())?,
         };
         let shm = conn.shm_query_version().ok().and_then(|c| c.reply().ok()).is_some();
         let composite = conn.composite_query_version(0, 4).ok().and_then(|c| c.reply().ok()).is_some();
-        Ok(Self { conn, root, shm, composite, atoms })
+        let damage = conn.damage_query_version(1, 1).ok().and_then(|c| c.reply().ok()).is_some();
+        let xkb = conn.xkb_use_extension(1, 0).ok().and_then(|c| c.reply().ok()).is_some_and(|r| r.supported);
+        Ok(Self { conn, root, shm, composite, damage, damaged: Mutex::new(HashSet::new()), xkb, atoms })
+    }
+
+    /// The keyboard mapping, the active layout and the layouts' names (from `_XKB_RULES_NAMES`, which setxkbmap
+    /// and the desktops keep).
+    pub fn keymap(&self) -> Option<Keymap> {
+        let setup = self.conn.setup();
+        let (min, max) = (setup.min_keycode, setup.max_keycode);
+        let map = self.conn.get_keyboard_mapping(min, max - min + 1).ok()?.reply().ok()?;
+        let rules = self
+            .conn
+            .get_property(false, self.root, self.atoms.rules_names, AtomEnum::STRING, 0, 1024)
+            .ok()
+            .and_then(|c| c.reply().ok())
+            .map(|r| r.value)
+            .unwrap_or_default();
+        // rules, model, layouts, variants, options
+        let layouts =
+            rules.split(|&b| b == 0).nth(2).map(|l| String::from_utf8_lossy(l).into_owned()).unwrap_or_default();
+        let names: Vec<String> = layouts.split(',').filter(|l| !l.is_empty()).map(language).collect();
+        Some(Keymap {
+            min_keycode: min,
+            per_keycode: usize::from(map.keysyms_per_keycode),
+            keysyms: map.keysyms,
+            group: self.group().unwrap_or(0),
+            names,
+        })
+    }
+
+    /// The active layout (XKB group).
+    pub fn group(&self) -> Option<u8> {
+        if !self.xkb {
+            return None;
+        }
+        let state = self.conn.xkb_get_state(xkb::ID::USE_CORE_KBD.into()).ok()?.reply().ok()?;
+        Some(u8::from(state.group))
+    }
+
+    /// Switches the active layout, as the desktop's own shortcut does.
+    pub fn set_group(&self, group: u8) -> bool {
+        if !self.xkb || group > 3 {
+            return false;
+        }
+        let none = 0u16.into();
+        let ok = self
+            .conn
+            .xkb_latch_lock_state(
+                xkb::ID::USE_CORE_KBD.into(),
+                none,
+                none,
+                true,
+                xkb::Group::from(group),
+                none,
+                false,
+                0,
+            )
+            .is_ok();
+        let _ = self.conn.flush();
+        ok
+    }
+
+    fn compositing(&self) -> bool {
+        self.conn
+            .get_selection_owner(self.atoms.compositor)
+            .ok()
+            .and_then(|c| c.reply().ok())
+            .is_some_and(|r| r.owner != x11rb::NONE)
+    }
+
+    /// Reads the events waiting on the connection, noting which damage objects reported a change. Only DAMAGE
+    /// events are asked for on this connection, so nothing else is lost.
+    fn pump(&self) {
+        let Ok(mut damaged) = self.damaged.lock() else { return };
+        while let Ok(Some(event)) = self.conn.poll_for_event() {
+            if let Event::DamageNotify(n) = event {
+                damaged.insert(n.damage);
+            }
+        }
     }
 
     /// Monitors in RandR's order, in root-window pixels.
@@ -279,9 +479,13 @@ pub struct XCapture {
     no_shm: bool,
     /// The window's Composite pixmap and the size it was named at.
     pixmap: Option<(u32, u16, u16)>,
+    /// Pixels when they did not come through the shared segment (plain GetImage).
     buf: Vec<u8>,
     w: u32,
     h: u32,
+    /// The DAMAGE object watching the target, and when the target was last read.
+    damage: Option<u32>,
+    read_at: Option<Instant>,
 }
 
 impl XCapture {
@@ -293,13 +497,45 @@ impl XCapture {
             // Under a compositor windows are redirected already; without one this keeps their pixels for us.
             let _ = x.conn.composite_redirect_window(w, Redirect::AUTOMATIC);
         }
-        Ok(Self { target, shm: None, no_shm: !x.shm, pixmap: None, buf: Vec::new(), w: 0, h: 0 })
+        // A window's own pixels always report their damage. The root's do not under a compositing manager (it
+        // paints elsewhere), so there the screen is read every frame as before.
+        let (drawable, watch) = match target {
+            Target::Root(_) => (x.root, !x.compositing()),
+            Target::Window(w) => (w, true),
+        };
+        let damage = (x.damage && watch).then(|| x.conn.generate_id().ok()).flatten().filter(|&id| {
+            x.conn.damage_create(id, drawable, ReportLevel::NON_EMPTY).ok().and_then(|c| c.check().ok()).is_some()
+        });
+        Ok(Self { target, shm: None, no_shm: !x.shm, pixmap: None, buf: Vec::new(), w: 0, h: 0, damage, read_at: None })
+    }
+
+    /// Whether the target may have changed since the last read: always without DAMAGE, on the first read and
+    /// every `DAMAGE_REFRESH`; otherwise only when it reported a change. Re-arms the report when it did.
+    fn changed(&mut self, x: &X11) -> bool {
+        let Some(id) = self.damage else { return true };
+        if self.read_at.is_none_or(|t| t.elapsed() >= DAMAGE_REFRESH) {
+            let _ = x.conn.damage_subtract(id, x11rb::NONE, x11rb::NONE);
+            return true;
+        }
+        x.pump();
+        let hit = x.damaged.lock().is_ok_and(|mut d| d.remove(&id));
+        if hit {
+            // NON_EMPTY reports once until the damage is cleared: clear it before reading, so a change made while
+            // we read reports again.
+            let _ = x.conn.damage_subtract(id, x11rb::NONE, x11rb::NONE);
+            let _ = x.conn.flush();
+        }
+        hit
     }
 
     /// Reads the latest pixels (BGRA, rows of `w * 4`); `None` when the source is gone or unreadable.
     #[allow(unsafe_code)]
     pub fn grab(&mut self) -> Option<(u32, u32, &[u8])> {
         let x = get()?;
+        if !self.changed(x) {
+            return None;
+        }
+        self.read_at = Some(Instant::now());
         let (drawable, sx, sy, w, h) = match self.target {
             Target::Root(r) => (x.root, clamp16(r.x), clamp16(r.y), r.w as u16, r.h as u16),
             Target::Window(win) => {
@@ -327,8 +563,8 @@ impl XCapture {
             return None;
         }
         let len = usize::from(w) * usize::from(h) * 4;
-        self.buf.resize(len, 0);
-        let mut read = false;
+        self.w = u32::from(w);
+        self.h = u32::from(h);
         if !self.no_shm {
             if self.shm.as_ref().is_none_or(|s| s.len < len) {
                 self.shm = Shm::new(x, len).inspect_err(|err| tracing::warn!(%err, "MIT-SHM unavailable")).ok();
@@ -342,32 +578,78 @@ impl XCapture {
                     .and_then(|c| c.reply().ok())
                     .is_some()
                 {
-                    // SAFETY: the server wrote `len` bytes into our segment, which is at least that long.
-                    unsafe { std::ptr::copy_nonoverlapping(s.ptr, self.buf.as_mut_ptr(), len) };
-                    read = true;
+                    // SAFETY: the server wrote `len` bytes into our segment, which is at least that long and ours
+                    // alone until the next request; the pixels are lent from it, with no copy.
+                    let px = unsafe { std::slice::from_raw_parts_mut(s.ptr, len) };
+                    opaque(px);
+                    return Some((self.w, self.h, px));
                 }
             }
         }
-        if !read {
-            let reply = x.conn.get_image(ImageFormat::Z_PIXMAP, drawable, sx, sy, w, h, !0).ok()?.reply().ok()?;
-            let n = reply.data.len().min(len);
-            self.buf[..n].copy_from_slice(&reply.data[..n]);
-        }
-        // 24-bit visuals leave the fourth byte undefined; SteamVR would treat it as transparency.
-        for px in self.buf.as_chunks_mut::<4>().0 {
-            px[3] = 0xFF;
-        }
-        self.w = u32::from(w);
-        self.h = u32::from(h);
+        let reply = x.conn.get_image(ImageFormat::Z_PIXMAP, drawable, sx, sy, w, h, !0).ok()?.reply().ok()?;
+        self.buf.resize(len, 0);
+        let n = reply.data.len().min(len);
+        self.buf[..n].copy_from_slice(&reply.data[..n]);
+        opaque(&mut self.buf);
         Some((self.w, self.h, &self.buf))
+    }
+}
+
+/// 24-bit visuals leave the fourth byte undefined; SteamVR would treat it as transparency.
+fn opaque(px: &mut [u8]) {
+    for p in px.as_chunks_mut::<4>().0 {
+        p[3] = 0xFF;
     }
 }
 
 impl Drop for XCapture {
     fn drop(&mut self) {
-        if let (Some(x), Some((p, _, _))) = (get(), self.pixmap.take()) {
+        let Some(x) = get() else { return };
+        if let Some((p, _, _)) = self.pixmap.take() {
             let _ = x.conn.free_pixmap(p);
-            let _ = x.conn.flush();
         }
+        if let Some(id) = self.damage.take() {
+            let _ = x.conn.damage_destroy(id);
+            if let Ok(mut d) = x.damaged.lock() {
+                d.remove(&id);
+            }
+        }
+        let _ = x.conn.flush();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Key 30 (A) as the X server maps it: US in the first layout, Ukrainian (Unicode keysyms) in the second.
+    fn map(group: u8) -> Keymap {
+        let (min, per) = (8u8, 4usize);
+        let mut keysyms = vec![0u32; (255 - usize::from(min)) * per];
+        let row = (30 + 8 - usize::from(min)) * per;
+        keysyms[row..row + 4].copy_from_slice(&[0x61, 0x41, 0x0100_0444, 0x0100_0424]);
+        Keymap { min_keycode: min, per_keycode: per, keysyms, group, names: vec!["EN".into(), "UK".into()] }
+    }
+
+    #[test]
+    fn keys_type_what_the_active_layout_says() {
+        let us = map(0);
+        assert_eq!(us.char(30, false, false), Some('a'));
+        assert_eq!(us.char(30, true, false), Some('A'));
+        assert_eq!(us.char(30, false, true), Some('A'));
+        assert_eq!(us.char(30, true, true), Some('a'));
+        let ua = map(1);
+        assert_eq!(ua.char(30, false, false), Some('ф'));
+        assert_eq!(ua.char(30, true, false), Some('Ф'));
+        assert_eq!(ua.char(31, false, false), None);
+        assert_eq!(map(2).char(30, false, false), None);
+    }
+
+    #[test]
+    fn layouts_get_language_names() {
+        assert_eq!(language("us"), "EN");
+        assert_eq!(language("ua"), "UK");
+        assert_eq!(language("de(nodeadkeys)"), "DE");
+        assert_eq!(language("ru:2"), "RU");
     }
 }

@@ -121,8 +121,12 @@ registers with SteamVR and starts with it from then on. `./uninstall.sh` undoes 
 - **X11**: everything works as on Windows, with no prompt.
 - Needs Vulkan, fontconfig and, on Wayland, PipeWire and xdg-desktop-portal (all standard on current desktops).
   The tray icon needs a StatusNotifierItem tray (KDE, XFCE, GNOME with the AppIndicator extension).
-- Not on Linux yet: the screen detail pass (on Linux SteamVR shrinks screens itself), key click sounds, switching the keyboard language from VR (the
-  keys type in your system layout; their labels show US), and the GPU load on NVIDIA.
+- Keyboard: keys always type in your system layout. On X11 their labels follow it, and the layout can be switched
+  from VR; on Wayland the labels show US and switching stays with the desktop.
+- Not on Linux yet: the screen detail pass (on Linux SteamVR shrinks screens itself), key click sounds, and the GPU
+  load on NVIDIA.
+- **Testing GPU capture (Wayland):** start WristXR with `WRISTXR_DMABUF=1` and screens reach the GPU without a copy
+  through the CPU. It falls back to the usual path when the GPU cannot take them; reports of either help.
 
 ## Switching from XSOverlay, OVR Toolkit or Desktop+
 
@@ -203,7 +207,7 @@ WristXR is in early access (0.8). Where each part stands, and what moves it forw
 | Area | Where it stands | What helps |
 |---|---|---|
 | **Windows** | Works end to end with SteamVR | A [bug report](https://github.com/EncidXVII/WristXR/issues/new/choose) with `selftest-report.zip` when something is off |
-| **Linux (X11 and Wayland)** | Experimental, requires more testing. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
+| **Linux (X11 and Wayland)** | Experimental, requires more testing. Still missing there: the screen detail pass, key click sounds, switching the keyboard language from VR on Wayland, GPU load on NVIDIA | Test reports from KDE Plasma, GNOME and other desktops, on X11 and on Wayland, with NVIDIA and AMD cards; fixes for what breaks |
 | **Headsets and controllers** | Default bindings for Valve Index, Meta Quest (Touch), HTC Vive, Windows Mixed Reality and Steam Frame (experimental) controllers | A self-test report from your headset, even when everything worked: say which headset, controllers and streaming method |
 | **Steam Frame** | Controller bindings and the Linux build support it; experimental, requires more testing | The "Steam Frame test report" issue template |
 | **Languages** | English only. Every string is in one file, `crates/ui/locales/en-US.ftl`; loading other languages is the next step | Open an issue to claim a language |

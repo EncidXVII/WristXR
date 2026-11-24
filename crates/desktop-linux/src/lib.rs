@@ -333,31 +333,74 @@ impl Injector {
 }
 
 // --- Keyboard layout ---------------------------------------------------------------------------------------------
-// Keys go out as key codes, so every app gets the user's own layout. The labels and the VRChat chat line follow a US
-// layout: Linux has no one way to read the active layout across X11 and the Wayland compositors.
+// Keys go out as key codes, so every app gets the user's own layout. On X11 the labels and the VRChat chat line
+// follow the active layout too, read from the X server, and the layout can be switched from VR. Wayland has no
+// common way to read or set it, so there they follow a US layout.
 
+/// How long a read keyboard mapping is reused (labels ask for it once per key per redraw).
+const KEYMAP_FRESH: Duration = Duration::from_millis(500);
+
+static KEYMAP: std::sync::Mutex<Option<(Instant, std::sync::Arc<x11::Keymap>)>> = std::sync::Mutex::new(None);
+
+fn keymap() -> Option<std::sync::Arc<x11::Keymap>> {
+    let Backend::X11(x) = backend() else { return None };
+    let mut cached = KEYMAP.lock().ok()?;
+    if let Some((at, map)) = cached.as_ref()
+        && at.elapsed() < KEYMAP_FRESH
+    {
+        return Some(map.clone());
+    }
+    let map = std::sync::Arc::new(x.keymap()?);
+    *cached = Some((Instant::now(), map.clone()));
+    Some(map)
+}
+
+fn forget_keymap() {
+    if let Ok(mut cached) = KEYMAP.lock() {
+        *cached = None;
+    }
+}
+
+/// Changes when the active layout does.
 pub fn layout_id() -> isize {
-    0
+    match backend() {
+        Backend::X11(x) => x.group().map_or(0, isize::from),
+        _ => 0,
+    }
 }
 
 pub fn layout_name() -> String {
-    "EN".to_owned()
+    keymap().and_then(|m| m.names.get(usize::from(m.group)).cloned()).unwrap_or_else(|| "EN".to_owned())
 }
 
 pub fn layouts() -> Vec<String> {
-    vec!["EN".to_owned()]
+    keymap().map(|m| m.names.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| vec!["EN".to_owned()])
 }
 
-/// Switching the system layout is the desktop's job on Linux.
+/// The next layout, on X11; on Wayland switching is the desktop's job.
 pub fn next_layout() -> bool {
-    false
+    let Some(map) = keymap() else { return false };
+    let n = map.names.len().min(4);
+    if n < 2 {
+        return false;
+    }
+    select_layout((usize::from(map.group) + 1) % n)
 }
 
-pub fn select_layout(_i: usize) -> bool {
-    false
+pub fn select_layout(i: usize) -> bool {
+    let Backend::X11(x) = backend() else { return false };
+    let ok = u8::try_from(i).is_ok_and(|g| x.set_group(g));
+    forget_keymap();
+    ok
 }
 
 pub fn key_char(scancode: u16, shift: bool, caps: bool) -> Option<char> {
+    if let Some(map) = keymap() {
+        let from_layout = keys::evdev(scancode).and_then(|code| map.char(code, shift, caps));
+        if from_layout.is_some() || map.group <= 1 {
+            return from_layout;
+        }
+    }
     keys::us_char(scancode, shift, caps)
 }
 
