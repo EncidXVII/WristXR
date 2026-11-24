@@ -76,6 +76,11 @@
                 chmod -R u+w "$dest"
                 echo "${app}" > "$dest/.nix-package"
               fi
+              # The copy's libraries are in the Nix store: a GC root keeps them while the copy is there, or a
+              # garbage collection after `nix run` would break the copy.
+              if command -v nix-store >/dev/null; then
+                nix-store --add-root "$dest/.nix-gcroot" --realise "${app}" >/dev/null 2>&1 || true
+              fi
               exec "$dest/wristxr" "$@"
             '';
           };
