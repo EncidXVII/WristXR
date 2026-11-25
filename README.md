@@ -16,7 +16,7 @@ point at your screens and click, type on a two-hand VR keyboard, send messages t
 your wrist for time, batteries and load, then get back to the game.
 
 It costs under **0.1 ms of GPU time per frame** and shows its own cost live. Everything stays out of your
-way until you need it: hold one button to hide it all. No account, no telemetry, no paid tier.
+way until you need it: double-tap one button to hide it all. No account, no telemetry, no paid tier.
 
 [**Download for Windows and Linux**](https://github.com/EncidXVII/WristXR/releases/latest) ·
 [Guides and help on everyvr.net](https://everyvr.net/wristxr) · [Discord](https://discord.gg/WkzGQwu2kz) ·
@@ -251,7 +251,7 @@ GPU model, monitor resolutions; no names, paths or identifiers). Attach it to a
 ## Privacy
 
 No telemetry. Network use: a GitHub release check (no identifiers), VRChat OSC on localhost, the notification
-API on localhost. Nothing else. Windows notifications (Discord by default) are read on your PC only to show them
+API on localhost. Nothing else. Notifications (from all apps by default) are read on your PC only to show them
 on the watch; they are never stored on disk or sent anywhere. Switch it off in Menu > Inbox (Off).
 
 ## Building from source
@@ -268,7 +268,7 @@ Other SteamVR desktop overlays, with Steam prices in US dollars, checked 25 Nove
 | Tool | Price | Windows | Linux | Desktop and windows | Keyboard | Wrist watch | VRChat chatbox |
 |---|---|---|---|---|---|---|---|
 | **WristXR** | Free, GPL-3.0 | Yes | Experimental | Yes | Yes | Yes | Yes |
-| [XSOverlay](https://store.steampowered.com/app/1173510) | $9.99 | Yes | No | Yes | Yes | Yes | No |
+| [XSOverlay](https://store.steampowered.com/app/1173510) | $9.99 | Yes | No | Yes | Yes | Yes | Yes |
 | [OVR Toolkit](https://store.steampowered.com/app/1068820) | $10.99 | Yes | No | Yes | Yes | Yes | Yes |
 | [vrOS](https://store.steampowered.com/app/3873610) | $7.98 | Yes | Yes | Yes | Yes | No | Yes |
 | [Desktop+](https://store.steampowered.com/app/1494460) | Free, GPL-3.0 | Yes | No | Yes | Yes | No | No |
