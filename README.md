@@ -261,6 +261,23 @@ Rust stable (1.85+). `cargo test --workspace`, `cargo run -p wxr-app -- --selfte
 SteamVR's null driver: `harness/null-driver.ps1 target/release/wxr-app.exe --selftest --vr` (backs up and
 restores your SteamVR settings). See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## How it compares
+
+Other SteamVR desktop overlays, with Steam prices in US dollars, checked 25 November 2026:
+
+| Tool | Price | Windows | Linux | Desktop and windows | Keyboard | Wrist watch | VRChat chatbox |
+|---|---|---|---|---|---|---|---|
+| **WristXR** | Free, GPL-3.0 | Yes | Experimental | Yes | Yes | Yes | Yes |
+| [XSOverlay](https://store.steampowered.com/app/1173510) | $9.99 | Yes | No | Yes | Yes | Yes | No |
+| [OVR Toolkit](https://store.steampowered.com/app/1068820) | $10.99 | Yes | No | Yes | Yes | Yes | Yes |
+| [vrOS](https://store.steampowered.com/app/3873610) | $7.98 | Yes | Yes | Yes | Yes | No | Yes |
+| [Desktop+](https://store.steampowered.com/app/1494460) | Free, GPL-3.0 | Yes | No | Yes | Yes | No | No |
+| [WayVR](https://github.com/wayvr-org/wayvr) | Free, GPL-3.0 | No | Yes | Yes | Yes | Batteries only | No |
+
+XSOverlay, OVR Toolkit and Desktop+ have years of updates behind them, and WayVR is the most mature Linux overlay.
+WristXR puts the desktop, keyboard, watch and chatbox in one free app on Windows and Linux, and shows its own GPU
+cost per frame.
+
 ## More PC VR tools from the same author
 
 Four free, open-source tools for PC VR by [EncidXVII](https://github.com/EncidXVII), with one look and one way of working. Guides, downloads and news for all four: [everyvr.net](https://everyvr.net).
