@@ -259,11 +259,15 @@ impl State {
         self.panels.iter().map(|p| p.id + 1).max().unwrap_or(1)
     }
 
-    /// Missing or corrupt file yields defaults; the app must always start.
+    /// Missing or corrupt file yields defaults; the app must always start. A file that does not parse (damaged, or
+    /// written by a newer version) is kept as `state.json.bad`, because the next save writes over `state.json`.
     pub fn load(path: &Path) -> Self {
         match fs::read(path) {
             Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|e| {
                 tracing::warn!(%e, "state file unreadable, using defaults");
+                if let Err(e) = fs::copy(path, path.with_extension("json.bad")) {
+                    tracing::warn!(%e, "could not keep the unreadable state file");
+                }
                 Self::default()
             }),
             Err(_) => Self::default(),

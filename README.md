@@ -67,9 +67,10 @@ way until you need it: double-tap one button to hide it all. No account, no tele
   the song to the VRChat chatbox (the button lights when sent), the player's volume and mute, switches
   for Show overlay and Keyboard, Add (a window or the next screen, right there on the watch), the Inbox, the menu,
   and fps / load / this overlay's own cost.
-- **Seven watch layouts** for the glance: Standard, Clock, No batteries, Batteries, Music (a small player with
-  back / play / next), Performance (fps, CPU and GPU) and Compact (one slim bar). Messages and low batteries come
-  through in every one, and opening the watch looks the same in all of them.
+- **Nine watch layouts** for the glance: Standard, Clock, No batteries, Batteries, Music (a small player with
+  back / play / next), Player (Music with the date in place of the batteries), Performance (fps, CPU and GPU),
+  Game (Performance with the date in place of the batteries) and Compact (one slim bar). Messages and low
+  batteries come through in every one, and opening the watch looks the same in all of them.
 - **Themes**: eight accent colours (Lime, Mint, Aqua, Sky, Violet, Pink, Amber, White) in Setup > Theme.
 - **Notifications on your wrist**: messages from Discord, Telegram and any other app's Windows notifications
   pop up with a buzz as a banner low in your view (who, the app, and up to three lines of the message; lasers pass

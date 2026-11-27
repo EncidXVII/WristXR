@@ -30,6 +30,9 @@ use wxr_vr::cursor_key;
 const SAVE_DELAY: Duration = Duration::from_secs(1);
 const CURSOR_LIFT_M: f32 = 0.003;
 const STANDING_HEAD: Pose = Pose::new(Vec3::new(0.0, 1.6, 0.0), Quat::IDENTITY);
+/// How often the list of screens is read again (Windows).
+#[cfg(windows)]
+const MONITOR_POLL: Duration = Duration::from_secs(2);
 const LAYOUT_POLL: Duration = Duration::from_millis(500);
 const STATS_PERIOD: Duration = Duration::from_secs(1);
 /// Cleanup after quitting gets this long before the process is ended anyway.
@@ -278,8 +281,13 @@ pub fn run() -> Result<(), String> {
     // Screens at the detail the headset shows; without a shader compiler they are shown as captured.
     let sharpen = Sharpen::new(&gpu).inspect_err(|e| tracing::warn!(%e, "screen detail pass unavailable")).ok();
     let sharp = sharpen.is_some();
-    let monitors = plat::monitors();
-    let screens: Vec<MonitorInfo> = monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut monitors = plat::monitors();
+    #[cfg_attr(not(windows), allow(unused_mut))]
+    let mut screens: Vec<MonitorInfo> =
+        monitors.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
+    #[cfg(windows)]
+    let mut monitors_checked = Instant::now();
     let head = |vr: &Vr| vr.head_pose().unwrap_or(STANDING_HEAD);
 
     let mut state = State::load(&state_path);
@@ -474,6 +482,46 @@ pub fn run() -> Result<(), String> {
         vr.set_claims(claims);
         let mut cursors: [Option<(u32, [f32; 2])>; 2] = [None; 2];
         let mut key_hover: [Option<u16>; 2] = [None; 2];
+        // Screens change while the overlay runs: a game switches the resolution, a display is unplugged, a streaming
+        // app adds a virtual one. Clicks map through a screen's current rectangle, a screen that is back is captured
+        // again, and a new one can be added.
+        #[cfg(windows)]
+        if monitors_checked.elapsed() >= MONITOR_POLL {
+            monitors_checked = Instant::now();
+            let fresh = plat::monitors();
+            let same = |a: &Monitor, b: &Monitor| a.handle == b.handle && a.rect == b.rect && a.primary == b.primary;
+            if fresh.len() != monitors.len() || !fresh.iter().zip(&monitors).all(|(a, b)| same(a, b)) {
+                for p in &engine.panels {
+                    let Source::Monitor(i) = p.source else { continue };
+                    let was = monitors.get(i as usize).map(|m| m.handle);
+                    match fresh.get(i as usize) {
+                        // The same screen at a new place or size: its capture follows the size by itself.
+                        Some(m) if was == Some(m.handle) => {
+                            if let Some(s) = surfaces.get_mut(&p.id) {
+                                s.rect = Some(m.rect);
+                            }
+                        }
+                        // Another screen in its place, or the screen is back: start over on it.
+                        Some(m) => match surface(&gpu, sharp, p, &fresh) {
+                            Ok(s) => {
+                                surfaces.insert(p.id, s);
+                                resized.push((p.id, m.rect.w, m.rect.h));
+                            }
+                            Err(e) => tracing::warn!(%e, panel = p.id, "screen not picked up again"),
+                        },
+                        // Gone: its last picture stays, and clicks on it go nowhere.
+                        None => {
+                            if let Some(s) = surfaces.get_mut(&p.id) {
+                                s.rect = None;
+                                s.capture = None;
+                            }
+                        }
+                    }
+                }
+                screens = fresh.iter().map(|m| MonitorInfo { rect: m.rect, primary: m.primary }).collect();
+                monitors = fresh;
+            }
+        }
         // Popped-out windows can move on the desktop; input maps through their current rectangle. A window that
         // was closed takes its panel with it.
         let mut closed = Vec::new();
