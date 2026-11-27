@@ -3,6 +3,15 @@
 All notable changes to WristXR. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions: [Semantic Versioning](https://semver.org/).
 
+## [0.9.1] - 2026-11-28
+
+### Fixed
+- Windows: screens are read again while WristXR runs. After a game switches the resolution, or a display is moved,
+  rescaled, unplugged or plugged back in, clicks land where you point, a screen that is back shows again, and a new
+  one can be added, all without a restart.
+- A settings file that can't be read (damaged, or written by a newer version) is kept as `state.json.bad` beside
+  the new one instead of being written over.
+
 ## [0.9.0] - 2026-11-24
 
 Linux, all of it experimental.

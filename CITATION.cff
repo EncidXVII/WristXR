@@ -5,8 +5,8 @@ title: "WristXR: free VR desktop overlay with wrist clock for SteamVR"
 abstract: "Free, open-source SteamVR overlay for Windows and Linux: desktop screens and windows in VR with a laser pointer, a two-hand VR keyboard, a VRChat chatbox keyboard, Discord notifications and a wrist watch with time, controller batteries, music controls and frame rate."
 authors:
   - alias: EncidXVII
-version: 0.9.0
-date-released: 2026-11-24
+version: 0.9.1
+date-released: 2026-11-28
 license: GPL-3.0-or-later
 repository-code: "https://github.com/EncidXVII/WristXR"
 url: "https://everyvr.net/wristxr"
